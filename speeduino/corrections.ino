@@ -71,8 +71,8 @@ void initialiseCorrections()
   O2_SensorIsRichPrev = O2_SensorIsRich;
   O2_2ndSensorIsRich = false;
   O2_2ndSensorIsRichPrev = O2_2ndSensorIsRich;
-  BIT_SET(currentStatus.status4, BIT_STATUS4_EGO_RESET);
-  BIT_SET(currentStatus.status4, BIT_STATUS4_EGO_FROZEN);
+  BIT_SET(currentStatus.status5, BIT_STATUS5_EGO_RESET);
+  BIT_SET(currentStatus.status5, BIT_STATUS5_EGO_FROZEN);
   ego_FuelLoadPrev = currentStatus.fuelLoad;
   currentStatus.knockActive = false;
   currentStatus.battery10 = 125; //Set battery voltage to sensible value for dwell correction for "flying start" (else ignition gets suprious pulses after boot)  
@@ -799,10 +799,10 @@ byte correctionAFRClosedLoop()
   	  } // End Conditions not to reset ego
   	  else 
       { //Reset closed loop. Also activate freeze delay to for when we re-enable.
-        BIT_SET(currentStatus.status4, BIT_STATUS4_EGO_RESET);
-        BIT_SET(currentStatus.status4, BIT_STATUS4_EGO_FROZEN);
-        BIT_CLEAR(currentStatus.status4, BIT_STATUS4_EGO1_INTCORR);
-        BIT_CLEAR(currentStatus.status4, BIT_STATUS4_EGO2_INTCORR);
+        BIT_SET(currentStatus.status5, BIT_STATUS5_EGO_RESET);
+        BIT_SET(currentStatus.status5, BIT_STATUS5_EGO_FROZEN);
+        BIT_CLEAR(currentStatus.status5, BIT_STATUS5_EGO1_INTCORR);
+        BIT_CLEAR(currentStatus.status5, BIT_STATUS5_EGO2_INTCORR);
         ego_AdjustPct = 100;
         ego2_AdjustPct = 100;      
         ego_Integral = 0;
@@ -839,10 +839,10 @@ byte correctionAFRClosedLoop()
   } //End egoType
   else
   { // No O2 sensors or incorrect config to run closed loop O2
-    BIT_SET(currentStatus.status4, BIT_STATUS4_EGO_RESET);
-    BIT_SET(currentStatus.status4, BIT_STATUS4_EGO_FROZEN);
-    BIT_CLEAR(currentStatus.status4, BIT_STATUS4_EGO1_INTCORR);
-    BIT_CLEAR(currentStatus.status4, BIT_STATUS4_EGO2_INTCORR);
+    BIT_SET(currentStatus.status5, BIT_STATUS5_EGO_RESET);
+    BIT_SET(currentStatus.status5, BIT_STATUS5_EGO_FROZEN);
+    BIT_CLEAR(currentStatus.status5, BIT_STATUS5_EGO1_INTCORR);
+    BIT_CLEAR(currentStatus.status5, BIT_STATUS5_EGO2_INTCORR);
     ego_AdjustPct = 100;
     ego2_AdjustPct = 100;  
     ego_NextCycleCount = 0;
