@@ -234,7 +234,7 @@ void loop()
 
     //***Perform sensor reads***
     //-----------------------------------------------------------------------------------------------------
-    ADC_sequencer();//All ADC reads are now combined into sequencer to ensure optimal loop speed without any blocking
+    ADC_sequencer(); //All ADC reads are now combined into sequencer to ensure optimal loop speed without any blocking
 
     if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_15HZ)) 
     {

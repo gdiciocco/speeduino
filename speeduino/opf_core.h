@@ -12,8 +12,20 @@
 //#define USE_CAN_DASH
 // #define USE_SPI_EEPROM PB12
 
+#define CORE8_VERSION 23
+
+#if (CORE8_VERSION == 23)
+    #define USE_SPI_EEPROM PB12
+#else
+    #define USE_SPI_EEPROM PD6
+#endif //CORE8_VERSION
+
 #ifdef USE_I2C_BARO
-#include <src/LPS25HB/LPS25HBSensor.h>
+    #if (CORE8_VERSION == 23)
+        #include <src/LPS25HB/LPS25HBSensor.h>
+    #else
+        #include <src/LPS22HH/LPS22HHSensor.h>
+    #endif //CORE8_VERSION
 #endif //USE_I2C_BARO
 
 #ifdef USE_DBW_IFX9201

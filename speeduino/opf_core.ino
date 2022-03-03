@@ -1,11 +1,16 @@
 #ifndef OPF_CORE
 #define OPF_CORE
+#endif
 
 #include "opf_core.h"
 
 #ifdef USE_I2C_BARO
-TwoWire LPS_dev(PIN_WIRE_SDA, PIN_WIRE_SCL);
-LPS25HBSensor LPS_Sensor(&LPS_dev, LPS25HB_ADDRESS_LOW);
+    TwoWire LPS_dev(PIN_WIRE_SDA, PIN_WIRE_SCL);
+    #if (CORE8_VERSION == 23)
+        LPS25HBSensor LPS_Sensor(&LPS_dev, LPS25HB_ADDRESS_LOW);
+    #else
+        LPS22HHSensor LPS_Sensor(&LPS_dev, LPS22HH_I2C_ADD_L);
+    #endif //CORE8_VERSION
 #endif //USE_I2C_BARO
 
 #ifdef USE_DBW_IFX9201
@@ -47,9 +52,10 @@ void setupBoard()
 #ifdef USE_I2C_BARO
   LPS_dev.begin();
   LPS_Sensor.begin();
-  LPS_Sensor.SetODR(7.0f);
-  LPS_Sensor.Enable();
-#endif //USE_I2C_BARO
+  #if (CORE8_VERSION == 23)
+      LPS_Sensor.SetODR(7.0f);
+  #endif //CORE8_VERSION
+
 
 #ifdef USE_DBW_IFX9201
   Timer10.setMode(1, TIMER_OUTPUT_COMPARE_PWM1, DIS_PIN); //DBW PWM output fixed to PB8/
