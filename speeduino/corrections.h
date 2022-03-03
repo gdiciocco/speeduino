@@ -39,6 +39,20 @@ int8_t correctionKnock(int8_t);
 
 uint16_t correctionsDwell(uint16_t dwell);
 
+<<<<<<< HEAD
+=======
+void correctionsFuel_Individual(void);
+void correctionFuelStaging(void);
+void correctionEGOBank2(void);
+void correctionFuelTrim(void);
+void correctionFuelInjOpen(void);
+void correctionFuelPWLimit(void);
+
+extern int MAP_rateOfChange;
+extern int TPS_rateOfChange;
+extern byte activateMAPDOT; //The mapDOT value seen when the MAE was activated. 
+extern byte activateTPSDOT; //The tpsDOT value seen when the MAE was activated. 
+>>>>>>> hwright9/speeduino/Dual_O2_ClosedLoop
 
 extern uint16_t AFRnextCycle;
 extern unsigned long knockStartTime;
