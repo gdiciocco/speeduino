@@ -119,7 +119,7 @@ void loop()
       mainLoopCount++;
       LOOP_TIMER = TIMER_mask;
 
-      runLoop();
+      opf_runLoop();
 
       //SERIAL Comms
       //Initially check that the last serial send values request is not still outstanding

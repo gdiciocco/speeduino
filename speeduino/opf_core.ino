@@ -199,7 +199,7 @@ void resetPins()
   pinMC33810_2_CS = BOARD_MAX_IO_PINS - 1;
 }
 
-void runLoop()
+void opf_runLoop()
 {
   if ((Serial.available()) > 0)
   {

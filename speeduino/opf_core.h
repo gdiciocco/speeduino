@@ -49,5 +49,5 @@ extern HardwareTimer Timer10;
 void setupBoard();
 void resetPins();
 void setPins();
-void runLoop();
+void opf_runLoop();
 void dash_generic(STM32_CAN *can);
