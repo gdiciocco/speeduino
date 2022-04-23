@@ -1057,7 +1057,7 @@ ADCstates readOilpressure(ADCstates adcState)
   }
   else if (configPage10.oilPressureEnable == 2)
   {
-  currentStatus.oilPressure = oilSensorOPStData.pressure;
+    tempOilPressure = oilSensorOPStData.pressure;
   }    
   
   //Sanity check

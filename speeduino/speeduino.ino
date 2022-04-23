@@ -118,6 +118,7 @@ void loop()
 {
       mainLoopCount++;
       LOOP_TIMER = TIMER_mask;
+      bool doIdleControl = false;
 
       runLoop();
 
@@ -317,7 +318,8 @@ void loop()
       BIT_CLEAR(TIMER_mask, BIT_TIMER_4HZ);
 
       nitrousControl();
-      idleControl(); //Perform any idle related actions. Even at higher frequencies, running 4x per second is sufficient.
+      doIdleControl = true; // Plan idle control to be executed from the main loop
+      // idleControl(); //Perform any idle related actions. Even at higher frequencies, running 4x per second is sufficient.
 
       if (configPage10.oilPressureEnable == 2) { // Hella OPS+T Sensor is enabled
         currentStatus.oilTemperature = getOilTemperature(); // Get oil temp previous reading
@@ -414,7 +416,8 @@ void loop()
 
     if( (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_OL)
     || (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_CL)
-    || (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_OLCL) )
+    || (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_OLCL) 
+    || doIdleControl )
     {
       idleControl(); //Run idlecontrol every loop for stepper idle.
     }
