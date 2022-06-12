@@ -116,7 +116,7 @@ void setPins()
   pinBaro = PC5; //A1
   pinMAP = PA6;   //A5
 
-  pinFuelPressure = PB0; //A2
+  //pinFuelPressure = PB0; //A2
 
 
   pinTachOut = PD14;    //10

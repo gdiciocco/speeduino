@@ -2,10 +2,12 @@
 #define SENSORS_H
 
 #include "Arduino.h"
+#include <src\SimpleKalmanFilter-0.1.0\src\SimpleKalmanFilter.h>
+
 
 // The following are alpha values for the ADC filters.
 // Their values are from 0 to 240, with 0 being no filtering and 240 being maximum
-#define ADCFILTER_TPS_DEFAULT   50
+#define ADCFILTER_TPS_DEFAULT   0
 #define ADCFILTER_CLT_DEFAULT  180
 #define ADCFILTER_IAT_DEFAULT  180
 #define ADCFILTER_O2_DEFAULT   128
@@ -25,7 +27,7 @@
 
 #define VSS_GEAR_HYSTERESIS 10
 #define VSS_SAMPLES         4 //Must be a power of 2 and smaller than 255
-#define TPS_READ_FREQUENCY 40 //Hz calculated from interval above and rounded to the nearest integer
+#define TPS_READ_FREQUENCY 100 //Hz calculated from interval above and rounded to the nearest integer
 
 //enum ADCstates:uint8_t {ADCidle,ADCrunning,ADCcomplete};//ADC converter states {ADCidle,ADCrunning,ADCcomplete}
 enum ADCstates {ADCidle,ADCrunning,ADCcomplete};//ADC converter states {ADCidle,ADCrunning,ADCcomplete}
@@ -68,6 +70,9 @@ unsigned long MAP_time; //The time the MAP sample was taken
 unsigned long MAPlast_time; //The time the previous MAP sample was taken
 volatile unsigned long vssTimes[VSS_SAMPLES] = {0};
 volatile byte vssIndex;
+
+SimpleKalmanFilter TPSKalman(0.2, 0.2, 0.1);
+SimpleKalmanFilter AuxInKalman(1, 1, 0.1);
 
 
 //These variables are used for tracking the number of running sensors values that appear to be errors. Once a threshold is reached, the sensor reading will go to default value and assume the sensor is faulty

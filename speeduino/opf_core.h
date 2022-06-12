@@ -8,7 +8,7 @@
 #define BOARD_MAX_IO_PINS 110
 
 #define USE_I2C_BARO
-#define CORE8_VERSION 24
+#define CORE8_VERSION 23
 
 #if (CORE8_VERSION == 23)
     #define USE_SPI_EEPROM PB12

@@ -23,6 +23,7 @@ A full copy of the license may be found in the projects root directory
  */
 void initialiseADC()
 {
+
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega1281__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
   //board specific initialization
   ADCinit_AVR2560();
@@ -111,6 +112,7 @@ void initializeAux()         //The following checks the aux inputs and initialis
        }  
 
     }
+
   } //For loop iterating through aux in lines
 }
 
@@ -671,17 +673,23 @@ ADCstates readTPS(bool useFilter, ADCstates adcState) //this is to be called rep
   } 
 
   tempReading = tempReading >> 2; //Get the current raw TPS ADC value and map it into a byte
-  //The use of the filter can be overridden if required. This is used on startup to disable priming pulse if flood clear is wanted
-  if(useFilter == true) { currentStatus.tpsADC = ADC_FILTER(tempReading, configPage4.ADCFILTER_TPS, currentStatus.tpsADC); }
-  else { currentStatus.tpsADC = tempReading; }
-  uint8_t tempADC = currentStatus.tpsADC; //The tempADC value is used in order to allow TunerStudio to recover and redo the TPS calibration if this somehow gets corrupted
+     
+  // Kalman filter
+  tempReading = round(TPSKalman.updateEstimate(tempReading));
 
   if(configPage2.tpsMax > configPage2.tpsMin)
   {
-    //Check that the ADC values fall within the min and max ranges (Should always be the case, but noise can cause these to fluctuate outside the defined range).
+   uint8_t tempADC = currentStatus.tpsADC; //The tempADC value is used in order to allow TunerStudio to recover and redo the TPS calibration if this somehow gets corrupted
+  //Check that the ADC values fall within the min and max ranges (Should always be the case, but noise can cause these to fluctuate outside the defined range).
     //if (currentStatus.tpsADC < configPage2.tpsMin) { tempADC = configPage2.tpsMin; }
     //else if(currentStatus.tpsADC > configPage2.tpsMax) { tempADC = configPage2.tpsMax; }
-    tempADC=constrain(currentStatus.tpsADC,configPage2.tpsMin,configPage2.tpsMax);
+    //tempADC=constrain(currentStatus.tpsADC,configPage2.tpsMin,configPage2.tpsMax);
+    tempADC=constrain(tempReading,configPage2.tpsMin,configPage2.tpsMax);
+    
+    //The use of the filter can be overridden if required. This is used on startup to disable priming pulse if flood clear is wanted
+    if(useFilter == true) { currentStatus.tpsADC = ADC_FILTER(tempReading, configPage4.ADCFILTER_TPS, currentStatus.tpsADC); }
+    else { currentStatus.tpsADC = tempReading; }
+
     currentStatus.TPS = map(tempADC, configPage2.tpsMin, configPage2.tpsMax, 0, 200); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
   }
   else
@@ -689,13 +697,19 @@ ADCstates readTPS(bool useFilter, ADCstates adcState) //this is to be called rep
     //This case occurs when the TPS +5v and gnd are wired backwards, but the user wishes to retain this configuration.
     //In such a case, tpsMin will be greater then tpsMax and hence checks and mapping needs to be reversed
 
-    tempADC = 255 - currentStatus.tpsADC; //Reverse the ADC values
+    uint8_t tempADC = 255 - currentStatus.tpsADC; //Reverse the ADC values
     uint16_t tempTPSMax = 255 - configPage2.tpsMax;
     uint16_t tempTPSMin = 255 - configPage2.tpsMin;
 
     //All checks below are reversed from the standard case above
     if (tempADC > tempTPSMax) { tempADC = tempTPSMax; }
     else if(tempADC < tempTPSMin) { tempADC = tempTPSMin; }
+
+    //The use of the filter can be overridden if required. This is used on startup to disable priming pulse if flood clear is wanted
+    if(useFilter == true) { currentStatus.tpsADC = ADC_FILTER(tempReading, configPage4.ADCFILTER_TPS, currentStatus.tpsADC); }
+    else { currentStatus.tpsADC = tempReading; }
+
+
     currentStatus.TPS = map(tempADC, tempTPSMin, tempTPSMax, 0, 200);
   }
 
@@ -711,6 +725,7 @@ ADCstates readTPS(bool useFilter, ADCstates adcState) //this is to be called rep
   return adcState;
 }
 //Get the TPS change rate 
+
 void readTPSdot(){
   int TPSrateOfChange;
   static uint8_t TPSlast; //The previous TPS reading  
@@ -1119,8 +1134,18 @@ void vssPulse()
 
 uint16_t readAuxanalog(uint8_t analogPin)   //currently inoperational
 {
+  /*
   //read the Aux analog value for pin set by analogPin 
-  unsigned int tempReading=0;
+  unsigned int tempReading;
+  #if defined(ANALOG_ISR)
+    tempReading = fastMap1023toX(AnChannel[analogPin-A0], 1023); //Get the current raw Auxanalog value
+  #else
+    tempReading = analogRead(analogPin);
+    tempReading = analogRead(analogPin);
+    //tempReading = fastMap1023toX(analogRead(analogPin), 511); Get the current raw Auxanalog value
+  #endif
+  */
+  uint8_t tempReading = 0;
   return tempReading;
 } 
 
