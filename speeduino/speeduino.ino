@@ -21,6 +21,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 #include <stdint.h> //developer.mbed.org/handbook/C-Data-Types
 //************************************************
+#include "opf_core.h"
+#include "sensors.h"
 #include "globals.h"
 #include "speeduino.h"
 #include "scheduler.h"
@@ -89,8 +91,9 @@ uint16_t staged_req_fuel_mult_sec = 0;
 void setup()
 {
   initialisationComplete = false; //Tracks whether the initialiseAll() function has run completely
-  initialiseAll();
-}
+  //initialiseAll();
+  setupBoard();  
+  }
 
 inline uint16_t applyFuelTrimToPW(trimTable3d *pTrimTable, int16_t fuelLoad, int16_t RPM, uint16_t currentPW)
 {
@@ -120,6 +123,7 @@ void loop()
       mainLoopCount++;
       LOOP_TIMER = TIMER_mask;
 
+      runLoop();
       //SERIAL Comms
       //Initially check that the last serial send values request is not still outstanding
       if (serialInProgress == true) 
@@ -338,6 +342,7 @@ void loop()
       readIAT();
       readBat();
       nitrousControl();
+      
 
       //Lookup the current target idle RPM. This is aligned with coolant and so needs to be calculated at the same rate CLT is read
       if( (configPage2.idleAdvEnabled >= 1) || (configPage6.iacAlgorithm != IAC_ALGORITHM_NONE) )
@@ -350,6 +355,7 @@ void loop()
       #endif  
       
       currentStatus.fuelPressure = getFuelPressure();
+      readOPSt(); // Activate the sensor PPM reading interrupt
       currentStatus.oilPressure = getOilPressure();
 
       if(auxIsEnabled == true)
