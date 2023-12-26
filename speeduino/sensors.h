@@ -49,6 +49,10 @@ extern uint16_t MAPlast; /**< The previous MAP reading */
 extern unsigned long MAP_time; //The time the MAP sample was taken
 extern unsigned long MAPlast_time; //The time the previous MAP sample was taken
 
+
+SimpleKalmanFilter TPSKalman(2, 2, 1);
+byte prevTPS, curTPS;
+int tempTPSts;
 /**
  * @brief Simple low pass IIR filter macro for the analog inputs
  * This is effectively implementing the smooth filter from playground.arduino.cc/Main/Smooth
