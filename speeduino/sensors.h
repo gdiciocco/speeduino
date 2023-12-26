@@ -58,7 +58,10 @@ unsigned long MAP_time; //The time the MAP sample was taken
 unsigned long MAPlast_time; //The time the previous MAP sample was taken
 volatile unsigned long vssTimes[VSS_SAMPLES] = {0};
 volatile byte vssIndex;
-SimpleKalmanFilter TPSKalman(0.9, 0.9, 1);
+
+SimpleKalmanFilter TPSKalman(2, 2, 1);
+byte prevTPS, curTPS;
+int tempTPSts;
 
 //These variables are used for tracking the number of running sensors values that appear to be errors. Once a threshold is reached, the sensor reading will go to default value and assume the sensor is faulty
 byte mapErrorCount = 0;

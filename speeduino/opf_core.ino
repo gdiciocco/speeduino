@@ -77,7 +77,7 @@ void setPins()
   //******************************************
 
   pinTrigger = PE5; //106
-  pinTrigger2 = PE3;  //107
+  pinTrigger2 = PE4;  //107
   //pinTrigger3 = PE4;  //104
   //pinVSS = PE5;       //105
   pinVSS = PC13;       //105
@@ -119,8 +119,7 @@ void setPins()
 
   pinCoil1 = PE14; //59
   pinCoil2 = PE15; //58
-  pinCoil3 = A0;
-/*
+  /*
     pinCoil3 = PE13; //61
     pinCoil4 = PE12; //60
     pinCoil5 = PE11; //63
@@ -133,7 +132,7 @@ void setPins()
   //******** OTHER CONNECTIONS ***************
   //******************************************
 
-  pinTachOut = PD14;    //10
+  // pinTachOut = PD14;    //10
   /*
     pinIdle1 = PD15;      //11
     pinIdle2 = PG2;       //12
