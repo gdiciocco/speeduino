@@ -133,13 +133,13 @@ void setup_DFCO_on()
   currentStatus.coolant = 80;
   configPage4.dfcoRPM = 150; //DFCO enable RPM = 1500
   configPage4.dfcoTPSThresh = 1;
-  configPage4.dfcoHyster = 50;
+  configPage4.dfcoHyster = 25;
   configPage2.dfcoMinCLT = 40; //Actually 0 with offset
   configPage2.dfcoDelay = 10;
 
-  dfcoTaper = 1;
+  dfcoDelay = 1;
   correctionDFCO();
-  dfcoTaper = 20;
+  dfcoDelay = 20;
 }
 //**********************************************************************************************************************
 void test_corrections_dfco_on(void)
@@ -178,6 +178,65 @@ void test_corrections_dfco_off_delay()
 
   TEST_ASSERT_FALSE(correctionDFCO()); //Make sure DFCO does not come on
 }
+void setup_DFCO_taper_on()
+{
+  //Test that DFCO comes will not activate if there has not been a long enough delay
+  //The steup function below simulates a 2 second delay
+  setup_DFCO_on();
+
+  configPage9.dfcoTaperEnable = 1; //Enable
+  configPage9.dfcoTaperTime = 20; //2.0 second
+  configPage9.dfcoTaperFuel = 0; //Scale fuel to 0%
+  configPage9.dfcoTaperAdvance = 20; //Reduce 20deg until full fuel cut
+
+  BIT_CLEAR(currentStatus.status1, BIT_STATUS1_DFCO);
+  //Set the threshold to be 2.5 seconds, above the simulated delay of 2s
+  configPage2.dfcoDelay = 250;
+}
+void test_corrections_dfco_taper()
+{
+  setup_DFCO_taper_on();
+
+  TEST_ASSERT_FALSE(correctionDFCO()); //Make sure DFCO does not come on
+  correctionDFCOfuel();
+  TEST_ASSERT_EQUAL(20, dfcoTaper); //Check if value was reset to setting
+}
+void test_corrections_dfco_taper_fuel()
+{
+  setup_DFCO_taper_on();
+
+  correctionDFCOfuel();
+  TEST_ASSERT_EQUAL(20, dfcoTaper); //Check if value was reset to setting
+
+  BIT_SET(currentStatus.status1, BIT_STATUS1_DFCO);
+  dfcoTaper = 10;
+  TEST_ASSERT_EQUAL(50, correctionDFCOfuel());
+  dfcoTaper = 5;
+  TEST_ASSERT_EQUAL(25, correctionDFCOfuel());
+
+  configPage9.dfcoTaperTime = 10; //1.0 second
+  dfcoTaper = 15; //Check for overflow
+  TEST_ASSERT_EQUAL(100, correctionDFCOfuel());
+  configPage9.dfcoTaperEnable = 0; //Disable
+  TEST_ASSERT_EQUAL(0, correctionDFCOfuel());
+}
+void test_corrections_dfco_taper_ign()
+{
+  setup_DFCO_taper_on();
+
+  dfcoTaper = 20;
+  BIT_SET(currentStatus.status1, BIT_STATUS1_DFCO);
+
+  TEST_ASSERT_EQUAL(20, correctionDFCOignition(20));
+  dfcoTaper = 15;
+  TEST_ASSERT_EQUAL(15, correctionDFCOignition(20));
+  dfcoTaper = 10;
+  TEST_ASSERT_EQUAL(10, correctionDFCOignition(20));
+  dfcoTaper = 5;
+  TEST_ASSERT_EQUAL(5, correctionDFCOignition(20));
+  configPage9.dfcoTaperEnable = 0; //Disable
+  TEST_ASSERT_EQUAL(20, correctionDFCOignition(20));
+}
 
 void test_corrections_dfco()
 {
@@ -185,6 +244,9 @@ void test_corrections_dfco()
   RUN_TEST(test_corrections_dfco_off_RPM);
   RUN_TEST(test_corrections_dfco_off_TPS);
   RUN_TEST(test_corrections_dfco_off_delay);
+  RUN_TEST(test_corrections_dfco_taper);
+  RUN_TEST(test_corrections_dfco_taper_fuel);
+  RUN_TEST(test_corrections_dfco_taper_ign);
 }
 //**********************************************************************************************************************
 //Setup a basic TAE enrichment curve, threshold etc that are common to all tests. Specifica values maybe updated in each individual test
@@ -204,6 +266,7 @@ void test_corrections_TAE_setup()
   configPage4.taeBins[3] = 97; 
   
   configPage2.taeThresh = 0;
+  configPage2.taeMinChange = 0;
 
   //Divided by 100
   configPage2.aeTaperMin = 10; //1000
@@ -215,6 +278,7 @@ void test_corrections_TAE_setup()
 	currentStatus.coolant = (int)(configPage2.aeColdTaperMax - CALIBRATION_TEMPERATURE_OFFSET) + 1;
 
   BIT_CLEAR(currentStatus.engine, BIT_ENGINE_ACC); //Make sure AE is turned off
+  BIT_CLEAR(currentStatus.engine, BIT_ENGINE_DCC); //Make sure AE is turned off
 }
 
 void test_corrections_TAE_no_rpm_taper()
@@ -229,7 +293,7 @@ void test_corrections_TAE_no_rpm_taper()
 
   uint16_t accelValue = correctionAccel(); //Run the AE calcs
 
-  TEST_ASSERT_EQUAL(75, currentStatus.tpsDOT); //DOT is 750%/s (25 * 30), value divided by 10;
+  TEST_ASSERT_EQUAL(750, currentStatus.tpsDOT); //DOT is 750%/s (25 * 30)
   TEST_ASSERT_EQUAL((100+132), accelValue);
 	TEST_ASSERT_TRUE(BIT_CHECK(currentStatus.engine, BIT_ENGINE_ACC)); //Confirm AE is flagged on
 }
@@ -246,7 +310,7 @@ void test_corrections_TAE_50pc_rpm_taper()
 
   uint16_t accelValue = correctionAccel(); //Run the AE calcs
 
-  TEST_ASSERT_EQUAL(75, currentStatus.tpsDOT); //DOT is 750%/s (25 * 30), value divided by 10;
+  TEST_ASSERT_EQUAL(750, currentStatus.tpsDOT); //DOT is 750%/s (25 * 30)
   TEST_ASSERT_EQUAL((100+66), accelValue);
 	TEST_ASSERT_TRUE(BIT_CHECK(currentStatus.engine, BIT_ENGINE_ACC)); //Confirm AE is flagged on
 }
@@ -263,7 +327,7 @@ void test_corrections_TAE_110pc_rpm_taper()
 
   uint16_t accelValue = correctionAccel(); //Run the AE calcs
 
-  TEST_ASSERT_EQUAL(75, currentStatus.tpsDOT); //DOT is 750%/s (25 * 30), value divided by 10;
+  TEST_ASSERT_EQUAL(750, currentStatus.tpsDOT); //DOT is 750%/s (25 * 30)
   TEST_ASSERT_EQUAL(100, accelValue); //Should be no AE as we're above the RPM taper end point
 	TEST_ASSERT_TRUE(BIT_CHECK(currentStatus.engine, BIT_ENGINE_ACC)); //Confirm AE is flagged on
 }
@@ -281,7 +345,7 @@ void test_corrections_TAE_under_threshold()
 
   uint16_t accelValue = correctionAccel(); //Run the AE calcs
 
-  TEST_ASSERT_EQUAL(9, currentStatus.tpsDOT); //DOT is 90%/s (3% * 30), value divided by 10;
+  TEST_ASSERT_EQUAL(90, currentStatus.tpsDOT); //DOT is 90%/s (3% * 30)
   TEST_ASSERT_EQUAL(100, accelValue); //Should be no AE as we're above the RPM taper end point
 	TEST_ASSERT_FALSE(BIT_CHECK(currentStatus.engine, BIT_ENGINE_ACC)); //Confirm AE is flagged off
 }
@@ -305,7 +369,7 @@ void test_corrections_TAE_50pc_warmup_taper()
 
   uint16_t accelValue = correctionAccel(); //Run the AE calcs
 
-  TEST_ASSERT_EQUAL(75, currentStatus.tpsDOT); //DOT is 750%/s (25 * 30), value divided by 10;
+  TEST_ASSERT_EQUAL(750, currentStatus.tpsDOT); //DOT is 750%/s (25 * 30)
   TEST_ASSERT_EQUAL((100+165), accelValue); //Total AE should be 132 + (50% * 50%) = 132 * 1.25 = 165
 	TEST_ASSERT_TRUE(BIT_CHECK(currentStatus.engine, BIT_ENGINE_ACC)); //Confirm AE is flagged on
 }
