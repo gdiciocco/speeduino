@@ -60,16 +60,19 @@ int tempTPSts;
  */
 #define ADC_FILTER(input, alpha, prior) (((long)input * (256 - alpha) + ((long)prior * alpha))) >> 8
 
-void initialiseADC(void);
-void readTPS(bool useFilter=true); //Allows the option to override the use of the filter
-void readO2_2(void);
-void flexPulse(void);
-uint32_t vssGetPulseGap(byte toothHistoryIndex);
-void vssPulse(void);
-uint16_t getSpeed(void);
-byte getGear(void);
-byte getFuelPressure(void);
-byte getOilPressure(void);
+static inline void instanteneousMAPReading() __attribute__((always_inline));
+static inline void readMAP() __attribute__((always_inline));
+static inline void validateMAP();
+void initialiseADC();
+void readTPS(bool=true); //Allows the option to override the use of the filter
+void readO2_2();
+void flexPulse();
+uint32_t vssGetPulseGap(byte);
+void vssPulse();
+uint16_t getSpeed();
+byte getGear();
+byte getFuelPressure();
+byte getOilPressure();
 uint16_t readAuxanalog(uint8_t analogPin);
 uint16_t readAuxdigital(uint8_t digitalPin);
 void readCLT(bool useFilter=true); //Allows the option to override the use of the filter

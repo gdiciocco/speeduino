@@ -17,87 +17,24 @@ A full copy of the license may be found in the projects root directory
 #include "corrections.h"
 #include "pages.h"
 #include "decoders.h"
-#include "auxiliaries.h"
-#include "utilities.h"
-#include BOARD_H
-
-uint32_t MAPcurRev; //Tracks which revolution we're sampling on
-unsigned int MAPcount; //Number of samples taken in the current MAP cycle
-unsigned long MAPrunningValue; //Used for tracking either the total of all MAP readings in this cycle (Event average) or the lowest value detected in this cycle (event minimum)
-unsigned long EMAPrunningValue; //As above but for EMAP
-bool auxIsEnabled;
-uint16_t MAPlast; /**< The previous MAP reading */
-unsigned long MAP_time; //The time the MAP sample was taken
-unsigned long MAPlast_time; //The time the previous MAP sample was taken
-volatile unsigned long vssTimes[VSS_SAMPLES] = {0};
-volatile byte vssIndex;
-
-volatile byte flexCounter = 0;
-volatile unsigned long flexStartTime;
-volatile unsigned long flexPulseWidth;
-
-volatile byte knockCounter = 0;
-volatile uint16_t knockAngle;
-
-//These variables are used for tracking the number of running sensors values that appear to be errors. Once a threshold is reached, the sensor reading will go to default value and assume the sensor is faulty
-byte mapErrorCount = 0;
-//byte iatErrorCount = 0; Not used
-//byte cltErrorCount = 0; Not used
-
-static inline void validateMAP(void);
-
-#if defined(ANALOG_ISR)
-static volatile uint16_t AnChannel[16];
-
-ISR(ADC_vect)
-{
-  byte nChannel = (ADMUX & 0x07);
-
-  byte result_low = ADCL;
-  byte result_high = ADCH;
-
-  #if defined(__AVR_ATmega1281__) || defined(__AVR_ATmega2561__)
-    if (nChannel == 7) { ADMUX = 0x40; }
-  #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    if( BIT_CHECK(ADCSRB, MUX5) ) { nChannel += 8; }  //8 to 15
-    if(nChannel == 15)
-    {
-      ADMUX = ADMUX_DEFAULT_CONFIG; //channel 0
-      ADCSRB = 0x00; //clear MUX5 bit
-
-      BIT_CLEAR(ADCSRA,ADIE); //Disable interrupt as we're at the end of a full ADC cycle. This will be re-enabled in the main loop
-    }
-    else if (nChannel == 7) //channel 7
-    {
-      ADMUX = ADMUX_DEFAULT_CONFIG;
-      ADCSRB = 0x08; //Set MUX5 bit
-    }
-  #endif
-    else { ADMUX++; }
-
-  //ADMUX always appears to be one ahead of the actual channel value that is in ADCL/ADCH. Subtract 1 from it to get the correct channel number
-  if(nChannel == 0) { nChannel = 16;} 
-  AnChannel[nChannel-1] = (result_high << 8) | result_low;
-}
-#endif
 
 /** Init all ADC conversions by setting resolutions, etc.
  */
-void initialiseADC(void)
+void initialiseADC()
 {
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega1281__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__) //AVR chips use the ISR for this
 
   #if defined(ANALOG_ISR)
+    //This sets the ADC (Analog to Digital Converter) to run at 250KHz, greatly reducing analog read times (MAP/TPS)
+    //the code on ISR run each conversion every 25 ADC clock, conversion run about 100KHz effectively
+    //making a 6250 conversions/s on 16 channels and 12500 on 8 channels devices.
     noInterrupts(); //Interrupts should be turned off when playing with any of these registers
 
     ADCSRB = 0x00; //ADC Auto Trigger Source is in Free Running mode
-
-    ADMUX = ADMUX_DEFAULT_CONFIG;  //Select AVCC as reference, ADC Right Adjust Result, Starting at channel 0
+    ADMUX = 0x40;  //Select AREF as reference, ADC Left Adjust Result, Starting at channel 0
 
     //All of the below is the longhand version of: ADCSRA = 0xEE;
-    #ifndef ADFR
-      #define ADFR 5 //Looks like this is now defined. Retain this for compatibility with earlier versions of Arduino IDE that did not have this.
-    #endif
+    #define ADFR 5 //Why the HELL isn't this defined in the same place as everything else (wiring.h)?!?!
     BIT_SET(ADCSRA,ADFR); //Set free running mode
     BIT_SET(ADCSRA,ADIE); //Set ADC interrupt enabled
     BIT_CLEAR(ADCSRA,ADIF); //Clear interrupt flag
@@ -180,7 +117,6 @@ void initialiseADC(void)
 
     }
   } //For loop iterating through aux in lines
-  
 
   //Sanity checks to ensure none of the filter values are set above 240 (Which would include the 255 value which is the default on a new arduino)
   //If an invalid value is detected, it's reset to the default the value and burned to EEPROM. 
@@ -199,7 +135,7 @@ void initialiseADC(void)
   vssIndex = 0;
 }
 
-static inline void validateMAP(void)
+static inline void validateMAP()
 {
   //Error checks
   if(currentStatus.MAP < VALID_MAP_MIN)
@@ -225,7 +161,7 @@ static inline void validateMAP(void)
   }
 }
 
-void instanteneousMAPReading(void)
+static inline void instanteneousMAPReading()
 {
   //Update the calculation times and last value. These are used by the MAP based Accel enrich
   MAPlast = currentStatus.MAP;
@@ -245,7 +181,7 @@ void instanteneousMAPReading(void)
   else { mapErrorCount = 0; }
 
   //During startup a call is made here to get the baro reading. In this case, we can't apply the ADC filter
-  if(currentStatus.initialisationComplete == true) { currentStatus.mapADC = ADC_FILTER(tempReading, configPage4.ADCFILTER_MAP, currentStatus.mapADC); } //Very weak filter
+  if(initialisationComplete == true) { currentStatus.mapADC = ADC_FILTER(tempReading, configPage4.ADCFILTER_MAP, currentStatus.mapADC); } //Very weak filter
   else { currentStatus.mapADC = tempReading; } //Baro reading (No filter)
 
   currentStatus.MAP = fastMap10Bit(currentStatus.mapADC, configPage2.mapMin, configPage2.mapMax); //Get the current MAP value
@@ -254,12 +190,8 @@ void instanteneousMAPReading(void)
   //Repeat for EMAP if it's enabled
   if(configPage6.useEMAP == true)
   {
-    #if defined(ANALOG_ISR_MAP)
-      tempReading = AnChannel[pinEMAP-A0];
-    #else
-      tempReading = analogRead(pinEMAP);
-      tempReading = analogRead(pinEMAP);
-    #endif
+    tempReading = analogRead(pinEMAP);
+    tempReading = analogRead(pinEMAP);
 
     //Error check
     if( (tempReading < VALID_MAP_MAX) && (tempReading > VALID_MAP_MIN) )
@@ -273,7 +205,7 @@ void instanteneousMAPReading(void)
 
 }
 
-void readMAP(void)
+static inline void readMAP()
 {
   unsigned int tempReading;
   //MAP Sampling system
@@ -310,12 +242,8 @@ void readMAP(void)
           //Repeat for EMAP if it's enabled
           if(configPage6.useEMAP == true)
           {
-            #if defined(ANALOG_ISR_MAP)
-              tempReading = AnChannel[pinEMAP-A0];
-            #else
-              tempReading = analogRead(pinEMAP);
-              tempReading = analogRead(pinEMAP);
-            #endif
+            tempReading = analogRead(pinEMAP);
+            tempReading = analogRead(pinEMAP);
 
             //Error check
             if( (tempReading < VALID_MAP_MAX) && (tempReading > VALID_MAP_MIN) )
@@ -337,14 +265,14 @@ void readMAP(void)
             MAPlast_time = MAP_time;
             MAP_time = micros();
 
-            currentStatus.mapADC = udiv_32_16(MAPrunningValue, MAPcount);
+            currentStatus.mapADC = ldiv(MAPrunningValue, MAPcount).quot;
             currentStatus.MAP = fastMap10Bit(currentStatus.mapADC, configPage2.mapMin, configPage2.mapMax); //Get the current MAP value
             validateMAP();
 
             //If EMAP is enabled, the process is identical to the above
             if(configPage6.useEMAP == true)
             {
-              currentStatus.EMAPADC = udiv_32_16(EMAPrunningValue, MAPcount); //Note that the MAP count can be reused here as it will always be the same count.
+              currentStatus.EMAPADC = ldiv(EMAPrunningValue, MAPcount).quot; //Note that the MAP count can be reused here as it will always be the same count.
               currentStatus.EMAP = fastMap10Bit(currentStatus.EMAPADC, configPage2.EMAPMin, configPage2.EMAPMax);
               if(currentStatus.EMAP < 0) { currentStatus.EMAP = 0; } //Sanity check
             }
@@ -445,7 +373,7 @@ void readMAP(void)
             MAPlast_time = MAP_time;
             MAP_time = micros();
 
-            currentStatus.mapADC = udiv_32_16(MAPrunningValue, MAPcount);
+            currentStatus.mapADC = ldiv(MAPrunningValue, MAPcount).quot;
             currentStatus.MAP = fastMap10Bit(currentStatus.mapADC, configPage2.mapMin, configPage2.mapMax); //Get the current MAP value
             validateMAP();
           }
@@ -473,6 +401,7 @@ void readMAP(void)
 
 void readTPS(bool useFilter)
 {
+  useFilter = false;
   currentStatus.TPSlast = currentStatus.TPS;
   #if defined(ANALOG_ISR)
     byte tempTPS = fastMap1023toX(AnChannel[pinTPS-A0], 255); //Get the current raw TPS ADC value and map it into a byte
@@ -480,6 +409,7 @@ void readTPS(bool useFilter)
     analogRead(pinTPS);
     byte tempTPS = fastMap1023toX(analogRead(pinTPS), 255); //Get the current raw TPS ADC value and map it into a byte
   #endif
+  tempTPS = TPSKalman.updateEstimate(tempTPS);
   //The use of the filter can be overridden if required. This is used on startup to disable priming pulse if flood clear is wanted
   if(useFilter == true) { currentStatus.tpsADC = ADC_FILTER(tempTPS, configPage4.ADCFILTER_TPS, currentStatus.tpsADC); }
   else { currentStatus.tpsADC = tempTPS; }
@@ -530,7 +460,7 @@ void readCLT(bool useFilter)
 {
   unsigned int tempReading;
   #if defined(ANALOG_ISR)
-    tempReading = AnChannel[pinCLT-A0]; //Get the current raw CLT value
+    tempReading = fastMap1023toX(AnChannel[pinCLT-A0], 511); //Get the current raw CLT value
   #else
     tempReading = analogRead(pinCLT);
     tempReading = analogRead(pinCLT);
@@ -543,20 +473,21 @@ void readCLT(bool useFilter)
   currentStatus.coolant = table2D_getValue(&cltCalibrationTable, currentStatus.cltADC) - CALIBRATION_TEMPERATURE_OFFSET; //Temperature calibration values are stored as positive bytes. We subtract 40 from them to allow for negative temperatures
 }
 
-void readIAT(void)
+void readIAT()
 {
   unsigned int tempReading;
   #if defined(ANALOG_ISR)
-    tempReading = AnChannel[pinIAT-A0]; //Get the current raw IAT value
+    tempReading = fastMap1023toX(AnChannel[pinIAT-A0], 511); //Get the current raw IAT value
   #else
     tempReading = analogRead(pinIAT);
     tempReading = analogRead(pinIAT);
+    //tempReading = fastMap1023toX(analogRead(pinIAT), 511); //Get the current raw IAT value
   #endif
   currentStatus.iatADC = ADC_FILTER(tempReading, configPage4.ADCFILTER_IAT, currentStatus.iatADC);
   currentStatus.IAT = table2D_getValue(&iatCalibrationTable, currentStatus.iatADC) - CALIBRATION_TEMPERATURE_OFFSET;
 }
 
-void readBaro(void)
+void readBaro()
 {
   if ( configPage6.useExtBaro != 0 )
   {
@@ -569,7 +500,7 @@ void readBaro(void)
       tempReading = analogRead(pinBaro);
     #endif
 
-    if(currentStatus.initialisationComplete == true) { currentStatus.baroADC = ADC_FILTER(tempReading, configPage4.ADCFILTER_BARO, currentStatus.baroADC); }//Very weak filter
+    if(initialisationComplete == true) { currentStatus.baroADC = ADC_FILTER(tempReading, configPage4.ADCFILTER_BARO, currentStatus.baroADC); }//Very weak filter
     else { currentStatus.baroADC = tempReading; } //Baro reading (No filter)
 
     currentStatus.baro = fastMap10Bit(currentStatus.baroADC, configPage2.baroMin, configPage2.baroMax); //Get the current MAP value
@@ -590,7 +521,7 @@ void readBaro(void)
 
     //Verify the engine isn't running by confirming RPM is 0 and it has been at least 1 second since the last tooth was detected
     unsigned long timeToLastTooth = (micros() - toothLastToothTime);
-    if((currentStatus.RPM == 0) && (timeToLastTooth > MICROS_PER_SEC))
+    if((currentStatus.RPM == 0) && (timeToLastTooth > 1000000UL))
     {
       instanteneousMAPReading(); //Get the current MAP value
       /* 
@@ -607,14 +538,14 @@ void readBaro(void)
   }
 }
 
-void readO2(void)
+void readO2()
 {
   //An O2 read is only performed if an O2 sensor type is selected. This is to prevent potentially dangerous use of the O2 readings prior to proper setup/calibration
   if(configPage6.egoType > 0)
   {
     unsigned int tempReading;
     #if defined(ANALOG_ISR)
-      tempReading = AnChannel[pinO2-A0]; //Get the current O2 value.
+      tempReading = fastMap1023toX(AnChannel[pinO2-A0], 511); //Get the current O2 value.
     #else
       tempReading = analogRead(pinO2);
       tempReading = analogRead(pinO2);
@@ -632,13 +563,13 @@ void readO2(void)
   
 }
 
-void readO2_2(void)
+void readO2_2()
 {
   //Second O2 currently disabled as its not being used
   //Get the current O2 value.
   unsigned int tempReading;
   #if defined(ANALOG_ISR)
-    tempReading = AnChannel[pinO2_2-A0]; //Get the current O2 value.
+    tempReading = fastMap1023toX(AnChannel[pinO2_2-A0], 511); //Get the current O2 value.
   #else
     tempReading = analogRead(pinO2_2);
     tempReading = analogRead(pinO2_2);
@@ -648,7 +579,7 @@ void readO2_2(void)
   currentStatus.O2_2 = table2D_getValue(&o2CalibrationTable, currentStatus.O2_2ADC);
 }
 
-void readBat(void)
+void readBat()
 {
   int tempReading;
   #if defined(ANALOG_ISR)
@@ -672,13 +603,13 @@ void readBat(void)
   {
     //Re-prime the fuel pump
     fpPrimeTime = currentStatus.secl;
-    currentStatus.fpPrimed = false;
+    fpPrimed = false;
     FUEL_PUMP_ON();
 
     //Redo the stepper homing
     if( (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_CL) || (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_OL) )
     {
-      initialiseIdle(true);
+      initialiseIdle();
     }
   }
 
@@ -707,23 +638,13 @@ uint32_t vssGetPulseGap(byte historyIndex)
   return tempGap;
 }
 
-uint16_t getSpeed(void)
+uint16_t getSpeed()
 {
   uint16_t tempSpeed = 0;
-  // Get VSS from CAN, Serial or Analog by using Aux input channels.
+
   if(configPage2.vssMode == 1)
   {
-    // Direct reading from Aux channel
-    if (configPage2.vssPulsesPerKm == 0)
-    {
-      tempSpeed = currentStatus.canin[configPage2.vssAuxCh];
-    }
-    // Adjust the reading by dividing it by set amount.
-    else
-    {
-      tempSpeed = (currentStatus.canin[configPage2.vssAuxCh] / configPage2.vssPulsesPerKm);
-    }
-    tempSpeed = ADC_FILTER(tempSpeed, configPage2.vssSmoothing, currentStatus.vss); //Apply speed smoothing factor
+    //VSS mode 1 is (Will be) CAN
   }
   // Interrupt driven mode
   else if(configPage2.vssMode > 1)
@@ -738,19 +659,19 @@ uint16_t getSpeed(void)
     }
 
     pulseTime = vssTotalTime / (VSS_SAMPLES - 1);
-    if ( (micros() - vssTimes[vssIndex]) > MICROS_PER_SEC ) { tempSpeed = 0; } // Check that the car hasn't come to a stop. Is true if last pulse was more than 1 second ago
+    if ( (micros() - vssTimes[0]) > 1000000UL ) { tempSpeed = 0; } // Check that the car hasn't come to a stop
     else 
-    {
-      tempSpeed = MICROS_PER_HOUR / (pulseTime * configPage2.vssPulsesPerKm); //Convert the pulse gap into km/h
-      tempSpeed = ADC_FILTER(tempSpeed, configPage2.vssSmoothing, currentStatus.vss); //Apply speed smoothing factor
-    }
+      {
+        tempSpeed = 3600000000UL / (pulseTime * configPage2.vssPulsesPerKm); //Convert the pulse gap into km/h
+        tempSpeed = ADC_FILTER(tempSpeed, configPage2.vssSmoothing, currentStatus.vss); //Apply speed smoothing factor
+      }
     if(tempSpeed > 1000) { tempSpeed = currentStatus.vss; } //Safety check. This usually occurs when there is a hardware issue
 
   }
   return tempSpeed;
 }
 
-byte getGear(void)
+byte getGear()
 {
   byte tempGear = 0; //Unknown gear
   if(currentStatus.vss > 0)
@@ -758,7 +679,7 @@ byte getGear(void)
     //If the speed is non-zero, default to the last calculated gear
     tempGear = currentStatus.gear;
 
-    uint16_t pulsesPer1000rpm = udiv_32_16(currentStatus.vss * 10000UL, currentStatus.RPM); //Gives the current pulses per 1000RPM, multiplied by 10 (10x is the multiplication factor for the ratios in TS)
+    uint16_t pulsesPer1000rpm = (currentStatus.vss * 10000UL) / currentStatus.RPM; //Gives the current pulses per 1000RPM, multiplied by 10 (10x is the multiplication factor for the ratios in TS)
     //Begin gear detection
     if( (pulsesPer1000rpm > (configPage2.vssRatio1 - VSS_GEAR_HYSTERESIS)) && (pulsesPer1000rpm < (configPage2.vssRatio1 + VSS_GEAR_HYSTERESIS)) ) { tempGear = 1; }
     else if( (pulsesPer1000rpm > (configPage2.vssRatio2 - VSS_GEAR_HYSTERESIS)) && (pulsesPer1000rpm < (configPage2.vssRatio2 + VSS_GEAR_HYSTERESIS)) ) { tempGear = 2; }
@@ -771,7 +692,7 @@ byte getGear(void)
   return tempGear;
 }
 
-byte getFuelPressure(void)
+byte getFuelPressure()
 {
   int16_t tempFuelPressure = 0;
   uint16_t tempReading;
@@ -779,12 +700,8 @@ byte getFuelPressure(void)
   if(configPage10.fuelPressureEnable > 0)
   {
     //Perform ADC read
-    #if defined(ANALOG_ISR)
-      tempReading = AnChannel[pinFuelPressure-A0];
-    #else
-      tempReading = analogRead(pinFuelPressure);
-      tempReading = analogRead(pinFuelPressure);
-    #endif
+    tempReading = analogRead(pinFuelPressure);
+    tempReading = analogRead(pinFuelPressure);
 
     tempFuelPressure = fastMap10Bit(tempReading, configPage10.fuelPressureMin, configPage10.fuelPressureMax);
     tempFuelPressure = ADC_FILTER(tempFuelPressure, ADCFILTER_PSI_DEFAULT, currentStatus.fuelPressure); //Apply smoothing factor
@@ -796,7 +713,22 @@ byte getFuelPressure(void)
   return (byte)tempFuelPressure;
 }
 
-byte getOilPressure(void)
+byte getOilTemperature()
+{
+  int16_t tempOilTemperature = 0;
+
+  if( configPage10.oilPressureEnable > 0 ) // Enabling OPS+T sensor will also enable temperature readings from it
+  {
+    tempOilTemperature = oilSensorOPStData.temperature; 
+  }
+  //Sanity check
+  // TODO if(tempOilTemperature > configPage9.oilTemperatureMax) { tempOilTemperature = configPage9.oilTemperatureMax; }
+  if(tempOilTemperature < 0 ) { tempOilTemperature = 0; } //prevent negative values, which will cause problems later when the values aren't signed.
+
+  return (byte)tempOilTemperature;
+}
+
+byte getOilPressure()
 {
   int16_t tempOilPressure = 0;
   uint16_t tempReading;
@@ -804,12 +736,7 @@ byte getOilPressure(void)
   if(configPage10.oilPressureEnable > 0)
   {
     //Perform ADC read
-    #if defined(ANALOG_ISR)
-      tempReading = AnChannel[pinOilPressure-A0];
-    #else
-      tempReading = analogRead(pinOilPressure);
-      tempReading = analogRead(pinOilPressure);
-    #endif
+    tempReading = oilSensorOPStData.pressure;
 
 
     tempOilPressure = fastMap10Bit(tempReading, configPage10.oilPressureMin, configPage10.oilPressureMax);
@@ -827,7 +754,7 @@ byte getOilPressure(void)
  * The interrupt function for reading the flex sensor frequency and pulse width
  * flexCounter value is incremented with every pulse and reset back to 0 once per second
  */
-void flexPulse(void)
+void flexPulse()
 {
   if(READ_FLEX() == true)
   {
@@ -845,12 +772,12 @@ void flexPulse(void)
  * The interrupt function for pulses from a knock conditioner / controller
  * 
  */
-void knockPulse(void)
+void knockPulse()
 {
   //Check if this the start of a knock. 
   if(knockCounter == 0)
   {
-    //knockAngle = crankAngle + timeToAngleDegPerMicroSec( (micros() - lastCrankAngleCalc) ); 
+    //knockAngle = crankAngle + fastTimeToAngle( (micros() - lastCrankAngleCalc) ); 
     knockStartTime = micros();
     knockCounter = 1;
   }
@@ -862,7 +789,7 @@ void knockPulse(void)
  * @brief The ISR function for VSS pulses
  * 
  */
-void vssPulse(void)
+void vssPulse()
 {
   //TODO: Add basic filtering here
   vssIndex++;
@@ -876,10 +803,11 @@ uint16_t readAuxanalog(uint8_t analogPin)
   //read the Aux analog value for pin set by analogPin 
   unsigned int tempReading;
   #if defined(ANALOG_ISR)
-    tempReading = AnChannel[analogPin-A0]; //Get the current raw Auxanalog value
+    tempReading = fastMap1023toX(AnChannel[analogPin-A0], 1023); //Get the current raw Auxanalog value
   #else
     tempReading = analogRead(analogPin);
     tempReading = analogRead(analogPin);
+    //tempReading = fastMap1023toX(analogRead(analogPin), 511); Get the current raw Auxanalog value
   #endif
   return tempReading;
 } 
@@ -891,3 +819,60 @@ uint16_t readAuxdigital(uint8_t digitalPin)
   tempReading = digitalRead(digitalPin); 
   return tempReading;
 } 
+
+/*
+ * Called by the 4 hz hardware timer, enables OPS+T interrupt
+ * when timer clicks, ISR will detach itself when it has got readings
+*/
+void readOPSt () {
+  attachInterrupt(digitalPinToInterrupt(PF3), oilSensorOPStISR, CHANGE);       
+}
+
+// ISR to decode PPM data from HELLA oil temperature and pressure sensor
+  static inline void oilSensorOPStISR() //Most ARM chips can simply call a function
+{
+  oilSensorOPStPulse.curEvent = micros();
+
+  //digitalToggle(PA7);
+
+  if(oilSensorOPStPulse.lastLevel == 0 && READ_OPST_TRIGGER()) // Last event was LOW and we have got a rising edge
+  {
+      oilSensorOPStPulse.offTime = oilSensorOPStPulse.curEvent - oilSensorOPStPulse.lastEvent;
+      oilSensorOPStPulse.totalTime = oilSensorOPStPulse.offTime + oilSensorOPStPulse.onTime;
+      oilSensorOPStPulse.lastLevel = 1;
+      oilSensorOPStPulse.lastEvent = oilSensorOPStPulse.curEvent;
+      if (oilSensorOPStPulse.totalTime <= 1024 && oilSensorOPStPulse.index == 0) 
+      {
+        oilSensorOPStPulse.index++;
+        oilSensorOPStPulse.gotSync = 1; 
+        //oilSensorOPStData.status = ((1024UL*oilSensorOPStPulse.onTime)/oilSensorOPStPulse.totalTime)/4; // 640uS max, making it fit uint8
+        oilSensorOPStData.status = ((1024.0/oilSensorOPStPulse.totalTime)*oilSensorOPStPulse.onTime)/4.0;
+      } 
+      else if (oilSensorOPStPulse.index == 1 && oilSensorOPStPulse.gotSync == 1) 
+      {
+        oilSensorOPStData.temperature = (((4096.0/oilSensorOPStPulse.totalTime)*oilSensorOPStPulse.onTime)-128)/19.2;
+        //oilSensorOPStData.temperature = fastMap((4096UL*oilSensorOPStPulse.onTime)/oilSensorOPStPulse.totalTime, 128, 3968, 0, 200);
+        //sensor.temperature = ((4096.0/pulse.total_time)*pulse.on_time-128)/19.2-40;
+        oilSensorOPStPulse.index++;
+      } 
+      else if (oilSensorOPStPulse.index == 2 && oilSensorOPStPulse.gotSync == 1) 
+      {
+        oilSensorOPStData.pressure = (((4096.0/oilSensorOPStPulse.totalTime)*oilSensorOPStPulse.onTime)-128.0)/26.475+10.0;
+        //sensor.pressure = (((((4096.0/pulse.total_time)*pulse.on_time)-128)/384.0)+0.5)*14.503773773;
+        //oilSensorOPStData.pressure = fastMap((4096UL*oilSensorOPStPulse.onTime)/oilSensorOPStPulse.totalTime, 128, 3968, 7, 152);
+        oilSensorOPStPulse.index = 0;
+        detachInterrupt(digitalPinToInterrupt(PF3));       
+      } 
+      else 
+      {
+        oilSensorOPStPulse.index = 0;
+        oilSensorOPStPulse.gotSync = 0;
+      }
+  } 
+  else if(oilSensorOPStPulse.lastLevel == 1 && !READ_OPST_TRIGGER()) // Last event was HIGH and we have got a falling edge 
+  { 
+      oilSensorOPStPulse.onTime = oilSensorOPStPulse.curEvent - oilSensorOPStPulse.lastEvent;
+      oilSensorOPStPulse.lastLevel = 0;
+      oilSensorOPStPulse.lastEvent = oilSensorOPStPulse.curEvent;
+  }
+}
