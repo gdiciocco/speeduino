@@ -29,8 +29,8 @@
 
 #define TPS_READ_FREQUENCY  30 //ONLY VALID VALUES ARE 15 or 30!!!
 
-uint8_t curTPS = 0, prevTPS = 0;
-long tempTPSts = millis();
+extern volatile uint8_t curTPS, prevTPS;
+extern volatile long tempTPSts;
 
 extern volatile byte flexCounter;
 extern volatile unsigned long flexStartTime;
@@ -88,7 +88,8 @@ static inline void oilSensorOPStISR();
 #else
   #define READ_OPST_TRIGGER() digitalRead(PF3)
 #endif
-volatile struct oilSensorOPStPulse {
+
+extern struct oilSensorOPStPulse {
   uint8_t index = 0; // Index of the pulse we are on, frame is composed by three pulses
   unsigned long onTime; // Time duration of the HIGH level 
   unsigned long offTime; // Time duration of the LOW level
@@ -99,7 +100,7 @@ volatile struct oilSensorOPStPulse {
   uint8_t gotSync; // Have we synced to the pulse sequence ?
 } oilSensorOPStPulse;
 
-volatile struct oilSensorOPStData {
+extern struct oilSensorOPStData {
   int16_t temperature; // Celsius temperature + 40 C to avoid problems with negative values 
   int16_t pressure; // Pressure in PSI
   uint8_t status; // Diagnostic pulse, containing its (error corrected) value

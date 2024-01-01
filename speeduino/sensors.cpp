@@ -39,6 +39,12 @@ volatile unsigned long flexPulseWidth;
 volatile byte knockCounter = 0;
 volatile uint16_t knockAngle;
 
+volatile uint8_t curTPS = 0, prevTPS = 0;
+volatile long tempTPSts = millis();
+
+struct oilSensorOPStData oilSensorOPStData;
+struct oilSensorOPStPulse oilSensorOPStPulse;
+
 //These variables are used for tracking the number of running sensors values that appear to be errors. Once a threshold is reached, the sensor reading will go to default value and assume the sensor is faulty
 byte mapErrorCount = 0;
 //byte iatErrorCount = 0; Not used
