@@ -35,7 +35,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "decoders.h"
 #include "idle.h"
 #include "auxiliaries.h"
-#include "sensors.h"
 #include "storage.h"
 #include "crankMaths.h"
 #include "init.h"
