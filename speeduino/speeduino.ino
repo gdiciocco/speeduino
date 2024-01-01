@@ -354,6 +354,10 @@ void loop()
       #endif  
       
       currentStatus.fuelPressure = getFuelPressure();
+      readOPSt(); // Activate the sensor PPM reading interrupt
+      currentStatus.oilPressure = getOilPressure();
+      currentStatus.EMAP = getOilTemperature();
+
       
       if(auxIsEnabled == true)
       {

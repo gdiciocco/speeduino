@@ -725,7 +725,8 @@ int16_t getOilTemperature()
   // TODO if(tempOilTemperature > configPage9.oilTemperatureMax) { tempOilTemperature = configPage9.oilTemperatureMax; }
   if(tempOilTemperature < 0 ) { tempOilTemperature = 0; } //prevent negative values, which will cause problems later when the values aren't signed.
 
-  return (int16_t)tempOilTemperature;
+  //return (int16_t)tempOilTemperature;
+  return (int16_t) oilSensorOPStData.temperature;
 }
 
 byte getOilPressure()
