@@ -292,9 +292,7 @@ void loop(void)
       #endif  
       
       currentStatus.fuelPressure = getFuelPressure();
-      readOPSt(); // Activate the sensor PPM reading interrupt
-      currentStatus.oilPressure = getOilPressure();
-
+      
       if(auxIsEnabled == true)
       {
         //TODO dazq to clean this right up :)

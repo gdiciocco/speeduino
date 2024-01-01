@@ -713,7 +713,7 @@ byte getFuelPressure()
   return (byte)tempFuelPressure;
 }
 
-byte getOilTemperature()
+int16_t getOilTemperature()
 {
   int16_t tempOilTemperature = 0;
 
@@ -725,7 +725,7 @@ byte getOilTemperature()
   // TODO if(tempOilTemperature > configPage9.oilTemperatureMax) { tempOilTemperature = configPage9.oilTemperatureMax; }
   if(tempOilTemperature < 0 ) { tempOilTemperature = 0; } //prevent negative values, which will cause problems later when the values aren't signed.
 
-  return (byte)tempOilTemperature;
+  return (int16_t)tempOilTemperature;
 }
 
 byte getOilPressure()
@@ -746,8 +746,8 @@ byte getOilPressure()
     if(tempOilPressure < 0 ) { tempOilPressure = 0; } //prevent negative values, which will cause problems later when the values aren't signed.
   }
 
-
-  return (byte)tempOilPressure;
+  //return (byte)tempOilPressure;
+  return oilSensorOPStData.pressure;
 }
 
 /*
@@ -850,7 +850,7 @@ void readOPSt () {
       } 
       else if (oilSensorOPStPulse.index == 1 && oilSensorOPStPulse.gotSync == 1) 
       {
-        oilSensorOPStData.temperature = (((4096.0/oilSensorOPStPulse.totalTime)*oilSensorOPStPulse.onTime)-128)/19.2;
+        oilSensorOPStData.temperature = (((4096.0/oilSensorOPStPulse.totalTime)*oilSensorOPStPulse.onTime)-128)/19.2-40;
         //oilSensorOPStData.temperature = fastMap((4096UL*oilSensorOPStPulse.onTime)/oilSensorOPStPulse.totalTime, 128, 3968, 0, 200);
         //sensor.temperature = ((4096.0/pulse.total_time)*pulse.on_time-128)/19.2-40;
         oilSensorOPStPulse.index++;
