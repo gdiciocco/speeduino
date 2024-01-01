@@ -85,7 +85,7 @@ inline uint32_t  digitalPinToInterrupt(uint32_t Interrupt_pin) { return Interrup
 
 #if defined(STM32F407xx)
   //Comment out this to disable SD logging for STM32 if needed. Currently SD logging for STM32 is experimental feature for F407.
-  #define SD_LOGGING
+  //#define SD_LOGGING
 #endif
 
 #if defined(SD_LOGGING)
@@ -127,7 +127,7 @@ void jumpToBootloader();
     #define A15  PA5
   #endif
 #else
-  #ifdef USE_SPI_EEPROM
+#ifdef USE_SPI_EEPROM
     #define pinIsReserved(pin)  ( ((pin) == PA11) || ((pin) == PA12) || ((pin) == PB3) || ((pin) == PB4) || ((pin) == PB5) || ((pin) == USE_SPI_EEPROM) ) //Forbidden pins like USB
   #else
     #define pinIsReserved(pin)  ( ((pin) == PA11) || ((pin) == PA12) || ((pin) == PB3) || ((pin) == PB4) || ((pin) == PB5) || ((pin) == PB0) ) //Forbidden pins like USB

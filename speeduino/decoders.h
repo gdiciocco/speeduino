@@ -216,12 +216,12 @@ void triggerSetEndTeeth_FordST170(void);
 void triggerSetup_DRZ400(void);
 void triggerSec_DRZ400(void);
 
-void triggerSetup_NGC(void);
-void triggerPri_NGC(void);
-void triggerSec_NGC4(void);
-void triggerSec_NGC68(void);
-uint16_t getRPM_NGC(void);
-void triggerSetEndTeeth_NGC(void);
+void triggerSetup_NGC();
+void triggerPri_NGC();
+void triggerSec_NGC4();
+void triggerSec_NGC68();
+uint16_t getRPM_NGC();
+void triggerSetEndTeeth_NGC();
 
 void triggerSetup_Renix(void);
 void triggerPri_Renix(void);
