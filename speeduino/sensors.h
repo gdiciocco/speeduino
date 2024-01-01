@@ -1,7 +1,7 @@
 #ifndef SENSORS_H
 #define SENSORS_H
 
-#include "Arduino.h"
+#include "globals.h"
 #include <src\SimpleKalmanFilter-0.1.0\src\SimpleKalmanFilter.h>
 
 // The following are alpha values for the ADC filters.
@@ -29,15 +29,9 @@
 
 #define TPS_READ_FREQUENCY  30 //ONLY VALID VALUES ARE 15 or 30!!!
 
-/*
-#if defined(CORE_AVR)
-  #define ANALOG_ISR
-#endif
-*/
-
-volatile byte flexCounter = 0;
-volatile unsigned long flexStartTime;
-volatile unsigned long flexPulseWidth;
+extern volatile byte flexCounter;
+extern volatile unsigned long flexStartTime;
+extern volatile unsigned long flexPulseWidth;
 
 #if defined(CORE_AVR)
   #define READ_FLEX() ((*flex_pin_port & flex_pin_mask) ? true : false)
@@ -59,9 +53,6 @@ unsigned long MAPlast_time; //The time the previous MAP sample was taken
 volatile unsigned long vssTimes[VSS_SAMPLES] = {0};
 volatile byte vssIndex;
 
-SimpleKalmanFilter TPSKalman(2, 2, 1);
-byte prevTPS, curTPS;
-int tempTPSts;
 
 //These variables are used for tracking the number of running sensors values that appear to be errors. Once a threshold is reached, the sensor reading will go to default value and assume the sensor is faulty
 byte mapErrorCount = 0;
@@ -88,7 +79,6 @@ uint16_t getSpeed();
 byte getGear();
 byte getFuelPressure();
 byte getOilPressure();
-int16_t getOilTemperature();
 uint16_t readAuxanalog(uint8_t analogPin);
 uint16_t readAuxdigital(uint8_t digitalPin);
 void readCLT(bool=true); //Allows the option to override the use of the filter
@@ -96,9 +86,6 @@ void readIAT();
 void readO2();
 void readBat();
 void readBaro();
-void readOPSt(); 
-static inline void oilSensorOPStISR();
-
 
 #if defined(ANALOG_ISR)
 volatile int AnChannel[15];
@@ -164,30 +151,5 @@ ISR(ADC_vect)
   BIT_SET(ADCSRA, ADEN); //Enable ADC
 }
 #endif
-
-#if defined(CORE_AVR)
-  #define READ_OPST_TRIGGER() ((*oilSensorOPSt_pin_port & oilSensorOPSt_pin_mask) ? true : false)
-#else
-  #define READ_OPST_TRIGGER() digitalRead(PF3)
-#endif
-
-
-volatile struct oilSensorOPStPulse {
-  uint8_t index = 0; // Index of the pulse we are on, frame is composed by three pulses
-  unsigned long onTime; // Time duration of the HIGH level 
-  unsigned long offTime; // Time duration of the LOW level
-  unsigned long totalTime; // Time duration of the whole symbol
-  unsigned long curEvent; // micros() time of current ISR call
-  unsigned long lastEvent; // micros() time of the last ISR call
-  uint8_t lastLevel; // last level
-  uint8_t gotSync; // Have we synced to the pulse sequence ?
-} oilSensorOPStPulse;
-
-volatile struct oilSensorOPStData {
-  int16_t temperature; // Celsius temperature + 40 C to avoid problems with negative values 
-  int16_t pressure; // Pressure in PSI
-  uint8_t status; // Diagnostic pulse, containing its (error corrected) value
-} oilSensorOPStData;
-
 
 #endif // SENSORS_H
