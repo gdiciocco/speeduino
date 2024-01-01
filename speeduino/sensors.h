@@ -29,6 +29,9 @@
 
 #define TPS_READ_FREQUENCY  30 //ONLY VALID VALUES ARE 15 or 30!!!
 
+uint8_t curTPS = 0, prevTPS = 0;
+long tempTPSts = millis();
+
 extern volatile byte flexCounter;
 extern volatile unsigned long flexStartTime;
 extern volatile unsigned long flexPulseWidth;
@@ -39,25 +42,16 @@ extern volatile unsigned long flexPulseWidth;
   #define READ_FLEX() digitalRead(pinFlex)
 #endif
 
-volatile byte knockCounter = 0;
-volatile uint16_t knockAngle;
+#define ADMUX_DEFAULT_CONFIG  0x40 //AVCC reference, ADC0 input, right adjusted, ADC enabled
 
-unsigned long MAPrunningValue; //Used for tracking either the total of all MAP readings in this cycle (Event average) or the lowest value detected in this cycle (event minimum)
-unsigned long EMAPrunningValue; //As above but for EMAP
-unsigned int MAPcount; //Number of samples taken in the current MAP cycle
-uint32_t MAPcurRev; //Tracks which revolution we're sampling on
-bool auxIsEnabled;
-uint16_t MAPlast; /**< The previous MAP reading */
-unsigned long MAP_time; //The time the MAP sample was taken
-unsigned long MAPlast_time; //The time the previous MAP sample was taken
-volatile unsigned long vssTimes[VSS_SAMPLES] = {0};
-volatile byte vssIndex;
+extern volatile byte knockCounter;
 
-
-//These variables are used for tracking the number of running sensors values that appear to be errors. Once a threshold is reached, the sensor reading will go to default value and assume the sensor is faulty
-byte mapErrorCount = 0;
-byte iatErrorCount = 0;
-byte cltErrorCount = 0;
+extern unsigned int MAPcount; //Number of samples taken in the current MAP cycle
+extern uint32_t MAPcurRev; //Tracks which revolution we're sampling on
+extern bool auxIsEnabled;
+extern uint16_t MAPlast; /**< The previous MAP reading */
+extern unsigned long MAP_time; //The time the MAP sample was taken
+extern unsigned long MAPlast_time; //The time the previous MAP sample was taken
 
 /**
  * @brief Simple low pass IIR filter macro for the analog inputs
@@ -66,90 +60,50 @@ byte cltErrorCount = 0;
  */
 #define ADC_FILTER(input, alpha, prior) (((long)input * (256 - alpha) + ((long)prior * alpha))) >> 8
 
-static inline void instanteneousMAPReading() __attribute__((always_inline));
-static inline void readMAP() __attribute__((always_inline));
-static inline void validateMAP();
-void initialiseADC();
-void readTPS(bool=true); //Allows the option to override the use of the filter
-void readO2_2();
-void flexPulse();
-uint32_t vssGetPulseGap(byte);
-void vssPulse();
-uint16_t getSpeed();
-byte getGear();
-byte getFuelPressure();
-byte getOilPressure();
+void initialiseADC(void);
+void readTPS(bool useFilter=true); //Allows the option to override the use of the filter
+void readO2_2(void);
+void flexPulse(void);
+uint32_t vssGetPulseGap(byte toothHistoryIndex);
+void vssPulse(void);
+uint16_t getSpeed(void);
+byte getGear(void);
+byte getFuelPressure(void);
+byte getOilPressure(void);
+int16_t getOilTemperature(void);
 uint16_t readAuxanalog(uint8_t analogPin);
 uint16_t readAuxdigital(uint8_t digitalPin);
-void readCLT(bool=true); //Allows the option to override the use of the filter
-void readIAT();
-void readO2();
-void readBat();
-void readBaro();
+void readCLT(bool useFilter=true); //Allows the option to override the use of the filter
+void readIAT(void);
+void readO2(void);
+void readBat(void);
+void readBaro(void);
+void readMAP(void);
+void instanteneousMAPReading(void);
+void readOPSt(); 
+static inline void oilSensorOPStISR();
 
-#if defined(ANALOG_ISR)
-volatile int AnChannel[15];
-
-//Analog ISR interrupt routine
-/*
-ISR(ADC_vect)
-{
-  byte nChannel;
-  int result = ADCL | (ADCH << 8);
-
-  //ADCSRA = 0x6E; - ADC disabled by clearing bit 7(ADEN)
-  //BIT_CLEAR(ADCSRA, ADIE);
-
-  nChannel = ADMUX & 0x07;
-  #if defined(__AVR_ATmega1281__) || defined(__AVR_ATmega2561__)
-    if (nChannel==7) { ADMUX = 0x40; }
-  #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    if(ADCSRB & 0x08) { nChannel += 8; }  //8 to 15
-    if(nChannel == 15)
-    {
-      ADMUX = 0x40; //channel 0
-      ADCSRB = 0x00; //clear MUX5 bit
-    }
-    else if (nChannel == 7) //channel 7
-    {
-      ADMUX = 0x40;
-      ADCSRB = 0x08; //Set MUX5 bit
-    }
-  #endif
-    else { ADMUX++; }
-  AnChannel[nChannel-1] = result;
-
-  //BIT_SET(ADCSRA, ADIE);
-  //ADCSRA = 0xEE; - ADC Interrupt Flag enabled
-}
-*/
-ISR(ADC_vect)
-{
-  byte nChannel = ADMUX & 0x07;
-  int result = ADCL | (ADCH << 8);
-
-  BIT_CLEAR(ADCSRA, ADEN); //Disable ADC for Changing Channel (see chapter 26.5 of datasheet)
-
-  #if defined(__AVR_ATmega1281__) || defined(__AVR_ATmega2561__)
-    if (nChannel==7) { ADMUX = 0x40; }
-  #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    if( (ADCSRB & 0x08) > 0) { nChannel += 8; }  //8 to 15
-    if(nChannel == 15)
-    {
-      ADMUX = 0x40; //channel 0
-      ADCSRB = 0x00; //clear MUX5 bit
-    }
-    else if (nChannel == 7) //channel 7
-    {
-      ADMUX = 0x40;
-      ADCSRB = 0x08; //Set MUX5 bit
-    }
-  #endif
-    else { ADMUX++; }
-  AnChannel[nChannel] = result;
-
-  BIT_SET(ADCSRA, ADEN); //Enable ADC
-}
+#if defined(CORE_AVR)
+  #define READ_OPST_TRIGGER() ((*oilSensorOPSt_pin_port & oilSensorOPSt_pin_mask) ? true : false)
+#else
+  #define READ_OPST_TRIGGER() digitalRead(PF3)
 #endif
+volatile struct oilSensorOPStPulse {
+  uint8_t index = 0; // Index of the pulse we are on, frame is composed by three pulses
+  unsigned long onTime; // Time duration of the HIGH level 
+  unsigned long offTime; // Time duration of the LOW level
+  unsigned long totalTime; // Time duration of the whole symbol
+  unsigned long curEvent; // micros() time of current ISR call
+  unsigned long lastEvent; // micros() time of the last ISR call
+  uint8_t lastLevel; // last level
+  uint8_t gotSync; // Have we synced to the pulse sequence ?
+} oilSensorOPStPulse;
+
+volatile struct oilSensorOPStData {
+  int16_t temperature; // Celsius temperature + 40 C to avoid problems with negative values 
+  int16_t pressure; // Pressure in PSI
+  uint8_t status; // Diagnostic pulse, containing its (error corrected) value
+} oilSensorOPStData;
+
 
 #endif // SENSORS_H

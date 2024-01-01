@@ -64,7 +64,7 @@ uint16_t staged_req_fuel_mult_sec = 0;
 #ifndef UNIT_TEST // Scope guard for unit testing
 void setup(void)
 {
-  initialisationComplete = false; //Tracks whether the initialiseAll() function has run completely
+  currentStatus.initialisationComplete = false; //Tracks whether the initialiseAll() function has run completely
   //initialiseAll();
   setupBoard();  
   }
