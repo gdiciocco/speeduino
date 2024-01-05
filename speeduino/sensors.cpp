@@ -493,13 +493,13 @@ void readTPS(bool useFilter)
     if (currentStatus.tpsADC < configPage2.tpsMin) { tempADC = configPage2.tpsMin; }
     else if(currentStatus.tpsADC > configPage2.tpsMax) { tempADC = configPage2.tpsMax; }
     currentStatus.TPS = map(tempADC, configPage2.tpsMin, configPage2.tpsMax, 0, 200); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
-    if (curTPS == 1 && millis() - tempTPSts > 70 && prevTPS == 1) {  
-      curTPS = 0;
+    if (currentStatus.TPS == 1 && millis() - tempTPSts > 70 && prevTPS == 1) {  
       tempTPSts = millis();  
+      currentStatus.TPS =  0;
+      prevTPS = 0; 
     } else {
-      prevTPS = curTPS;
+      prevTPS = currentStatus.TPS;
     }
-    currentStatus.TPS =  curTPS; 
   }
   else
   {

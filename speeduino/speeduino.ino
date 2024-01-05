@@ -295,8 +295,9 @@ void loop(void)
         syncSDLog(); //Sync the SD log file to the card 4 times per second. 
       #endif  
       
-      currentStatus.fuelPressure = getFuelPressure();
       readOPSt(); // Activate the sensor PPM reading interrupt
+
+      currentStatus.fuelPressure = getFuelPressure();
       currentStatus.oilPressure = getOilPressure();
       currentStatus.EMAP = getOilTemperature();
 
