@@ -5,7 +5,7 @@
 #include "speeduino.h"
 #include <src/STM32_CAN/STM32_CAN.h>
 
-#define BOARD_MAX_IO_PINS 110
+#define BOARD_MAX_IO_PINS 75
 //#define USE_SPI_EEPROM PB12
 
 #define USE_I2C_BARO
@@ -24,10 +24,10 @@
 #define DIS_PIN PB8_ALT1
 #endif //USE_DBW_IFX9201
 
-#define LED_RUNNING PG9     //42
-#define LED_WARNING PG10    //43
-#define LED_ALERT PG11      //44
-#define LED_COMS PG12       //45
+#define LED_RUNNING PD15     //42
+#define LED_WARNING PD14    //43
+#define LED_ALERT PD14      //44
+#define LED_COMS PD15       //45
 
 
 #define PIN_SERIAL_RX PA10

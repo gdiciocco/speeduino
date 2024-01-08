@@ -86,7 +86,7 @@ static inline void oilSensorOPStISR();
 #if defined(CORE_AVR)
   #define READ_OPST_TRIGGER() ((*oilSensorOPSt_pin_port & oilSensorOPSt_pin_mask) ? true : false)
 #else
-  #define READ_OPST_TRIGGER() digitalRead(PF3)
+  #define READ_OPST_TRIGGER() digitalRead(PD5)
 #endif
 
 extern struct oilSensorOPStPulse {

@@ -914,7 +914,7 @@ uint16_t readAuxdigital(uint8_t digitalPin)
  * when timer clicks, ISR will detach itself when it has got readings
 */
 void readOPSt () {
-  attachInterrupt(digitalPinToInterrupt(PF3), oilSensorOPStISR, CHANGE);       
+  attachInterrupt(digitalPinToInterrupt(PD5), oilSensorOPStISR, CHANGE);       
 }
 
 // ISR to decode PPM data from HELLA oil temperature and pressure sensor
@@ -950,7 +950,7 @@ void readOPSt () {
         //sensor.pressure = (((((4096.0/pulse.total_time)*pulse.on_time)-128)/384.0)+0.5)*14.503773773;
         //oilSensorOPStData.pressure = fastMap((4096UL*oilSensorOPStPulse.onTime)/oilSensorOPStPulse.totalTime, 128, 3968, 7, 152);
         oilSensorOPStPulse.index = 0;
-        detachInterrupt(digitalPinToInterrupt(PF3));       
+        detachInterrupt(digitalPinToInterrupt(PD3));       
       } 
       else 
       {
