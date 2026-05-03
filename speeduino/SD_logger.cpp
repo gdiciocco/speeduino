@@ -12,6 +12,7 @@
 #include "logger.h"
 #include "rtc_common.h"
 #include "maths.h"
+#include <elapsedMillis.h>
 
 //List of logger field names. This must be in the same order and length as logger_updateLogdataCSV()
 constexpr char header_0[] PROGMEM = "secl";
@@ -264,7 +265,6 @@ constexpr const char* header_table[] PROGMEM = {  header_0,\
                                               header_121,\
                                               */
                                             };
-#define SD_LOG_NUM_FIELDS   91 /**< The number of fields that are in the log. This is always smaller than the entry size due to some fields being 2 bytes */
 
 static_assert(sizeof(header_table) == (sizeof(char*) * SD_LOG_NUM_FIELDS), "Number of header table titles must match number of log fields");
 
@@ -275,6 +275,7 @@ uint8_t SD_status = SD_STATUS_OFF;
 uint16_t currentLogFileNumber;
 bool manualLogActive = false;
 uint32_t logStartTime = 0; //In ms
+elapsedMillis msSinceLastSDSync;
 
 void initSD()
 {
@@ -405,10 +406,10 @@ bool getSDLogFileDetails(uint8_t* buffer, uint16_t logNumber)
 
     //Sector number (4 bytes) - This byte order might be backwards
     uint32_t sector = logFile.firstSector();
-    buffer[18] = ((sector) & 255);
-    buffer[19] = ((sector >> 8) & 255);
-    buffer[20] = ((sector >> 16) & 255);
-    buffer[21] = ((sector >> 24) & 255);
+    buffer[18] = ((sector) & UINT8_MAX);
+    buffer[19] = ((sector >> 8) & UINT8_MAX);
+    buffer[20] = ((sector >> 16) & UINT8_MAX);
+    buffer[21] = ((sector >> 24) & UINT8_MAX);
 
     //Unsure on the below 6 bytes, possibly last accessed or modified date/time?
     buffer[22] = 0;
@@ -420,10 +421,10 @@ bool getSDLogFileDetails(uint8_t* buffer, uint16_t logNumber)
 
     //File size (4 bytes). Little endian
     uint32_t size = logFile.fileSize();
-    buffer[28] = ((size) & 255);
-    buffer[29] = ((size >> 8) & 255);
-    buffer[30] = ((size >> 16) & 255);
-    buffer[31] = ((size >> 24) & 255);
+    buffer[28] = ((size) & UINT8_MAX);
+    buffer[29] = ((size >> 8) & UINT8_MAX);
+    buffer[30] = ((size >> 16) & UINT8_MAX);
+    buffer[31] = ((size >> 24) & UINT8_MAX);
 
   }
 
@@ -502,36 +503,46 @@ void writeSDLogEntry()
 
   if(SD_status == SD_STATUS_ACTIVE)
   {
-    //Write the timestamp (x.yyy seconds format)
-    uint32_t duration = millis() - logStartTime;
-    uint32_t seconds = duration / 1000;
-    uint32_t milliseconds = duration % 1000;
-    rb.print(seconds);
-    rb.print('.');
-    if (milliseconds < 100) { rb.print("0"); }
-    if (milliseconds < 10) { rb.print("0"); }
-    rb.print(milliseconds);
-    rb.print(',');
-
-    //Write the line to the ring buffer
-    for(byte x=0; x<SD_LOG_NUM_FIELDS; x++)
+    //Check that there is enough free space in the ring buffer to write the entry
+    if(rb.bytesFree() > SD_LOG_ENTRY_TOTAL_BYTES)
     {
-      #if FPU_MAX_SIZE >= 32
-        float entryValue = getReadableFloatLogEntry(x);
-        if(IS_INTEGER(entryValue)) { rb.print((uint16_t)entryValue); }
-        else { rb.print(entryValue); }
-      #else
-        rb.print(getReadableLogEntry(x));
-      #endif
-      if(x < (SD_LOG_NUM_FIELDS - 1)) { rb.print(","); }
+      //Write the timestamp (x.yyy seconds format)
+      uint32_t duration = millis() - logStartTime;
+      uint32_t seconds = duration / 1000;
+      uint32_t milliseconds = duration % 1000;
+      rb.print(seconds);
+      rb.print('.');
+      if (milliseconds < 100) { rb.print("0"); }
+      if (milliseconds < 10) { rb.print("0"); }
+      rb.print(milliseconds);
+      rb.print(',');
+
+      //Write the line to the ring buffer
+      for(byte x=0; x<SD_LOG_NUM_FIELDS; x++)
+      {
+        #if FPU_MAX_SIZE >= 32
+          float entryValue = getReadableFloatLogEntry(x);
+          if(IS_INTEGER(entryValue)) 
+          { 
+            uint16_t entryValueInt = (uint16_t)entryValue;
+            if(entryValueInt <= UCHAR_MAX) { rb.print((uint8_t)entryValueInt); }
+            else { rb.print(entryValueInt); }
+          }
+          else { rb.print(entryValue); }
+        #else
+          rb.print(getReadableLogEntry(x));
+        #endif
+        if(x < (SD_LOG_NUM_FIELDS - 1)) { rb.print(","); }
+      }
+      rb.println("");
     }
-    rb.println("");
 
     //Check if write to SD from ringbuffer is needed
     //We write to SD when there is more than 1 sector worth of data in the ringbuffer and there is not already a write being performed
-    if( (rb.bytesUsed() >= SD_SECTOR_SIZE) && !logFile.isBusy() )
+    if( (rb.bytesUsed() >= SD_SECTOR_SIZE) && !logFile.isBusy())
     {
       uint16_t bytesWritten = rb.writeOut(SD_SECTOR_SIZE); 
+      
       //Make sure that the entire sector was written successfully
       if (SD_SECTOR_SIZE != bytesWritten) 
       {
@@ -711,12 +722,14 @@ void checkForSDStop()
   
 }
 
-void syncSDLog()
+bool syncSDLog()
 {     
   if( (SD_status == SD_STATUS_ACTIVE) && (!logFile.isBusy()) && (!sd.isBusy()) )
   {
     logFile.sync();
+    return true;
   }
+  return false;
 }
 
 /** 
