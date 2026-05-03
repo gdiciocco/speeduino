@@ -119,6 +119,7 @@ void initialiseAll(void)
     byte exit_erase_loop = false; 
     pinMode(EEPROM_RESET_PIN, INPUT_PULLUP);  
 
+    
     //only start routine when this pin is low because it is pulled low
     while (0 && digitalRead(EEPROM_RESET_PIN) != HIGH && (millis() - start_time)<1050)
     {
@@ -144,6 +145,7 @@ void initialiseAll(void)
         }
       } 
     }
+      
     #endif
   
     // Unit tests should be independent of any stored configuration on the board!
