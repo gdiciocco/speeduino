@@ -1,11 +1,10 @@
 
 #include <Arduino.h>
 #include "globals.h"
-// #include <init.h>
+#include <init.h>
 #include "speeduino.h"
 #include <src/STM32_CAN/STM32_CAN.h>
 
-#define BOARD_MAX_IO_PINS 110
 
 #define USE_I2C_BARO
 //#define USE_DBW_IFX9201
@@ -40,11 +39,8 @@
 #define PIN_SERIAL_RX PA10
 #define PIN_SERIAL_TX PA9
 
-#define PIN_WIRE_SDA PB11
-#define PIN_WIRE_SCL PB10
-
-//extern STM32_CAN Can0;
-//extern STM32_CAN Can1;
+extern STM32_CAN Can0;
+extern STM32_CAN Can1;
 extern HardwareTimer Timer10;
 
 void setupBoard();

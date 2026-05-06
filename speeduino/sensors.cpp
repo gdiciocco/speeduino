@@ -22,6 +22,10 @@ A full copy of the license may be found in the projects root directory
 #include "unit_testing.h"
 #include "sensors_map_structs.h"
 
+#ifdef OPST_SENSOR_ENABLED
+ #include "opst_sensor.h"
+#endif
+
 bool auxIsEnabled;
 
 static volatile uint32_t vssTimes[VSS_SAMPLES] = {0};
@@ -36,8 +40,8 @@ static map_algorithm_t mapAlgorithmState;
 volatile uint8_t curTPS = 0, prevTPS = 0;
 volatile long tempTPSts = millis();
 
-struct oilSensorOPStData oilSensorOPStData;
-struct oilSensorOPStPulse oilSensorOPStPulse;
+volatile struct oilSensorOPStData oilSensorOPStData;
+volatile struct oilSensorOPStPulse oilSensorOPStPulse;
 
 
 /**
@@ -645,6 +649,7 @@ static inline void setBaroFromMAP(void)
 
 void readBaro(void)
 {
+  return; //Currently disabled as the baro value is only read on startup and when the user triggers a manual refresh. This is to preserve the lifespan of the baro sensor and because the readings can be noisy when the engine is running which can cause issues if the baro value is being used for fuel calculations.
   if ( configPage6.useExtBaro != 0U  ) 
   {
     // readings
@@ -853,6 +858,9 @@ byte getFuelPressure(void)
 
 int16_t getOilTemperature(void)
 {
+  #ifdef OIL_SENSOR_OPST
+  return (int16_t) oilSensorOPStData.temperature;
+  #endif
   int16_t tempOilTemperature = 0;
 
   if( configPage10.oilPressureEnable > 0 ) // Enabling OPS+T sensor will also enable temperature readings from it
@@ -863,12 +871,15 @@ int16_t getOilTemperature(void)
   // TODO if(tempOilTemperature > configPage9.oilTemperatureMax) { tempOilTemperature = configPage9.oilTemperatureMax; }
   if(tempOilTemperature < 0 ) { tempOilTemperature = 0; } //prevent negative values, which will cause problems later when the values aren't signed.
 
-  //return (int16_t)tempOilTemperature;
-  return (int16_t) oilSensorOPStData.temperature;
+  return (int16_t)tempOilTemperature;
 }
 
 byte getOilPressure(void)
 {
+  #ifdef OIL_SENSOR_OPST
+  return clamp(oilSensorOPStData.pressure, (int16_t)0, (int16_t)configPage10.oilPressureMax); // eturn our digital sensor data
+  #endif 
+
   int16_t tempOilPressure = 0;
 
   if(configPage10.oilPressureEnable > 0U)
@@ -881,8 +892,7 @@ byte getOilPressure(void)
   }
 
 
-  //return (byte)tempOilPressure;
-  return oilSensorOPStData.pressure; // bruteforce return our digital sensor data
+  return (byte)tempOilPressure;
 }
 
 uint8_t getAnalogKnock(void)
@@ -956,59 +966,3 @@ uint16_t readAuxdigital(uint8_t digitalPin)
 } 
 
 
-/*
- * Called by the 4 hz hardware timer, enables OPS+T interrupt
- * when timer clicks, ISR will detach itself when it has got readings
-*/
-void readOPSt () {
-  attachInterrupt(digitalPinToInterrupt(PD5), oilSensorOPStISR, CHANGE);       
-}
-
-// ISR to decode PPM data from HELLA oil temperature and pressure sensor
-  static inline void oilSensorOPStISR() //Most ARM chips can simply call a function
-{
-  oilSensorOPStPulse.curEvent = micros();
-
-  //digitalToggle(PA7);
-
-  if(oilSensorOPStPulse.lastLevel == 0 && READ_OPST_TRIGGER()) // Last event was LOW and we have got a rising edge
-  {
-      oilSensorOPStPulse.offTime = oilSensorOPStPulse.curEvent - oilSensorOPStPulse.lastEvent;
-      oilSensorOPStPulse.totalTime = oilSensorOPStPulse.offTime + oilSensorOPStPulse.onTime;
-      oilSensorOPStPulse.lastLevel = 1;
-      oilSensorOPStPulse.lastEvent = oilSensorOPStPulse.curEvent;
-      if (oilSensorOPStPulse.totalTime <= 1024 && oilSensorOPStPulse.index == 0) 
-      {
-        oilSensorOPStPulse.index++;
-        oilSensorOPStPulse.gotSync = 1; 
-        //oilSensorOPStData.status = ((1024UL*oilSensorOPStPulse.onTime)/oilSensorOPStPulse.totalTime)/4; // 640uS max, making it fit uint8
-        oilSensorOPStData.status = ((1024.0/oilSensorOPStPulse.totalTime)*oilSensorOPStPulse.onTime)/4.0;
-      } 
-      else if (oilSensorOPStPulse.index == 1 && oilSensorOPStPulse.gotSync == 1) 
-      {
-        oilSensorOPStData.temperature = (((4096.0/oilSensorOPStPulse.totalTime)*oilSensorOPStPulse.onTime)-128)/19.2-40;
-        //oilSensorOPStData.temperature = fastMap((4096UL*oilSensorOPStPulse.onTime)/oilSensorOPStPulse.totalTime, 128, 3968, 0, 200);
-        //sensor.temperature = ((4096.0/pulse.total_time)*pulse.on_time-128)/19.2-40;
-        oilSensorOPStPulse.index++;
-      } 
-      else if (oilSensorOPStPulse.index == 2 && oilSensorOPStPulse.gotSync == 1) 
-      {
-        oilSensorOPStData.pressure = (((4096.0/oilSensorOPStPulse.totalTime)*oilSensorOPStPulse.onTime)-128.0)/26.475+10.0;
-        //sensor.pressure = (((((4096.0/pulse.total_time)*pulse.on_time)-128)/384.0)+0.5)*14.503773773;
-        //oilSensorOPStData.pressure = fastMap((4096UL*oilSensorOPStPulse.onTime)/oilSensorOPStPulse.totalTime, 128, 3968, 7, 152);
-        oilSensorOPStPulse.index = 0;
-        detachInterrupt(digitalPinToInterrupt(PD3));       
-      } 
-      else 
-      {
-        oilSensorOPStPulse.index = 0;
-        oilSensorOPStPulse.gotSync = 0;
-      }
-  } 
-  else if(oilSensorOPStPulse.lastLevel == 1 && !READ_OPST_TRIGGER()) // Last event was HIGH and we have got a falling edge 
-  { 
-      oilSensorOPStPulse.onTime = oilSensorOPStPulse.curEvent - oilSensorOPStPulse.lastEvent;
-      oilSensorOPStPulse.lastLevel = 0;
-      oilSensorOPStPulse.lastEvent = oilSensorOPStPulse.curEvent;
-  }
-}

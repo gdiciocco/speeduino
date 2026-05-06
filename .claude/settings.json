@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.maxxecu.com)",
+      "Bash(find \"c:\\\\Users\\\\HP\\\\.platformio\\\\packages\" -name \"variant.h\" -path \"*F407*\" 2>/dev/null | head -5; find \"c:\\\\Users\\\\HP\\\\.platformio\\\\packages\" -name \"variant.cpp\" -path \"*F407*\" 2>/dev/null | head -5)",
+      "Read(//c/Users/HP/.platformio/packages/**)"
+    ]
+  }
+}

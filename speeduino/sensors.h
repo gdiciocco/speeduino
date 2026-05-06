@@ -70,31 +70,6 @@ int16_t getMAPDelta(void);
 
 /** @brief Get the time in µS between the last 2 MAP readings */
 uint32_t getMAPDeltaTime(void);
-void readOPSt(); 
-static inline void oilSensorOPStISR();
-
-#if defined(CORE_AVR)
-  #define READ_OPST_TRIGGER() ((*oilSensorOPSt_pin_port & oilSensorOPSt_pin_mask) ? true : false)
-#else
-  #define READ_OPST_TRIGGER() digitalRead(PD5)
-#endif
-
-extern struct oilSensorOPStPulse {
-  uint8_t index = 0; // Index of the pulse we are on, frame is composed by three pulses
-  unsigned long onTime; // Time duration of the HIGH level 
-  unsigned long offTime; // Time duration of the LOW level
-  unsigned long totalTime; // Time duration of the whole symbol
-  unsigned long curEvent; // micros() time of current ISR call
-  unsigned long lastEvent; // micros() time of the last ISR call
-  uint8_t lastLevel; // last level
-  uint8_t gotSync; // Have we synced to the pulse sequence ?
-} oilSensorOPStPulse;
-
-extern struct oilSensorOPStData {
-  int16_t temperature; // Celsius temperature + 40 C to avoid problems with negative values 
-  int16_t pressure; // Pressure in PSI
-  uint8_t status; // Diagnostic pulse, containing its (error corrected) value
-} oilSensorOPStData;
 
 
 #endif // SENSORS_H

@@ -317,8 +317,6 @@ void __attribute__((always_inline)) loop(void)
         if(configPage13.onboard_log_file_rate == LOGGER_RATE_4HZ) { writeSDLogEntry(); }
       #endif  
       
-      readOPSt(); // Activate the sensor PPM reading interrupt
-
       currentStatus.fuelPressure = getFuelPressure();
       currentStatus.oilPressure = getOilPressure();
       currentStatus.EMAP = getOilTemperature();

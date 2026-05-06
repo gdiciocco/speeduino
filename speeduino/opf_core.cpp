@@ -3,8 +3,12 @@
 
 #include "opf_core.h"
 
+#ifdef OPST_SENSOR_ENABLED
+ #include "opst_sensor.h"
+#endif
+
 #ifdef USE_I2C_BARO
-TwoWire LPS_dev(PIN_WIRE_SDA, PIN_WIRE_SCL);
+TwoWire LPS_dev(PB11, PB10);  // I2C2, SDA=PB11, SCL=PB10
 LPS25HBSensor LPS_Sensor(&LPS_dev, LPS25HB_ADDRESS_LOW);
 #endif //USE_I2C_BARO
 
@@ -23,6 +27,9 @@ void setupBoard()
   resetPins();
   setPins();
   configPage2.pinMapping = 60;
+
+  initialiseAll();
+
 
   //STATUS LED
   pinMode(LED_RUNNING, OUTPUT);
@@ -47,11 +54,13 @@ void setupBoard()
 #endif
 #endif
 #ifdef USE_I2C_BARO
-  LPS_dev.begin();
-  LPS_Sensor.begin();
-  LPS_Sensor.SetODR(7.0f);
-  LPS_Sensor.Enable();
-#endif //USE_I2C_BARO
+    LPS_dev.begin();
+    if (LPS_Sensor.begin()   != LPS25HB_STATUS_OK ||
+        LPS_Sensor.SetODR(7.0f) != LPS25HB_STATUS_OK ||
+        LPS_Sensor.Enable()  != LPS25HB_STATUS_OK) {
+        digitalWrite(LED_ALERT, HIGH);  // segnala errore init sensore
+    }
+#endif
 
 #ifdef USE_DBW_IFX9201
   Timer10.setMode(1, TIMER_OUTPUT_COMPARE_PWM1, DIS_PIN); //DBW PWM output fixed to PB8/
@@ -73,7 +82,6 @@ void setupBoard()
   //DBWMotor.setSpeed(100);
 #endif //USE_DBW_IFX9201
 
-  initialiseAll();
 /*
   Can0.begin();
   Can0.setBaudRate(500000);
@@ -99,7 +107,7 @@ void setPins()
   //******** Trigger CONNECTIONS ***************
   //******************************************
 
-  pinTrigger = PE2; //106
+  pinTrigger = PE5; //106
   pinTrigger2 = PE4;  //107
   //pinTrigger3 = PE4;  //104
   //pinVSS = PE5;       //105
@@ -142,7 +150,7 @@ void setPins()
 
   pinCoil1 = PE14; //59
   pinCoil2 = PE15; //58
-  pinCoil3 = A0;
+  //pinCoil3 = A0;
 /*
     pinCoil3 = PE13; //61
     pinCoil4 = PE12; //60
@@ -168,7 +176,6 @@ void setPins()
   pinFuelPump = PG6;    //16
   pinFan = PG7;         //17
 
-  //pinOilSensorOPSt = PF3;
 }
 void resetPins()
 {
@@ -267,20 +274,21 @@ void runLoop()
   if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_1HZ)) //1 hertz
   {
 #ifdef USE_I2C_BARO
-    float pressure;
-    float temperature;
-    LPS_Sensor.GetPressure(&pressure);
-    LPS_Sensor.GetTemperature(&temperature);
-    currentStatus.fuelTemp = temperature;
-    currentStatus.baro = pressure / 10.0f;
-    digitalToggle(LED_RUNNING);
+    float pressure = 0.0f;   // ← inizializza sempre
+    float temperature = 0.0f;
+    if (LPS_Sensor.GetPressure(&pressure)    == LPS25HB_STATUS_OK &&
+        LPS_Sensor.GetTemperature(&temperature) == LPS25HB_STATUS_OK) {
+        currentStatus.fuelTemp = temperature;
+        currentStatus.baro = pressure / 10.0f;
+    }
 #endif
 
     //DBWMotor.move_revolution(4);
   }
   if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_4HZ)) //4 hertz
   {
-  //  digitalToggle(LED_RUNNING);
+    readOPSt(); // Activate the sensor PPM reading interrupt
+    digitalToggle(LED_RUNNING);
   }
   if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_10HZ)) //10 hertz
   {
@@ -300,152 +308,13 @@ void dash_generic(STM32_CAN *can)
   //BMW iDrive controller
   if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_1HZ))
   {
-    outMsg.id = 0x202;
-    outMsg.len = 1;
-    outMsg.buf[0] = 0xFD;
-    can->write(outMsg);
-
-    outMsg.id = 0x563;
-    outMsg.len = 1;
-    outMsg.buf[0] = 0x63;
-    can->write(outMsg);
-
-    outMsg.id = 0x273;
-    outMsg.len = 8;
-    outMsg.buf[0] = 0x1D;
-    outMsg.buf[1] = 0xE1;
-    outMsg.buf[2] = 0x00;
-    outMsg.buf[3] = 0xF0;
-    outMsg.buf[4] = 0xFF;
-    outMsg.buf[5] = 0x7F;
-    outMsg.buf[6] = 0xDE;
-    outMsg.buf[7] = 0x00;
-    can->write(outMsg);
-
-    delay(1);
   }
   if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_4HZ))
   {
-
-    outMsg.id = 0x370 + 2;
-    outMsg.len = 8;
-    outMsg.buf[0] = highByte(currentStatus.battery10);
-    outMsg.buf[1] = lowByte(currentStatus.battery10);
-    outMsg.buf[2] = highByte(0x00);
-    outMsg.buf[3] = lowByte(0x00);
-    outMsg.buf[4] = highByte(currentStatus.boostTarget);
-    outMsg.buf[5] = lowByte(currentStatus.boostTarget);
-    outMsg.buf[6] = highByte(currentStatus.baro);
-    outMsg.buf[7] = lowByte(currentStatus.baro);
-    can->write(outMsg);
-
-    outMsg.id = 0x3E0 + 0;
-    outMsg.len = 4;
-    outMsg.buf[0] = highByte(currentStatus.coolant);
-    outMsg.buf[1] = lowByte(currentStatus.coolant);
-    outMsg.buf[2] = highByte(currentStatus.IAT);
-    outMsg.buf[3] = lowByte(currentStatus.IAT);
-    can->write(outMsg);
-
-    outMsg.id = 0x368 + 1;
-    outMsg.len = 2;
-    outMsg.buf[0] = highByte(currentStatus.syncLossCounter);
-    outMsg.buf[1] = lowByte(currentStatus.syncLossCounter);
-    can->write(outMsg);
-    delay(1);
   }
 
   if (BIT_CHECK(LOOP_TIMER, BIT_TIMER_30HZ))
   {
-    outMsg.id = 0x3E8;
-    outMsg.len = 8;
-    outMsg.buf[0] = 0;
-    outMsg.buf[1] = 0;
-    outMsg.buf[2] = lowByte(currentStatus.RPM);
-    outMsg.buf[3] = highByte(currentStatus.RPM);
-    outMsg.buf[4] = lowByte(currentStatus.MAP - currentStatus.baro);
-    outMsg.buf[5] = highByte(currentStatus.MAP - currentStatus.baro);
-    outMsg.buf[6] = 0;
-    outMsg.buf[7] = 0;
-    can->write(outMsg);
-
-    outMsg.id = 0x3E8;
-    outMsg.len = 8;
-    outMsg.buf[0] = 0 + 1;
-    outMsg.buf[1] = 0;
-    outMsg.buf[2] = lowByte(currentStatus.baro * 10);
-    outMsg.buf[3] = highByte(currentStatus.baro * 10);
-    outMsg.buf[4] = lowByte(currentStatus.TPS * 10);
-    outMsg.buf[5] = highByte(currentStatus.TPS * 10);
-    outMsg.buf[6] = 0;
-    outMsg.buf[7] = 0;
-    can->write(outMsg);
-
-    outMsg.id = 0x3E8;
-    outMsg.len = 8;
-    outMsg.buf[0] = 0 + 2;
-    outMsg.buf[1] = 0;
-    outMsg.buf[2] = 0;
-    outMsg.buf[3] = 0;
-    outMsg.buf[4] = lowByte(currentStatus.PW1);
-    outMsg.buf[5] = highByte(currentStatus.PW1);
-    outMsg.buf[6] = lowByte(currentStatus.coolant + 50);
-    outMsg.buf[7] = highByte(currentStatus.coolant + 50);
-    can->write(outMsg);
-
-    delay(1);
-
-    outMsg.id = 0x3E8;
-    outMsg.len = 8;
-    outMsg.buf[0] = 0 + 3;
-    outMsg.buf[1] = 0;
-    outMsg.buf[2] = lowByte(currentStatus.IAT + 50);
-    outMsg.buf[3] = highByte(currentStatus.IAT + 50);
-    outMsg.buf[4] = lowByte(currentStatus.battery10 * 10);
-    outMsg.buf[5] = highByte(currentStatus.battery10 * 10);
-    outMsg.buf[6] = 0;
-    outMsg.buf[7] = 0;
-    can->write(outMsg);
-
-    outMsg.id = 0x3E8;
-    outMsg.len = 8;
-    outMsg.buf[0] = 0 + 6;
-    outMsg.buf[1] = 0;
-    outMsg.buf[2] = 0;
-    outMsg.buf[3] = 0;
-    outMsg.buf[4] = lowByte((uint8_t)(currentStatus.O2 * 100 / configPage2.stoich));
-    outMsg.buf[5] = highByte((uint8_t)(currentStatus.O2 * 100 / configPage2.stoich));
-    outMsg.buf[6] = 0;
-    outMsg.buf[7] = 0;
-    can->write(outMsg);
-
-    outMsg.id = 0x3E8;
-    outMsg.len = 8;
-    outMsg.buf[0] = 0 + 7;
-    outMsg.buf[1] = 0;
-    outMsg.buf[2] = lowByte(currentStatus.syncLossCounter);
-    outMsg.buf[3] = highByte(currentStatus.syncLossCounter);
-    outMsg.buf[4] = 0;
-    outMsg.buf[5] = 0;
-    outMsg.buf[6] = lowByte(currentStatus.fuelPressure * 10);
-    outMsg.buf[7] = highByte(currentStatus.fuelPressure * 10);
-    can->write(outMsg);
-
-    delay(1);
-
-    outMsg.id = 0x3E8;
-    outMsg.len = 8;
-    outMsg.buf[0] = 0 + 8;
-    outMsg.buf[1] = 0;
-    outMsg.buf[2] = 0;
-    outMsg.buf[3] = 0;
-    outMsg.buf[4] = lowByte(currentStatus.oilPressure * 10);
-    outMsg.buf[5] = highByte(currentStatus.oilPressure * 10);
-    outMsg.buf[6] = 0;
-    outMsg.buf[7] = 0;
-    can->write(outMsg);
-
-    //
   }
 }
 
