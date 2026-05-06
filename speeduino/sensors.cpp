@@ -631,6 +631,7 @@ static inline bool isValidBaro(uint8_t baro)
 
 static inline void setBaroFromSensorReading(uint16_t sensorReading) 
 {
+  return; // Coming from I2C Baro
   currentStatus.baroADC = sensorReading;
   int16_t tempValue = fastMap10Bit(currentStatus.baroADC, configPage2.baroMin, configPage2.baroMax);
   currentStatus.baro = (uint8_t)max((int16_t)0, tempValue);
@@ -877,7 +878,7 @@ int16_t getOilTemperature(void)
 byte getOilPressure(void)
 {
   #ifdef OIL_SENSOR_OPST
-  return clamp(oilSensorOPStData.pressure, (int16_t)0, (int16_t)configPage10.oilPressureMax); // eturn our digital sensor data
+  return oilSensorOPStData.pressure;
   #endif 
 
   int16_t tempOilPressure = 0;

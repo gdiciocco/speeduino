@@ -28,7 +28,6 @@ void readOPSt () {
       {
         oilSensorOPStPulse.index++;
         oilSensorOPStPulse.gotSync = 1; 
-        //oilSensorOPStData.status = ((1024UL*oilSensorOPStPulse.onTime)/oilSensorOPStPulse.totalTime)/4; // 640uS max, making it fit uint8
         oilSensorOPStData.status = ((1024.0/oilSensorOPStPulse.totalTime)*oilSensorOPStPulse.onTime)/4.0;
       } 
       else if (oilSensorOPStPulse.index == 1 && oilSensorOPStPulse.gotSync == 1) 

@@ -279,7 +279,7 @@ void runLoop()
     if (LPS_Sensor.GetPressure(&pressure)    == LPS25HB_STATUS_OK &&
         LPS_Sensor.GetTemperature(&temperature) == LPS25HB_STATUS_OK) {
         currentStatus.fuelTemp = temperature;
-        currentStatus.baro = pressure / 10.0f;
+        currentStatus.baroADC = pressure / 10.0f;
     }
 #endif
 
