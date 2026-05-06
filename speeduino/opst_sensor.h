@@ -1,4 +1,4 @@
-#ifdef OPST_SENSOR_ENABLED
+#ifdef OIL_SENSOR_OPST
 
 #include "sensors.h"
 #include "globals.h"

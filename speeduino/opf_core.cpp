@@ -3,7 +3,7 @@
 
 #include "opf_core.h"
 
-#ifdef OPST_SENSOR_ENABLED
+#ifdef OIL_SENSOR_OPST
  #include "opst_sensor.h"
 #endif
 

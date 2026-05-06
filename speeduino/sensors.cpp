@@ -22,7 +22,7 @@ A full copy of the license may be found in the projects root directory
 #include "unit_testing.h"
 #include "sensors_map_structs.h"
 
-#ifdef OPST_SENSOR_ENABLED
+#ifdef OIL_SENSOR_OPST
  #include "opst_sensor.h"
 #endif
 
