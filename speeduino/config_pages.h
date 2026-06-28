@@ -82,8 +82,8 @@ constexpr uint8_t PROTECT_CUT_FUEL    = 2U;
 constexpr uint8_t PROTECT_CUT_BOTH    = 3U;
 constexpr uint8_t PROTECT_IO_ERROR    = 7U;
 
-constexpr uint8_t AE_MODE_TPS         = 0U;
-constexpr uint8_t AE_MODE_MAP         = 1U;
+constexpr uint8_t AE_MODE_BLENDED      = 0U;
+constexpr uint8_t AE_MODE_WALL_WETTING = 1U;
 
 constexpr uint8_t AE_MODE_MULTIPLIER  = 0U;
 constexpr uint8_t AE_MODE_ADDER       = 1U;
@@ -173,7 +173,7 @@ struct config2 : public config_page_t {
   byte aseTaperTime;
   byte aeColdPct;  //AE cold clt modifier %
   byte aeColdTaperMin; //AE cold modifier, taper start temp (full modifier, was ASE in early versions)
-  byte aeMode : 2;      /**< Acceleration Enrichment mode. 0 = TPS, 1 = MAP. Values 2 and 3 reserved for potential future use (ie blended TPS / MAP) */
+  byte aeMode : 2;      /**< Acceleration Enrichment mode. 0 = TPS-MAP Blended, 1 = Wall Wetting. Values 2 and 3 reserved for potential future use (ie blended TPS / MAP) */
   byte unused2_3_3 : 1; //Previously used for battery correction type (open vs whole PW)
   byte SoftLimitMode : 1;
   byte useTachoSweep : 1;
@@ -327,6 +327,8 @@ struct config2 : public config_page_t {
   byte vssAuxCh : 4;
 
   byte decelAmount;
+  byte aeBlendPct; /**< Blend percentage between TPS and MAP AE. 0 = pure MAP, 100 = pure TPS */
+  byte wallWettingFuel; /**< Wall wetting fuel enrichment amount. Used only when aeMode == AE_MODE_WALL_WETTING */
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 
@@ -929,7 +931,10 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-255
-  byte Unused15_106_255[150];
+  //Bytes 106-107 - Unused (was External AE configuration)
+  byte Unused15_106_107[2];
+
+  //Bytes 108-255
+  byte Unused15_108_255[148];
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 

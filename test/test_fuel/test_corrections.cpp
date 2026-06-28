@@ -957,6 +957,8 @@ static void test_corrections_dfco()
 static void reset_AE(void) {
   currentStatus.isAcceleratingTPS = false;
   currentStatus.isDeceleratingTPS = false;
+  currentStatus.tpsDOT = 0;
+  currentStatus.mapDOT = 0;
 }
 
 static void setup_AE(void) {
@@ -985,7 +987,7 @@ static void setup_TAE()
 
   currentStatus.LOOP_TIMER = 0;
   BIT_SET(currentStatus.LOOP_TIMER, TPS_READ_TIMER_BIT);
-  configPage2.aeMode = AE_MODE_TPS; //Set AE to TPS
+  configPage2.aeBlendPct = 100; //Pure TPS blend
 
   TEST_DATA_P uint8_t bins[] = { 0, 8, 22, 97 };
   TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
@@ -1201,7 +1203,7 @@ static void setup_MAE(void)
 {
   setup_AE();
 
-  configPage2.aeMode = AE_MODE_MAP; //Set AE to TPS
+  configPage2.aeBlendPct = 0; //Pure MAP blend
   currentStatus.LOOP_TIMER = 0;
   BIT_SET(currentStatus.LOOP_TIMER, MAP_READ_TIMER_BIT);
 
@@ -1675,7 +1677,7 @@ static void test_corrections_correctionsFuel_clip_limit(void) {
   configPage2.aseTaperTime = 0U;
   configPage2.taeThresh = UINT8_MAX;
   configPage2.taeMinChange = UINT8_MAX;
-  configPage2.aeMode = AE_MODE_TPS; //Set AE to TPS
+  configPage2.aeBlendPct = 100;
   currentStatus.coolant = 212;
   currentStatus.runSecs = 255; 
   currentStatus.battery10 = 100;  
@@ -1713,6 +1715,112 @@ static void test_corrections_correctionsFuel_clip_limit(void) {
   TEST_ASSERT_EQUAL(1500U, correctionsFuel());
 }
 
+static void setup_BLENDED_AE(void)
+{
+  setup_AE();
+
+  // Enable both TPS and MAP read timers
+  currentStatus.LOOP_TIMER = 0;
+  BIT_SET(currentStatus.LOOP_TIMER, TPS_READ_TIMER_BIT);
+  BIT_SET(currentStatus.LOOP_TIMER, MAP_READ_TIMER_BIT);
+
+  // Set up TAE table
+  {
+    TEST_DATA_P uint8_t bins[] = { 0, 8, 22, 97 };
+    TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
+    populate_2dtable_P(&taeTable, values, bins);
+  }
+
+  // Set up MAE table
+  {
+    TEST_DATA_P uint8_t bins[] = { 0, 15, 19, 50 };
+    TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
+    populate_2dtable_P(&maeTable, values, bins);
+  }
+
+  configPage2.taeThresh = 0;
+  configPage2.taeMinChange = 0;
+  configPage2.maeThresh = 0;
+  configPage2.maeMinChange = 0;
+
+  // Disable RPM taper (RPM below taper start)
+  currentStatus.setRpm(2000U);
+  configPage2.aeTaperMin = 50; //5000 RPM
+  configPage2.aeTaperMax = 60; //6000 RPM
+
+  // Coolant already above cold taper range (set in setup_AE)
+}
+
+static void test_corrections_BLENDED_AE_25pct(void)
+{
+  setup_BLENDED_AE();
+  configPage2.aeBlendPct = 25;
+
+  // TPS: small change → tpsDOT = 15, toRaw = 1, tpsAe = 74
+  currentStatus.TPSlast = 50;
+  currentStatus.TPS = 51;
+
+  // MAP: large change over moderate time → mapDOT = 1000, toRaw = 100, mapAe = 136
+  getMapLast().timeDeltaReadings = 10000UL;
+  getMapLast().lastMAPValue = 0;
+  currentStatus.MAP = 10;
+
+  uint16_t accelValue = correctionAccel();
+
+  // blendedAe = (74*25 + 136*75) / 100 = 120
+  // accel = BASELINE_FUEL_CORRECTION + blendedAe = 220
+  TEST_ASSERT_EQUAL(220, accelValue);
+  TEST_ASSERT_TRUE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_BLENDED_AE_50pct(void)
+{
+  setup_BLENDED_AE();
+  configPage2.aeBlendPct = 50;
+
+  currentStatus.TPSlast = 50;
+  currentStatus.TPS = 51;
+  getMapLast().timeDeltaReadings = 10000UL;
+  getMapLast().lastMAPValue = 0;
+  currentStatus.MAP = 10;
+
+  uint16_t accelValue = correctionAccel();
+
+  // blendedAe = (74*50 + 136*50) / 100 = 105
+  // accel = 100 + 105 = 205
+  TEST_ASSERT_EQUAL(205, accelValue);
+  TEST_ASSERT_TRUE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_BLENDED_AE_75pct(void)
+{
+  setup_BLENDED_AE();
+  configPage2.aeBlendPct = 75;
+
+  currentStatus.TPSlast = 50;
+  currentStatus.TPS = 51;
+  getMapLast().timeDeltaReadings = 10000UL;
+  getMapLast().lastMAPValue = 0;
+  currentStatus.MAP = 10;
+
+  uint16_t accelValue = correctionAccel();
+
+  // blendedAe = (74*75 + 136*25) / 100 = 89
+  // accel = 100 + 89 = 189
+  TEST_ASSERT_EQUAL(189, accelValue);
+  TEST_ASSERT_TRUE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_BLENDED_AE(void)
+{
+  RUN_TEST_P(test_corrections_BLENDED_AE_25pct);
+  RUN_TEST_P(test_corrections_BLENDED_AE_50pct);
+  RUN_TEST_P(test_corrections_BLENDED_AE_75pct);
+}
+
 static void test_corrections_correctionsFuel(void) {
   RUN_TEST_P(test_corrections_correctionsFuel_ae_modes);
   RUN_TEST_P(test_corrections_correctionsFuel_clip_limit);
@@ -1725,6 +1833,7 @@ void testCorrections()
     test_corrections_dfco();
     test_corrections_TAE(); //TPS based accel enrichment corrections
     test_corrections_MAE(); //MAP based accel enrichment corrections
+    test_corrections_BLENDED_AE(); //Blended TPS/MAP accel enrichment corrections
     test_corrections_cranking();
     test_corrections_ASE();
     test_corrections_floodclear();

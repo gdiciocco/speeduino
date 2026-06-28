@@ -328,74 +328,6 @@ static inline void updateAeTimeout(void) {
   currentStatus.AEEndTime = micros() + TIME_TENTH_MILLIS.toUser(configPage2.aeTime); 
 }
 
-using aeTimeoutExpiredCallback_t = void (*)(void);
-using shouldResetCurrentAeCallback_t = bool (*)(void);
-using shouldStartAeCallback_t = bool (*)(void);
-using computAeCallback_t = uint16_t (*)(void);
-
-// Implements the skeleton of the AE algorithm. Callers fill in specific steps via callbacks
-// (Template Method design pattern in C!)
-static inline uint16_t correctionAccel( const aeTimeoutExpiredCallback_t onTimeoutExpired, 
-                                        const shouldResetCurrentAeCallback_t shouldResetCurrentAe, 
-                                        const shouldStartAeCallback_t shouldStartAe, 
-                                        const computAeCallback_t computeAe) {
-  uint16_t accelCorrection = NO_FUEL_CORRECTION;
-
-  //First, check whether the accel. enrichment is already running
-  if (isAccelEnrichmentOn()) {
-    //If it is currently running, check whether it should still be running or whether it's reached it's end time
-    if (aeTimeoutExpired()) {
-      accelEnrichmentOff();
-      // Timed out, reset
-      onTimeoutExpired();
-    //Need to check whether the accel amount has increased from when AE was turned on
-    //If the accel amount HAS increased, we clear the current enrich phase and a new one will be started below
-     } else if(shouldResetCurrentAe()) {
-        accelEnrichmentOff();
-    } else {
-      //Enrichment still needs to keep running. 
-      //Simply return the current amount
-      accelCorrection = currentStatus.AEamount;
-    }
-  }
-
-  //Need to check this again as it may have been changed in the above section (Both ACC and DCC are off if this has changed)
-  if ((!isAccelEnrichmentOn()) && (shouldStartAe())) {
-    updateAeTimeout();
-    accelCorrection = computeAe();
-  } 
-
-  return accelCorrection;
-}
-
-static inline void mapOnTimeoutExpired(void) { 
-  currentStatus.mapDOT = 0; 
-}
-
-static inline bool mapShouldResetAe(void) {
-  return (uint16_t)abs(currentStatus.mapDOT) > aeActivatedReading; 
-}
-
-static inline bool mapShouldStartAe(void) { 
-  return (uint16_t)abs(currentStatus.mapDOT) > configPage2.maeThresh; 
-};
-
-static inline uint16_t mapComputeAe(void) {
-  uint16_t aeEnrichment = 0U;
-
-  if (currentStatus.mapDOT < 0) {
-    aeEnrichment = calcDeccelEnrichment();
-  } else if (currentStatus.mapDOT > 0) {
-    aeEnrichment = calcAccelEnrichment(table2D_getValue(&maeTable, MAP_DOT.toRaw(currentStatus.mapDOT)));
-  } else {
-    // Steady state - nothing to do.
-  }
-  
-  aeActivatedReading = (uint16_t)abs(currentStatus.mapDOT);
-  
-  return aeEnrichment;
-}
-
 static inline int16_t computeMapDot(void) {
   int16_t mapDOT = 0U;
   const int16_t mapChange = getMAPDelta();
@@ -420,47 +352,6 @@ static inline int16_t computeMapDot(void) {
   return mapDOT;
 }
 
-static inline uint16_t correctionAccelModeMap(void) {
-  uint16_t aeCorrection = currentStatus.AEamount;
-
-  // No point in updating faster than the MAP sensor is read
-  if (BIT_CHECK(currentStatus.LOOP_TIMER, MAP_READ_TIMER_BIT)) {
-    currentStatus.mapDOT = computeMapDot();
-
-    aeCorrection = correctionAccel(mapOnTimeoutExpired, mapShouldResetAe, mapShouldStartAe, mapComputeAe);
-  }
-
-  return aeCorrection;
-}
-
-static inline void tpsOnTimeoutExpired(void) { 
-  currentStatus.tpsDOT = 0; 
-}
-
-static inline bool tpsShouldResetAe(void) { 
-  return (uint16_t)abs(currentStatus.tpsDOT) > aeActivatedReading; 
-}
-
-static inline bool tpsShouldStartAe(void) { 
-  return (uint16_t)abs(currentStatus.tpsDOT) > configPage2.taeThresh;
-}
-
-static inline uint16_t tpsComputeAe(void) {
-  uint16_t aeEnrichment = 0U;
-
-  //Check if the TPS rate of change is negative or positive. Negative means deceleration.
-  if (currentStatus.tpsDOT < 0) {
-    aeEnrichment = calcDeccelEnrichment();
-  } else if (currentStatus.tpsDOT > 0) {
-    aeEnrichment = calcAccelEnrichment(table2D_getValue(&taeTable, TPS_DOT.toRaw(currentStatus.tpsDOT))); 
-  } else {
-    // Steady state - nothing to do.
-  }
-  aeActivatedReading = (uint16_t)abs(currentStatus.tpsDOT);
-
-  return aeEnrichment;
-}
-
 static inline int16_t computeTPSDOT(void) {
   //Get the TPS rate change
   const int16_t tpsChange = (int16_t)currentStatus.TPS - (int16_t)currentStatus.TPSlast;
@@ -477,22 +368,78 @@ static inline int16_t computeTPSDOT(void) {
   return tpsDOT;
 }
 
-static inline uint16_t correctionAccelModeTps(void) {
-  uint16_t aeCorrection = currentStatus.AEamount;
+static inline bool blendShouldResetAe(void) {
+  return ((uint16_t)abs(currentStatus.tpsDOT) > aeActivatedReading)
+      || ((uint16_t)abs(currentStatus.mapDOT) > aeActivatedReading);
+}
 
-  // No point in updating faster than the TPS is read
-  if (BIT_CHECK(currentStatus.LOOP_TIMER, TPS_READ_TIMER_BIT)) {
-    currentStatus.tpsDOT = computeTPSDOT();
+static inline bool blendShouldStartAe(void) {
+  return ((uint16_t)abs(currentStatus.mapDOT) > configPage2.maeThresh)
+      || ((uint16_t)abs(currentStatus.tpsDOT) > configPage2.taeThresh);
+}
 
-    aeCorrection = correctionAccel(tpsOnTimeoutExpired, tpsShouldResetAe, tpsShouldStartAe, tpsComputeAe);
+static inline uint16_t blendComputeAe(void) {
+  uint16_t aeEnrichment = 0;
+
+  if ( (currentStatus.tpsDOT < 0) || (currentStatus.mapDOT < 0) ) {
+    aeEnrichment = calcDeccelEnrichment();
+  } else if ( (currentStatus.tpsDOT > 0) || (currentStatus.mapDOT > 0) ) {
+    uint16_t tpsAe = 0;
+    uint16_t mapAe = 0;
+
+    if (currentStatus.tpsDOT > 0) {
+      tpsAe = table2D_getValue(&taeTable, TPS_DOT.toRaw(currentStatus.tpsDOT));
+    }
+    if (currentStatus.mapDOT > 0) {
+      mapAe = table2D_getValue(&maeTable, MAP_DOT.toRaw(currentStatus.mapDOT));
+    }
+
+    uint8_t blendedAe = (((uint32_t)tpsAe * configPage2.aeBlendPct)
+                        + ((uint32_t)mapAe * (100U - configPage2.aeBlendPct)))
+                        / 100U;
+    aeEnrichment = calcAccelEnrichment(blendedAe);
   }
 
-  return aeCorrection;
+  aeActivatedReading = max((uint16_t)abs(currentStatus.tpsDOT), (uint16_t)abs(currentStatus.mapDOT));
+  return aeEnrichment;
+}
+
+
+static inline uint16_t correctionAccelBlended(void) {
+    uint16_t aeCorrection = NO_FUEL_CORRECTION;
+
+    if (isAccelEnrichmentOn()) {
+        if (aeTimeoutExpired()) {
+            accelEnrichmentOff();
+            currentStatus.mapDOT = 0;
+            currentStatus.tpsDOT = 0;
+        } else if (blendShouldResetAe()) {
+            accelEnrichmentOff();
+        } else {
+            aeCorrection = currentStatus.AEamount;
+        }
+    }
+
+    if ((!isAccelEnrichmentOn()) && (blendShouldStartAe())) {
+        updateAeTimeout();
+        aeCorrection = blendComputeAe();
+    }
+
+    return aeCorrection;
+}
+
+static inline uint16_t correctionAccelWallWetting(void)
+{
+  return NO_FUEL_CORRECTION;
 }
 
 /** Acceleration enrichment correction calculation.
  * 
- * Calculates the % change of the throttle over time (%/second) and performs a lookup based on this
+ * Dispatches between blended AE and wall wetting AE based on @ref config2.aeMode.
+ * 
+ * Blended mode computes both MAP DOT and TPS DOT, then blends them by the configured blend percentage (@ref config2.aeBlendPct).
+ * 0% = pure MAP AE, 100% = pure TPS AE.
+ * Wall wetting mode is a placeholder (returns no correction).
  * Coolant-based modifier is applied on the top of this.
  * When the enrichment is turned on, it runs at that amount for a fixed period of time (taeTime)
  * 
@@ -503,13 +450,21 @@ static inline uint16_t correctionAccelModeTps(void) {
  */
 TESTABLE_INLINE_STATIC uint16_t correctionAccel(void)
 {
-  if(AE_MODE_MAP==configPage2.aeMode) {
-    return correctionAccelModeMap();
+  if (BIT_CHECK(currentStatus.LOOP_TIMER, MAP_READ_TIMER_BIT)) {
+    currentStatus.mapDOT = computeMapDot();
   }
-  if(AE_MODE_TPS==configPage2.aeMode) {
-    return correctionAccelModeTps();
+  if (BIT_CHECK(currentStatus.LOOP_TIMER, TPS_READ_TIMER_BIT)) {
+    currentStatus.tpsDOT = computeTPSDOT();
   }
-  return NO_FUEL_CORRECTION;
+    
+  switch (configPage2.aeMode) {
+    case AE_MODE_BLENDED:
+      return correctionAccelBlended();
+    case AE_MODE_WALL_WETTING:
+      return correctionAccelWallWetting();
+    default:
+        return NO_FUEL_CORRECTION;
+  }
 }
 
 // ============================= Flood Clear =============================

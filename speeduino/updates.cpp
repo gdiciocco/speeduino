@@ -65,9 +65,43 @@ TESTABLE_STATIC void upgradeV25toV26(void) {
   }
 }
 
+// V27 modified TPS/MAP AE to BLENDED TPS-MAP AE. Convert to the new standard
+// Anyone using extended AE will need to be on this version. 
+TESTABLE_STATIC void upgradeV26toV27(void) {
+    if(loadEEPROMVersion() == 26U)
+    {
+        // Determine blend percentage based on which AE type was previously configured
+        bool tpsUsed = (configPage2.aeMode == 0); // aeMode used to be AE_MODE_TPS
+        bool mapUsed = (configPage2.aeMode == 1); // aeMode used to be AE_MODE_MAP
+
+        if (tpsUsed && !mapUsed)
+        {
+            // Was pure TPS AE: use blended mode with 100% TPS contribution
+            configPage2.aeBlendPct = 100;
+            configPage2.aeMode = AE_MODE_BLENDED; // Make sure we're moved over to blended mode
+        }
+        else if (!tpsUsed && mapUsed)
+        {
+            // Was pure MAP AE: use blended mode with 0% TPS contribution (100% MAP)
+            configPage2.aeBlendPct = 0;
+            configPage2.aeMode = AE_MODE_BLENDED; // Make sure we're moved over to blended mode
+        }
+        else
+        {
+            // Both or neither: default to balanced blend
+            // Something funny happened here.
+            configPage2.aeBlendPct = 50;
+            configPage2.aeMode = AE_MODE_BLENDED; // Make sure we're moved over to blended mode
+        }
+
+        saveAllPages();
+        saveEEPROMVersion(27);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    26
+  #define CURRENT_DATA_VERSION    27
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -275,8 +309,7 @@ void doUpdates(void)
     //March 19 added a tacho pulse duration that could default to stupidly high values. Check if this is the case and fix it if found. 6ms is the maximum allowed value
     if(configPage2.tachoDuration > 6) { configPage2.tachoDuration = 3; }
 
-    //MAP based AE was introduced, force the AE mode to be TPS for all existing tunes
-    configPage2.aeMode = AE_MODE_TPS;
+    //MAP based AE was introduced, set threshold to match existing TPS threshold
     configPage2.maeThresh = configPage2.taeThresh;
     //Set some sane values for the MAP AE curve
     configPage4.maeRates[0] = 75;
@@ -854,6 +887,7 @@ void doUpdates(void)
     saveEEPROMVersion(25);
   }
   upgradeV25toV26();
+  upgradeV26toV27();
   //Move this #endif to only do latest updates to safe ROM space on small devices.
   #endif
 
