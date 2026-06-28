@@ -789,6 +789,29 @@ int8_t correctionCLTadvance(int8_t advance)
 }
 /** Ignition Idle advance correction.
  */
+static constexpr int16_t IDLE_ADVANCE_RPMDOT_PER_DEGREE = 250; //rpm/s per degree of idle advance trim
+static constexpr int8_t IDLE_ADVANCE_RPMDOT_LIMIT = 5; //Maximum +/- timing trim from idle rpmDOT
+static int8_t idleAdvanceRpmDotTrim = 0;
+
+static inline int8_t computeIdleAdvanceRpmDotTrim(void) {
+  if(BIT_CHECK(LOOP_TIMER, BIT_TIMER_10HZ)) {
+    int32_t rpmDot;
+    ATOMIC() {
+      rpmDot = currentStatus.rpmDOT;
+    }
+
+    // Negative rpmDOT means RPM is falling, so add timing; positive removes timing.
+    int16_t trim = (int16_t)((-rpmDot) / IDLE_ADVANCE_RPMDOT_PER_DEGREE);
+    idleAdvanceRpmDotTrim = (int8_t)constrain(trim, -IDLE_ADVANCE_RPMDOT_LIMIT, IDLE_ADVANCE_RPMDOT_LIMIT);
+  }
+
+  return idleAdvanceRpmDotTrim;
+}
+
+static inline void resetIdleAdvanceRpmDotTrim(void) {
+  idleAdvanceRpmDotTrim = 0;
+}
+
 int8_t correctionIdleAdvance(int8_t advance)
 {
 
@@ -807,16 +830,19 @@ int8_t correctionIdleAdvance(int8_t advance)
       if( idleAdvTaper < configPage9.idleAdvStartDelay )
       {
         if( BIT_CHECK(LOOP_TIMER, BIT_TIMER_10HZ) ) { idleAdvTaper++; }
+        resetIdleAdvanceRpmDotTrim();
       }
       else
       {
         int8_t advanceIdleAdjust = (int16_t)(table2D_getValue(&idleAdvanceTable, idleRPMdelta)) - 15;
+        advanceIdleAdjust += computeIdleAdvanceRpmDotTrim();
         if(configPage2.idleAdvEnabled == 1) { ignIdleValue = (advance + advanceIdleAdjust); }
         else if(configPage2.idleAdvEnabled == 2) { ignIdleValue = advanceIdleAdjust; }
       }
     }
-    else { idleAdvTaper = 0; }
+    else { idleAdvTaper = 0; resetIdleAdvanceRpmDotTrim(); }
   }
+  else { resetIdleAdvanceRpmDotTrim(); }
 
 /* When Idle advance is the only idle speed control mechanism, activate as soon as not cranking. 
 When some other mechanism is also present, wait until the engine is no more than 200 RPM below idle target speed on first time
