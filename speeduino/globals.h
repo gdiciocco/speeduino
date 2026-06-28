@@ -24,6 +24,7 @@
  */
 #ifndef GLOBALS_H
 #define GLOBALS_H
+#include "opf_core.h"
 #include <Arduino.h>
 #include <SimplyAtomic.h>
 #include "table2d.h"
@@ -505,6 +506,13 @@ extern volatile PORT_TYPE *tach_pin_port;
 extern volatile PINMASK_TYPE tach_pin_mask;
 extern volatile PORT_TYPE *pump_pin_port;
 extern volatile PINMASK_TYPE pump_pin_mask;
+
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+extern volatile PORT_TYPE *knock_window_pin_port;
+extern volatile PINMASK_TYPE knock_window_pin_mask;
+extern volatile bool knockWindowOutputEnabled;
+extern volatile uint8_t knockWindowActiveCount;
+#endif
 
 extern volatile PORT_TYPE *flex_pin_port;
 extern volatile PINMASK_TYPE flex_pin_mask;

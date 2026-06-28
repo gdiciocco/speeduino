@@ -154,7 +154,6 @@ void initialiseAll(void)
     doUpdates(); //Check if any data items need updating (Occurs with firmware updates)
 #endif
 
-
     //Always start with a clean slate on the bootloader capabilities level
     //This should be 0 until we hear otherwise from the 16u2
     configPage4.bootloaderCaps = 0;
@@ -237,6 +236,27 @@ void initialiseAll(void)
     
     //Set the tacho output default state
     digitalWrite(pinTachOut, HIGH);
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+    // Optional knock-window output. The pin is intentionally build-time
+    // selected to avoid EEPROM/page layout churn and keep the timing path lean.
+    if(!pinIsUsed(KNOCK_WINDOW_OUTPUT_PIN))
+    {
+      pinMode(KNOCK_WINDOW_OUTPUT_PIN, OUTPUT);
+      knock_window_pin_port = portOutputRegister(digitalPinToPort(KNOCK_WINDOW_OUTPUT_PIN));
+      knock_window_pin_mask = digitalPinToBitMask(KNOCK_WINDOW_OUTPUT_PIN);
+#if defined(KNOCK_WINDOW_OUTPUT_ACTIVE_LOW)
+      *knock_window_pin_port |= (knock_window_pin_mask);
+#else
+      *knock_window_pin_port &= ~(knock_window_pin_mask);
+#endif
+      knockWindowActiveCount = 0;
+      knockWindowOutputEnabled = true;
+    }
+    else
+    {
+      knockWindowOutputEnabled = false;
+    }
+#endif
     //Perform all initialisations
     initialiseSchedulers();
     //initialiseDisplay();
@@ -2438,8 +2458,10 @@ void setPinMapping(byte boardID)
     
  
     case 60:
-        resetPins();
-        setPins();
+      #ifdef CAPONORD_BOARD
+        caponordResetPins();
+        caponordSetPins();
+      #endif
       break;
   }
 

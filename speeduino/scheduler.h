@@ -107,8 +107,10 @@ void refreshIgnitionSchedule1(unsigned long timeToEnd);
  * - PENDING - There's a scheduled plan, but is has not started to run yet
  * - STAGED - (???, Not used)
  * - RUNNING - Schedule is currently running
+ * - KNOCK_PENDING - Ignition has ended and the optional knock window start is scheduled
+ * - KNOCK_RUNNING - Optional knock window GPIO is active
  */
-enum ScheduleStatus {OFF, PENDING, STAGED, RUNNING}; //The statuses that a schedule can have
+enum ScheduleStatus {OFF, PENDING, STAGED, RUNNING, KNOCK_PENDING, KNOCK_RUNNING}; //The statuses that a schedule can have
 
 /** Ignition schedule.
  */
@@ -142,27 +144,55 @@ struct IgnitionSchedule {
   volatile bool hasNextSchedule = false; ///< Enable flag for planned next schedule (when current schedule is RUNNING)
   volatile bool endScheduleSetByDecoder = false;
 
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+  // Optional post-spark knock window notification. These are stored as timer
+  // compare deltas so the ISR does not perform degree/time conversion.
+  volatile COMPARE_TYPE knockWindowDelayCompare = 0;
+  volatile COMPARE_TYPE knockWindowDurationCompare = 0;
+  COMPARE_TYPE nextKnockWindowDelayCompare = 0;
+  COMPARE_TYPE nextKnockWindowDurationCompare = 0;
+  volatile bool knockWindowEnabled = false;
+  bool nextKnockWindowEnabled = false;
+#endif
+
   counter_t &counter;  // Reference to the counter register. E.g. TCNT3
   compare_t &compare;  // Reference to the compare register. E.g. OCR3A
   void (&pTimerDisable)();    // Reference to the timer disable function
   void (&pTimerEnable)();     // Reference to the timer enable function  
 };
 
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+void _setIgnitionScheduleRunning(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration, unsigned long knockWindowDelay, unsigned long knockWindowDuration);
+void _setIgnitionScheduleNext(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration, unsigned long knockWindowDelay, unsigned long knockWindowDuration);
+#else
 void _setIgnitionScheduleRunning(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration);
 void _setIgnitionScheduleNext(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration);
+#endif
 
-inline __attribute__((always_inline)) void setIgnitionSchedule(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration) 
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+inline __attribute__((always_inline)) void setIgnitionSchedule(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration, unsigned long knockWindowDelay = 0, unsigned long knockWindowDuration = 0)
+#else
+inline __attribute__((always_inline)) void setIgnitionSchedule(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration)
+#endif
 {
   if((timeout) < MAX_TIMER_PERIOD)
   {
-    if(schedule.Status != RUNNING) 
+    if((schedule.Status == OFF) || (schedule.Status == PENDING))
     { //Check that we're not already part way through a schedule
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      _setIgnitionScheduleRunning(schedule, timeout, duration, knockWindowDelay, knockWindowDuration);
+#else
       _setIgnitionScheduleRunning(schedule, timeout, duration);
+#endif
     }
     // Check whether timeout exceeds the maximum future time. This can potentially occur on sequential setups when below ~115rpm
     else if(angleToTimeMicroSecPerDegree(CRANK_ANGLE_MAX_IGN) < MAX_TIMER_PERIOD)
     {
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      _setIgnitionScheduleNext(schedule, timeout, duration, knockWindowDelay, knockWindowDuration);
+#else
       _setIgnitionScheduleNext(schedule, timeout, duration);
+#endif
     }
   }
 }

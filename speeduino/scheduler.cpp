@@ -73,6 +73,14 @@ static void reset(FuelSchedule &schedule)
 static void reset(IgnitionSchedule &schedule) 
 {
     schedule.Status = OFF;
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+    schedule.knockWindowEnabled = false;
+    schedule.nextKnockWindowEnabled = false;
+    schedule.knockWindowDelayCompare = 0;
+    schedule.knockWindowDurationCompare = 0;
+    schedule.nextKnockWindowDelayCompare = 0;
+    schedule.nextKnockWindowDurationCompare = 0;
+#endif
     schedule.pTimerEnable();
 }
 
@@ -239,7 +247,57 @@ void _setFuelScheduleNext(FuelSchedule &schedule, unsigned long timeout, unsigne
   interrupts();
 }
 
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+static inline __attribute__((always_inline)) COMPARE_TYPE knockWindowCompareFromUs(unsigned long duration)
+{
+  unsigned long clampedDuration = duration;
+  if(clampedDuration >= MAX_TIMER_PERIOD) { clampedDuration = MAX_TIMER_PERIOD - 1; }
+
+  COMPARE_TYPE compareValue = uS_TO_TIMER_COMPARE(clampedDuration);
+  if((clampedDuration > 0UL) && (compareValue == 0U)) { compareValue = 1U; }
+  return compareValue;
+}
+
+static inline __attribute__((always_inline)) void setKnockWindowForCurrentIgnition(IgnitionSchedule &schedule, unsigned long delay, unsigned long duration)
+{
+  // The knock window is attached to the ignition event as compare deltas.
+  // Conversion happens in the main loop; the ISR only loads compare values.
+  schedule.knockWindowEnabled = ((knockWindowOutputEnabled == true) && (duration > 0UL) && (delay < MAX_TIMER_PERIOD));
+  if(schedule.knockWindowEnabled == true)
+  {
+    schedule.knockWindowDelayCompare = knockWindowCompareFromUs(delay);
+    schedule.knockWindowDurationCompare = knockWindowCompareFromUs(duration);
+  }
+  else
+  {
+    schedule.knockWindowDelayCompare = 0;
+    schedule.knockWindowDurationCompare = 0;
+  }
+}
+
+static inline __attribute__((always_inline)) void setKnockWindowForNextIgnition(IgnitionSchedule &schedule, unsigned long delay, unsigned long duration)
+{
+  // Separate next-* storage keeps queued ignition events independent from the
+  // currently active dwell/knock state on the same output channel.
+  schedule.nextKnockWindowEnabled = ((knockWindowOutputEnabled == true) && (duration > 0UL) && (delay < MAX_TIMER_PERIOD));
+  if(schedule.nextKnockWindowEnabled == true)
+  {
+    schedule.nextKnockWindowDelayCompare = knockWindowCompareFromUs(delay);
+    schedule.nextKnockWindowDurationCompare = knockWindowCompareFromUs(duration);
+  }
+  else
+  {
+    schedule.nextKnockWindowDelayCompare = 0;
+    schedule.nextKnockWindowDurationCompare = 0;
+  }
+}
+#endif
+
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+void _setIgnitionScheduleRunning(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration, unsigned long knockWindowDelay, unsigned long knockWindowDuration)
+#else
 void _setIgnitionScheduleRunning(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration)
+#endif
 {
   //The duration of the dwell cannot be longer than the maximum timer period. This is unlikely as dwell timess should never get that long, but it's here for safety
   if(duration >= MAX_TIMER_PERIOD) { schedule.duration = MAX_TIMER_PERIOD - 1; }
@@ -248,6 +306,9 @@ void _setIgnitionScheduleRunning(IgnitionSchedule &schedule, unsigned long timeo
   COMPARE_TYPE timeout_timer_compare = uS_TO_TIMER_COMPARE(timeout);
 
   noInterrupts();
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+  setKnockWindowForCurrentIgnition(schedule, knockWindowDelay, knockWindowDuration);
+#endif
   schedule.startCompare = schedule.counter + timeout_timer_compare; //As there is a tick every 4uS, there are timeout/4 ticks until the interrupt should be triggered ( >>2 divides by 4)
   //if(schedule.endScheduleSetByDecoder == false) { schedule.endCompare = schedule.startCompare + uS_TO_TIMER_COMPARE(schedule.duration); } //The .endCompare value is also set by the per tooth timing in decoders.ino. The check here is so that it's not getting overridden. 
   SET_COMPARE(schedule.compare, schedule.startCompare);
@@ -256,7 +317,11 @@ void _setIgnitionScheduleRunning(IgnitionSchedule &schedule, unsigned long timeo
   schedule.pTimerEnable();
 }
 
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+void _setIgnitionScheduleNext(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration, unsigned long knockWindowDelay, unsigned long knockWindowDuration)
+#else
 void _setIgnitionScheduleNext(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration)
+#endif
 {
   //If the schedule is already running, we can set the next schedule so it is ready to go
   //This is required in cases of high rpm and high DC where there otherwise would not be enough time to set the schedule
@@ -264,6 +329,9 @@ void _setIgnitionScheduleNext(IgnitionSchedule &schedule, unsigned long timeout,
   schedule.nextStartCompare = schedule.counter + uS_TO_TIMER_COMPARE(timeout);
   if(duration >= MAX_TIMER_PERIOD) { schedule.duration = MAX_TIMER_PERIOD - 1; }
   else { schedule.duration = duration; }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+  setKnockWindowForNextIgnition(schedule, knockWindowDelay, knockWindowDuration);
+#endif
   schedule.hasNextSchedule = true;
   interrupts();
 }
@@ -443,6 +511,71 @@ void fuelSchedule8Interrupt() //Most ARM chips can simply call a function
   }
 #endif
 
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+static inline __attribute__((always_inline)) void knockWindowOutputOn(void)
+{
+  // Shared GPIO: keep it active while at least one cylinder window is open.
+  if(knockWindowActiveCount == 0U)
+  {
+#if defined(KNOCK_WINDOW_OUTPUT_ACTIVE_LOW)
+    *knock_window_pin_port &= ~(knock_window_pin_mask);
+#else
+    *knock_window_pin_port |= (knock_window_pin_mask);
+#endif
+  }
+  knockWindowActiveCount++;
+}
+
+static inline __attribute__((always_inline)) void knockWindowOutputOff(void)
+{
+  if(knockWindowActiveCount > 0U) { knockWindowActiveCount--; }
+  if(knockWindowActiveCount == 0U)
+  {
+#if defined(KNOCK_WINDOW_OUTPUT_ACTIVE_LOW)
+    *knock_window_pin_port |= (knock_window_pin_mask);
+#else
+    *knock_window_pin_port &= ~(knock_window_pin_mask);
+#endif
+  }
+}
+
+static inline __attribute__((always_inline)) void promoteNextIgnitionSchedule(IgnitionSchedule &schedule)
+{
+  if(schedule.hasNextSchedule == true)
+  {
+    SET_COMPARE(schedule.compare, schedule.nextStartCompare);
+    schedule.Status = PENDING;
+    schedule.hasNextSchedule = false;
+    schedule.knockWindowEnabled = schedule.nextKnockWindowEnabled;
+    schedule.knockWindowDelayCompare = schedule.nextKnockWindowDelayCompare;
+    schedule.knockWindowDurationCompare = schedule.nextKnockWindowDurationCompare;
+    schedule.nextKnockWindowEnabled = false;
+  }
+  else
+  {
+    schedule.Status = OFF;
+    schedule.knockWindowEnabled = false;
+    schedule.nextKnockWindowEnabled = false;
+    schedule.pTimerDisable();
+  }
+}
+#else
+static inline __attribute__((always_inline)) void promoteNextIgnitionSchedule(IgnitionSchedule &schedule)
+{
+  if(schedule.hasNextSchedule == true)
+  {
+    SET_COMPARE(schedule.compare, schedule.nextStartCompare);
+    schedule.Status = PENDING;
+    schedule.hasNextSchedule = false;
+  }
+  else
+  {
+    schedule.Status = OFF;
+    schedule.pTimerDisable();
+  }
+}
+#endif
+
 // Shared ISR function for all ignition timers.
 // This is completely inlined into the ISR - there is no function call
 // overhead.
@@ -459,23 +592,46 @@ static inline __attribute__((always_inline)) void ignitionScheduleISR(IgnitionSc
   else if (schedule.Status == RUNNING)
   {
     schedule.pEndCallback();
-    schedule.Status = OFF; //Turn off the schedule
     schedule.endScheduleSetByDecoder = false;
     ignitionCount = ignitionCount + 1; //Increment the ignition counter
     currentStatus.actualDwell = DWELL_AVERAGE( (micros() - schedule.startTime) );
 
-    //If there is a next schedule queued up, activate it
-    if(schedule.hasNextSchedule == true)
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+    if(schedule.knockWindowEnabled == true)
     {
-      SET_COMPARE(schedule.compare, schedule.nextStartCompare);
-      schedule.Status = PENDING;
-      schedule.hasNextSchedule = false;
+      if(schedule.knockWindowDelayCompare == 0U)
+      {
+        knockWindowOutputOn();
+        schedule.Status = KNOCK_RUNNING;
+        SET_COMPARE(schedule.compare, schedule.counter + schedule.knockWindowDurationCompare);
+      }
+      else
+      {
+        schedule.Status = KNOCK_PENDING;
+        SET_COMPARE(schedule.compare, schedule.counter + schedule.knockWindowDelayCompare);
+      }
     }
     else
-    { 
-      schedule.pTimerDisable(); 
+    {
+      promoteNextIgnitionSchedule(schedule);
     }
+#else
+    promoteNextIgnitionSchedule(schedule);
+#endif
   }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+  else if (schedule.Status == KNOCK_PENDING)
+  {
+    knockWindowOutputOn();
+    schedule.Status = KNOCK_RUNNING;
+    SET_COMPARE(schedule.compare, schedule.counter + schedule.knockWindowDurationCompare);
+  }
+  else if (schedule.Status == KNOCK_RUNNING)
+  {
+    knockWindowOutputOff();
+    promoteNextIgnitionSchedule(schedule);
+  }
+#endif
   else if (schedule.Status == OFF)
   {
     //Catch any spurious interrupts. This really shouldn't ever be called, but there as a safety
@@ -616,32 +772,64 @@ void disablePendingIgnSchedule(byte channel)
   {
     case 0:
       if(ignitionSchedule1.Status == PENDING) { ignitionSchedule1.Status = OFF; }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      else if(ignitionSchedule1.Status == KNOCK_PENDING) { ignitionSchedule1.Status = OFF; }
+      else if(ignitionSchedule1.Status == KNOCK_RUNNING) { knockWindowOutputOff(); ignitionSchedule1.Status = OFF; }
+#endif
       break;
     case 1:
       if(ignitionSchedule2.Status == PENDING) { ignitionSchedule2.Status = OFF; }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      else if(ignitionSchedule2.Status == KNOCK_PENDING) { ignitionSchedule2.Status = OFF; }
+      else if(ignitionSchedule2.Status == KNOCK_RUNNING) { knockWindowOutputOff(); ignitionSchedule2.Status = OFF; }
+#endif
       break;
     case 2: 
       if(ignitionSchedule3.Status == PENDING) { ignitionSchedule3.Status = OFF; }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      else if(ignitionSchedule3.Status == KNOCK_PENDING) { ignitionSchedule3.Status = OFF; }
+      else if(ignitionSchedule3.Status == KNOCK_RUNNING) { knockWindowOutputOff(); ignitionSchedule3.Status = OFF; }
+#endif
       break;
     case 3:
       if(ignitionSchedule4.Status == PENDING) { ignitionSchedule4.Status = OFF; }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      else if(ignitionSchedule4.Status == KNOCK_PENDING) { ignitionSchedule4.Status = OFF; }
+      else if(ignitionSchedule4.Status == KNOCK_RUNNING) { knockWindowOutputOff(); ignitionSchedule4.Status = OFF; }
+#endif
       break;
     case 4:
       if(ignitionSchedule5.Status == PENDING) { ignitionSchedule5.Status = OFF; }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      else if(ignitionSchedule5.Status == KNOCK_PENDING) { ignitionSchedule5.Status = OFF; }
+      else if(ignitionSchedule5.Status == KNOCK_RUNNING) { knockWindowOutputOff(); ignitionSchedule5.Status = OFF; }
+#endif
       break;
 #if IGN_CHANNELS >= 6      
     case 6:
       if(ignitionSchedule6.Status == PENDING) { ignitionSchedule6.Status = OFF; }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      else if(ignitionSchedule6.Status == KNOCK_PENDING) { ignitionSchedule6.Status = OFF; }
+      else if(ignitionSchedule6.Status == KNOCK_RUNNING) { knockWindowOutputOff(); ignitionSchedule6.Status = OFF; }
+#endif
       break;
 #endif
 #if IGN_CHANNELS >= 7      
     case 7:
       if(ignitionSchedule7.Status == PENDING) { ignitionSchedule7.Status = OFF; }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      else if(ignitionSchedule7.Status == KNOCK_PENDING) { ignitionSchedule7.Status = OFF; }
+      else if(ignitionSchedule7.Status == KNOCK_RUNNING) { knockWindowOutputOff(); ignitionSchedule7.Status = OFF; }
+#endif
       break;
 #endif
 #if IGN_CHANNELS >= 8      
     case 8:
       if(ignitionSchedule8.Status == PENDING) { ignitionSchedule8.Status = OFF; }
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      else if(ignitionSchedule8.Status == KNOCK_PENDING) { ignitionSchedule8.Status = OFF; }
+      else if(ignitionSchedule8.Status == KNOCK_RUNNING) { knockWindowOutputOff(); ignitionSchedule8.Status = OFF; }
+#endif
       break;
 #endif
   }

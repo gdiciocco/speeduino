@@ -40,8 +40,10 @@ static map_algorithm_t mapAlgorithmState;
 volatile uint8_t curTPS = 0, prevTPS = 0;
 volatile long tempTPSts = millis();
 
+#ifdef OIL_SENSOR_OPST
 volatile struct oilSensorOPStData oilSensorOPStData;
 volatile struct oilSensorOPStPulse oilSensorOPStPulse;
+#endif
 
 
 /**
@@ -859,15 +861,16 @@ byte getFuelPressure(void)
 
 int16_t getOilTemperature(void)
 {
-  #ifdef OIL_SENSOR_OPST
-  return (int16_t) oilSensorOPStData.temperature;
-  #endif
   int16_t tempOilTemperature = 0;
 
+#ifdef OIL_SENSOR_OPST
+  tempOilTemperature = oilSensorOPStData.temperature;
+#else
   if( configPage10.oilPressureEnable > 0 ) // Enabling OPS+T sensor will also enable temperature readings from it
   {
-    tempOilTemperature = oilSensorOPStData.temperature; 
+    tempOilTemperature = 0;
   }
+#endif
   //Sanity check
   // TODO if(tempOilTemperature > configPage9.oilTemperatureMax) { tempOilTemperature = configPage9.oilTemperatureMax; }
   if(tempOilTemperature < 0 ) { tempOilTemperature = 0; } //prevent negative values, which will cause problems later when the values aren't signed.
@@ -877,12 +880,13 @@ int16_t getOilTemperature(void)
 
 byte getOilPressure(void)
 {
-  #ifdef OIL_SENSOR_OPST
-  return oilSensorOPStData.pressure;
-  #endif 
-
   int16_t tempOilPressure = 0;
 
+#ifdef OIL_SENSOR_OPST
+  tempOilPressure = oilSensorOPStData.pressure;
+  int16_t oilPressureMax = (configPage10.oilPressureMax > 0U) ? configPage10.oilPressureMax : UINT8_MAX;
+  tempOilPressure = clamp(tempOilPressure, (int16_t)0, oilPressureMax);
+#else
   if(configPage10.oilPressureEnable > 0U)
   {
     //Perform ADC read
@@ -891,7 +895,7 @@ byte getOilPressure(void)
     //Sanity check
     tempOilPressure = clamp(tempOilPressure, (int16_t)0, (int16_t)configPage10.oilPressureMax);
   }
-
+#endif
 
   return (byte)tempOilPressure;
 }

@@ -61,6 +61,48 @@ uint32_t rollingCutLastRev = 0; /**< Tracks whether we're on the same or a diffe
 uint16_t staged_req_fuel_mult_pri = 0;
 uint16_t staged_req_fuel_mult_sec = 0;   
 #ifndef UNIT_TEST // Scope guard for unit testing
+
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+static unsigned long knockWindowDelay = 0UL;
+static unsigned long knockWindowDuration = 0UL;
+
+static inline __attribute__((always_inline)) void calculateKnockWindowSchedule(unsigned long &delay, unsigned long &duration)
+{
+  delay = 0UL;
+  duration = 0UL;
+
+  if(knockWindowOutputEnabled == true)
+  {
+    // TunerStudio stores the RPM bins as RPM/100 and the start angle as an
+    // 8-bit value. Cast through int8_t so negative BTDC values keep their sign.
+    int16_t windowStartAngle = (int8_t)table2D_getValue(&knockWindowStartTable, currentStatus.RPMdiv100);
+    int16_t delayAngle = (int16_t)currentStatus.advance + windowStartAngle;
+
+    // This compact scheduler extension is intentionally post-spark. If a
+    // tune asks for a pre-spark window, open immediately at spark end.
+    if(delayAngle > 0)
+    {
+      delay = angleToTimeMicroSecPerDegree((uint16_t)delayAngle);
+    }
+
+    uint16_t durationAngle = (uint16_t)table2D_getValue(&knockWindowDurationTable, currentStatus.RPMdiv100);
+    if(durationAngle > 0U)
+    {
+      duration = angleToTimeMicroSecPerDegree(durationAngle);
+    }
+  }
+}
+#endif
+
+static inline __attribute__((always_inline)) void scheduleIgnition(IgnitionSchedule &schedule, unsigned long timeout, unsigned long duration)
+{
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+  setIgnitionSchedule(schedule, timeout, duration, knockWindowDelay, knockWindowDuration);
+#else
+  setIgnitionSchedule(schedule, timeout, duration);
+#endif
+}
+
 void setup(void)
 {
   currentStatus.initialisationComplete = false; //Tracks whether the initialiseAll() function has run completely
@@ -766,6 +808,10 @@ void __attribute__((always_inline)) loop(void)
       // Convert the dwell time to dwell angle based on the current engine speed
       calculateIgnitionAngles(timeToAngleDegPerMicroSec(currentStatus.dwell));
 
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+      calculateKnockWindowSchedule(knockWindowDelay, knockWindowDuration);
+#endif
+
       //If ignition timing is being tracked per tooth, perform the calcs to get the end teeth
       //This only needs to be run if the advance figure has changed, otherwise the end teeth will still be the same
       //if( (configPage2.perToothIgn == true) && (lastToothCalcAdvance != currentStatus.advance) ) { triggerSetEndTeeth(); }
@@ -1081,7 +1127,7 @@ void __attribute__((always_inline)) loop(void)
         uint32_t timeOut = calculateIgnitionTimeout(ignitionSchedule1, ignition1StartAngle, channel1IgnDegrees, crankAngle);
         if ( (timeOut > 0U) && (BIT_CHECK(ignitionChannelsOn, IGN1_CMD_BIT)) )
         {
-          setIgnitionSchedule(ignitionSchedule1, timeOut,
+          scheduleIgnition(ignitionSchedule1, timeOut,
                     currentStatus.dwell + fixedCrankingOverride);
         }
 #endif
@@ -1112,7 +1158,7 @@ void __attribute__((always_inline)) loop(void)
 
             if ( (ignition2StartTime > 0) && (BIT_CHECK(ignitionChannelsOn, IGN2_CMD_BIT)) )
             {
-              setIgnitionSchedule(ignitionSchedule2, ignition2StartTime,
+              scheduleIgnition(ignitionSchedule2, ignition2StartTime,
                         currentStatus.dwell + fixedCrankingOverride);
             }
         }
@@ -1125,7 +1171,7 @@ void __attribute__((always_inline)) loop(void)
 
             if ( (ignition3StartTime > 0) && (BIT_CHECK(ignitionChannelsOn, IGN3_CMD_BIT)) )
             {
-              setIgnitionSchedule(ignitionSchedule3, ignition3StartTime,
+              scheduleIgnition(ignitionSchedule3, ignition3StartTime,
                         currentStatus.dwell + fixedCrankingOverride);
             }
         }
@@ -1138,7 +1184,7 @@ void __attribute__((always_inline)) loop(void)
 
             if ( (ignition4StartTime > 0) && (BIT_CHECK(ignitionChannelsOn, IGN4_CMD_BIT)) )
             {
-              setIgnitionSchedule(ignitionSchedule4, ignition4StartTime,
+              scheduleIgnition(ignitionSchedule4, ignition4StartTime,
                         currentStatus.dwell + fixedCrankingOverride);
             }
         }
@@ -1151,7 +1197,7 @@ void __attribute__((always_inline)) loop(void)
 
             if ( (ignition5StartTime > 0) && (BIT_CHECK(ignitionChannelsOn, IGN5_CMD_BIT)) )
             {
-              setIgnitionSchedule(ignitionSchedule5, ignition5StartTime,
+              scheduleIgnition(ignitionSchedule5, ignition5StartTime,
                         currentStatus.dwell + fixedCrankingOverride);
             }
         }
@@ -1164,7 +1210,7 @@ void __attribute__((always_inline)) loop(void)
 
             if ( (ignition6StartTime > 0) && (BIT_CHECK(ignitionChannelsOn, IGN6_CMD_BIT)) )
             {
-              setIgnitionSchedule(ignitionSchedule6, ignition6StartTime,
+              scheduleIgnition(ignitionSchedule6, ignition6StartTime,
                         currentStatus.dwell + fixedCrankingOverride);
             }
         }
@@ -1177,7 +1223,7 @@ void __attribute__((always_inline)) loop(void)
 
             if ( (ignition7StartTime > 0) && (BIT_CHECK(ignitionChannelsOn, IGN7_CMD_BIT)) )
             {
-              setIgnitionSchedule(ignitionSchedule7, ignition7StartTime,
+              scheduleIgnition(ignitionSchedule7, ignition7StartTime,
                         currentStatus.dwell + fixedCrankingOverride);
             }
         }
@@ -1190,7 +1236,7 @@ void __attribute__((always_inline)) loop(void)
 
             if ( (ignition8StartTime > 0) && (BIT_CHECK(ignitionChannelsOn, IGN8_CMD_BIT)) )
             {
-              setIgnitionSchedule(ignitionSchedule8, ignition8StartTime,
+              scheduleIgnition(ignitionSchedule8, ignition8StartTime,
                         currentStatus.dwell + fixedCrankingOverride);
             }
         }

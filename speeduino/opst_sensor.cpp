@@ -7,16 +7,10 @@
  * Called by the 4 hz hardware timer, enables OPS+T interrupt
  * when timer clicks, ISR will detach itself when it has got readings
 */
-void readOPSt () {
-  attachInterrupt(digitalPinToInterrupt(PF3), oilSensorOPStISR, CHANGE);       
-}
-
 // ISR to decode PPM data from HELLA oil temperature and pressure sensor
-  static inline void oilSensorOPStISR() //Most ARM chips can simply call a function
+static void oilSensorOPStISR() //Most ARM chips can simply call a function
 {
   oilSensorOPStPulse.curEvent = micros();
-
-  digitalToggle(PG10);
 
   if(oilSensorOPStPulse.lastLevel == 0 && READ_OPST_TRIGGER()) // Last event was LOW and we have got a rising edge
   {
@@ -53,6 +47,10 @@ void readOPSt () {
       oilSensorOPStPulse.lastLevel = 0;
       oilSensorOPStPulse.lastEvent = oilSensorOPStPulse.curEvent;
   }
+}
+
+void readOPSt () {
+  attachInterrupt(digitalPinToInterrupt(PIN_OPST), oilSensorOPStISR, CHANGE);
 }
 
 #endif

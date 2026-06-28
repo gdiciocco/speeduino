@@ -6,6 +6,32 @@
 #include "utilities.h"
 #include BOARD_H 
 
+#if defined(CAPONORD_BOARD)
+static byte getCaponordTSLogEntry(uint16_t byteNum)
+{
+  byte statusValue = 0;
+
+  switch(byteNum)
+  {
+    case 0: statusValue = lowByte(0xCA50U); break;
+    case 1: statusValue = highByte(0xCA50U); break;
+    case 2: statusValue = 1U; break;
+    case 4: statusValue = lowByte(currentStatus.RPM); break;
+    case 5: statusValue = highByte(currentStatus.RPM); break;
+    case 6: statusValue = lowByte(currentStatus.MAP); break;
+    case 7: statusValue = highByte(currentStatus.MAP); break;
+    case 8: statusValue = currentStatus.oilPressure; break;
+    case 9: statusValue = currentStatus.fuelPressure; break;
+    case 10: statusValue = currentStatus.status5; break;
+    case 11: statusValue = currentStatus.knockCount; break;
+    case 12: statusValue = currentStatus.knockRetard; break;
+    default: statusValue = 0; break;
+  }
+
+  return statusValue;
+}
+#endif
+
 /** 
  * Returns a numbered byte-field (partial field in case of multi-byte fields) from "current status" structure in the format expected by TunerStudio
  * Notes on fields:
@@ -19,6 +45,13 @@
 byte getTSLogEntry(uint16_t byteNum)
 {
   byte statusValue = 0;
+
+#if defined(CAPONORD_BOARD)
+  if(byteNum >= CAPONORD_TS_OUTPUT_BASE)
+  {
+    return getCaponordTSLogEntry(byteNum - CAPONORD_TS_OUTPUT_BASE);
+  }
+#endif
 
   switch(byteNum)
   {

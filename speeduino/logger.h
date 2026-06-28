@@ -12,7 +12,12 @@
 #include "globals.h" // Needed for FPU_MAX_SIZE
 
 #ifndef UNIT_TEST // Scope guard for unit testing
-  #define LOG_ENTRY_SIZE      130 /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
+  #if defined(CAPONORD_BOARD)
+    #define CAPONORD_TS_OUTPUT_BASE 192U
+    #define LOG_ENTRY_SIZE      224 /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
+  #else
+    #define LOG_ENTRY_SIZE      130 /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
+  #endif
 #else
   #define LOG_ENTRY_SIZE      1 /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
 #endif

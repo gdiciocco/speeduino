@@ -96,6 +96,13 @@ volatile PINMASK_TYPE tach_pin_mask;
 volatile PORT_TYPE *pump_pin_port;
 volatile PINMASK_TYPE pump_pin_mask;
 
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+volatile PORT_TYPE *knock_window_pin_port;
+volatile PINMASK_TYPE knock_window_pin_mask;
+volatile bool knockWindowOutputEnabled = false;
+volatile uint8_t knockWindowActiveCount = 0;
+#endif
+
 volatile PORT_TYPE *flex_pin_port;
 volatile PINMASK_TYPE flex_pin_mask;
 

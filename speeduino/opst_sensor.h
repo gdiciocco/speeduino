@@ -21,8 +21,6 @@
 
 extern void readOPSt();
 
-static inline void oilSensorOPStISR(); //Most ARM chips can simply call a function
-
 extern volatile struct oilSensorOPStPulse {
   uint8_t index; // Index of the pulse we are on, frame is composed by three pulses
   unsigned long onTime; // Time duration of the HIGH level 
