@@ -91,6 +91,8 @@ constexpr uint16_t EEPROM_CONFIG8_MAP8   = 3151;
 //Page 15 added after OUT OF ORDER page 8
 constexpr uint16_t EEPROM_CONFIG15_MAP   = 3199;
 constexpr uint16_t EEPROM_CONFIG15_START = 3281;
+constexpr uint16_t EEPROM_CONFIG16_MAP1  = 3457;
+constexpr uint16_t EEPROM_CONFIG16_MAP2  = 3537;
 
 #if defined(UNIT_TEST)
 uint16_t MAX_PAGE_ADDRESS = EEPROM_LAST_BARO-sizeof(uint8_t);
@@ -148,6 +150,8 @@ TESTABLE_STATIC uint16_t getEntityStartAddress(page_iterator_t iter) {
     { &ignitionTable2, EEPROM_CONFIG14_MAP },
     { &boostTableLookupDuty, EEPROM_CONFIG15_MAP },
     { &configPage15, EEPROM_CONFIG15_START },
+    { &wallWettingAddTable, EEPROM_CONFIG16_MAP1 },
+    { &wallWettingRemoveTable, EEPROM_CONFIG16_MAP2 },
   };
   static const constexpr entity_storage_map_t* entityMapEnd = entityMap + _countof(entityMap);
 
@@ -395,6 +399,11 @@ void savePage(uint8_t pageNum)
       writesRemaining = write_range((byte *)&configPage15, (byte *)&configPage15+sizeof(configPage15), EEPROM_CONFIG15_START, writesRemaining);
       break;
 
+    case wallWettingPage:
+      writesRemaining = writeTable(&wallWettingAddTable, decltype(wallWettingAddTable)::type_key, EEPROM_CONFIG16_MAP1, writesRemaining);
+      writesRemaining = writeTable(&wallWettingRemoveTable, decltype(wallWettingRemoveTable)::type_key, EEPROM_CONFIG16_MAP2, writesRemaining);
+      break;
+
     default:
       break;
   }
@@ -531,6 +540,11 @@ void loadAllPages(void)
   //CONFIG PAGE (15) + boost duty lookup table (LUT)
   (void)loadTable(&boostTableLookupDuty, decltype(boostTableLookupDuty)::type_key, EEPROM_CONFIG15_MAP);
   (void)load_range(EEPROM_CONFIG15_START, (byte *)&configPage15, (byte *)&configPage15+sizeof(configPage15));  
+
+  //*********************************************************************************************************************************************************************************
+  //Wall wetting tables load (Page 16)
+  (void)loadTable(&wallWettingAddTable, decltype(wallWettingAddTable)::type_key, EEPROM_CONFIG16_MAP1);
+  (void)loadTable(&wallWettingRemoveTable, decltype(wallWettingRemoveTable)::type_key, EEPROM_CONFIG16_MAP2);
 
   //*********************************************************************************************************************************************************************************
 }

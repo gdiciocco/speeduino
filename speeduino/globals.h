@@ -73,6 +73,8 @@ using trimTable3d = table3d6RpmLoad;
 extern trimTable3d trimTables[INJ_CHANNELS]; //6x6 Fuel trim maps
 
 extern struct table3d4RpmLoad dwellTable; //4x4 Dwell map
+extern struct table3d8RpmLoad wallWettingAddTable; //8x8 wall wetting "added to wall" coefficient (X)
+extern struct table3d8RpmLoad wallWettingRemoveTable; //8x8 wall wetting "removed from wall" coefficient (Y)
 
 extern uint8_t softLimitTime; //The time (in 0.1 seconds, based on seclx10) that the soft limiter started
 extern volatile uint16_t mainLoopCount;

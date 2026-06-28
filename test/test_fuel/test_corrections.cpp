@@ -1821,6 +1821,142 @@ static void test_corrections_BLENDED_AE(void)
   RUN_TEST_P(test_corrections_BLENDED_AE_75pct);
 }
 
+// ============================= Wall wetting AE =============================
+
+static void setup_wall_wetting(void)
+{
+  initialiseCorrections();
+
+  configPage2.aeMode = AE_MODE_WALL_WETTING;
+
+  // Disable RPM taper: keep RPM below taperMin
+  currentStatus.setRpm(3000U);
+  configPage2.aeTaperMin = 50; //5000 RPM
+  configPage2.aeTaperMax = 60; //6000 RPM
+
+  // Disable coolant taper
+  configPage2.aeColdPct = 100; // = NO_FUEL_CORRECTION -> disabled
+  configPage2.aeColdTaperMax = 60;
+  configPage2.aeColdTaperMin = 0;
+  currentStatus.coolant = temperatureRemoveOffset(configPage2.aeColdTaperMax) + 1;
+
+  // Set up linear axes so RPM=3000 and fuelLoad=30 fall on a bin
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    wallWettingAddTable.axisX.axis[i] = i * 10 + 1;   // 1, 11, 21, 31, 41, 51, 61, 71 (x100 RPM)
+    wallWettingAddTable.axisY.axis[i] = i * 10 + 1;   // 1, 11, 21, 31, 41, 51, 61, 71 (Load)
+    wallWettingRemoveTable.axisX.axis[i] = i * 10 + 1;
+    wallWettingRemoveTable.axisY.axis[i] = i * 10 + 1;
+  }
+  invalidate_cache(&wallWettingAddTable.get_value_cache);
+  invalidate_cache(&wallWettingRemoveTable.get_value_cache);
+
+  currentStatus.fuelLoad = 30; // fuel demand
+
+  // TPS/MAP state to avoid computeTPSDOT/computeMapDot surprises
+  currentStatus.TPS = 0;
+  currentStatus.TPSlast = 0;
+  currentStatus.MAP = 50;
+  configPage2.taeMinChange = 0;
+  configPage2.maeThresh = 0;
+
+  // Deceleration enrichment value
+  configPage2.decelAmount = 50;
+
+  // Clear timer bits – wall wetting does not depend on MAP/TPS DOT
+  currentStatus.LOOP_TIMER = 0;
+}
+
+static void test_corrections_WW_steady_state(void)
+{
+  setup_wall_wetting();
+
+  // netWallDiff = fuelDemand*addCoeff - wallFuel*removeCoeff
+  // Set addCoeff=100, wallFuel=15, removeCoeff=200
+  // netWallDiff = 30*100 - 15*200 = 0 → steady state
+  fill_table_values(wallWettingAddTable, 100);
+  fill_table_values(wallWettingRemoveTable, 200);
+  currentStatus.wallFuel = 15;
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT_EQUAL(NO_FUEL_CORRECTION, correction);
+  TEST_ASSERT_FALSE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_WW_acceleration(void)
+{
+  setup_wall_wetting();
+
+  // netWallDiff > 0 → enrichment needed
+  // addCoeff=128 (50%), removeCoeff=0, wallFuel=0
+  fill_table_values(wallWettingAddTable, 128);
+  fill_table_values(wallWettingRemoveTable, 0);
+  currentStatus.wallFuel = 0;
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT(correction > NO_FUEL_CORRECTION);
+  TEST_ASSERT_TRUE(currentStatus.isAcceleratingTPS);
+}
+
+static void test_corrections_WW_deceleration(void)
+{
+  setup_wall_wetting();
+
+  // netWallDiff < 0 → deceleration
+  // addCoeff=0, removeCoeff=255, wallFuel=255
+  fill_table_values(wallWettingAddTable, 0);
+  fill_table_values(wallWettingRemoveTable, 255);
+  currentStatus.wallFuel = 255;
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT_EQUAL(configPage2.decelAmount, correction);
+  TEST_ASSERT_TRUE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_WW_zero_fuel_demand(void)
+{
+  setup_wall_wetting();
+
+  // With zero fuel demand no enrichment is possible
+  currentStatus.fuelLoad = 0;
+  fill_table_values(wallWettingAddTable, 128);
+  fill_table_values(wallWettingRemoveTable, 128);
+  currentStatus.wallFuel = 0;
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT_EQUAL(NO_FUEL_CORRECTION, correction);
+  TEST_ASSERT_FALSE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_WW_wall_fuel_update(void)
+{
+  setup_wall_wetting();
+
+  // Enable the 30 Hz timer so wallFuel state is updated
+  // (also activates computeTPSDOT, but TPS values are zero so it's harmless)
+  BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_30HZ);
+
+  // addCoeff=128 (50%), removeCoeff=0: all fuel goes to wall film
+  fill_table_values(wallWettingAddTable, 128);
+  fill_table_values(wallWettingRemoveTable, 0);
+  currentStatus.wallFuel = 0;
+
+  // fuelDemand=30, addCoeff=128 → addedToWall = (30*128) >> 8 = 15
+  (void)correctionAccel();
+  TEST_ASSERT_EQUAL(15, currentStatus.wallFuel);
+}
+
+static void test_corrections_WW(void)
+{
+  RUN_TEST_P(test_corrections_WW_steady_state);
+  RUN_TEST_P(test_corrections_WW_acceleration);
+  RUN_TEST_P(test_corrections_WW_deceleration);
+  RUN_TEST_P(test_corrections_WW_zero_fuel_demand);
+  RUN_TEST_P(test_corrections_WW_wall_fuel_update);
+}
+
 static void test_corrections_correctionsFuel(void) {
   RUN_TEST_P(test_corrections_correctionsFuel_ae_modes);
   RUN_TEST_P(test_corrections_correctionsFuel_clip_limit);
@@ -1834,6 +1970,7 @@ void testCorrections()
     test_corrections_TAE(); //TPS based accel enrichment corrections
     test_corrections_MAE(); //MAP based accel enrichment corrections
     test_corrections_BLENDED_AE(); //Blended TPS/MAP accel enrichment corrections
+    test_corrections_WW(); //Wall wetting accel enrichment corrections
     test_corrections_cranking();
     test_corrections_ASE();
     test_corrections_floodclear();

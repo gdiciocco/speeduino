@@ -92,6 +92,7 @@ void initialiseCorrections(void)
   egoPID.SetMode(MANUAL);
   egoPID.SetMode(AUTOMATIC);
 
+  currentStatus.wallFuel = 0;
   currentStatus.flexIgnCorrection = 0;
   //Default value of no adjustment must be set to avoid randomness on first correction cycle after startup
   currentStatus.egoCorrection = NO_FUEL_CORRECTION; 
@@ -430,7 +431,73 @@ static inline uint16_t correctionAccelBlended(void) {
 
 static inline uint16_t correctionAccelWallWetting(void)
 {
-  return NO_FUEL_CORRECTION;
+  // Look up wall wetting coefficients from 3D tables (RPM x Load)
+  // addCoeff (X) = fraction of injected fuel that deposits on wall film
+  // removeCoeff (Y) = fraction of wall fuel that evaporates per update
+  // Both stored as 0-255 representing 0-100%
+  uint8_t addCoeff = get3DTableValue(&wallWettingAddTable, currentStatus.fuelLoad, currentStatus.RPM);
+  uint8_t removeCoeff = get3DTableValue(&wallWettingRemoveTable, currentStatus.fuelLoad, currentStatus.RPM);
+
+  uint16_t fuelDemand = currentStatus.fuelLoad;
+
+  // Reset flags initially
+  currentStatus.isAcceleratingTPS = false;
+  currentStatus.isDeceleratingTPS = false;
+
+  uint16_t correction = NO_FUEL_CORRECTION;
+
+  // X-Tau wall wetting model:
+  //   addedToWall      = fuelDemand * X/256
+  //   removedFromWall  = wallFuel * Y/256
+  //   netWallChange    = addedToWall - removedFromWall
+  //   fuelToEngine     = fuelDemand - netWallChange
+  //   To reach fuelDemand, we need extra fuel = netWallChange / (1 - X/256)
+  //   extraPct         = (fuelDemand*X - wallFuel*Y) * 100 / (fuelDemand*(256-X))
+
+  if (fuelDemand > 0)
+  {
+    // Numerator: fuelDemand*X/256 - wallFuel*Y/256 (scaled up by 256 for precision)
+    //           = fuelDemand*X - wallFuel*Y
+    int32_t netWallDiff = (int32_t)((uint32_t)fuelDemand * addCoeff)
+                        - (int32_t)((uint32_t)currentStatus.wallFuel * removeCoeff);
+
+    if (netWallDiff > 0)
+    {
+      // More fuel depositing on walls than coming off => need enrichment
+      uint32_t denominator = (uint32_t)fuelDemand * (256U - addCoeff);
+      if (denominator > 0)
+      {
+        uint8_t extraPct = (uint8_t)min(((uint32_t)netWallDiff * ONE_HUNDRED_PCT) / denominator, (uint32_t)UINT8_MAX);
+        uint8_t taperedExtra = applyAeRpmTaper(extraPct);
+        correction = BASELINE_FUEL_CORRECTION + applyAeCoolantTaper(taperedExtra);
+        currentStatus.isAcceleratingTPS = true;
+      }
+    }
+    else if (netWallDiff < 0)
+    {
+      // More fuel coming off walls than depositing => deceleration enrichment
+      correction = configPage2.decelAmount;
+      currentStatus.isDeceleratingTPS = true;
+    }
+    // netWallDiff == 0 => steady state, no correction
+  }
+
+  // Update wall fuel state at a controlled rate (30Hz)
+  if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_30HZ))
+  {
+    uint16_t addedToWall = ((uint32_t)fuelDemand * addCoeff) >> 8;
+    uint16_t removedFromWall = ((uint32_t)currentStatus.wallFuel * removeCoeff) >> 8;
+    if (currentStatus.wallFuel + addedToWall > removedFromWall)
+    {
+      currentStatus.wallFuel = currentStatus.wallFuel + addedToWall - removedFromWall;
+    }
+    else
+    {
+      currentStatus.wallFuel = 0;
+    }
+  }
+
+  return correction;
 }
 
 /** Acceleration enrichment correction calculation.
@@ -439,9 +506,11 @@ static inline uint16_t correctionAccelWallWetting(void)
  * 
  * Blended mode computes both MAP DOT and TPS DOT, then blends them by the configured blend percentage (@ref config2.aeBlendPct).
  * 0% = pure MAP AE, 100% = pure TPS AE.
- * Wall wetting mode is a placeholder (returns no correction).
+ * Wall wetting mode uses the X-Tau fuel film model with two 3D tables (RPM x Load):
+ * - "added to wall" coefficient (X): fraction of injected fuel that deposits on intake walls
+ * - "removed from wall" coefficient (Y): fraction of wall fuel that evaporates per update
+ * A state variable tracks the current fuel mass on the walls, updated at 30Hz.
  * Coolant-based modifier is applied on the top of this.
- * When the enrichment is turned on, it runs at that amount for a fixed period of time (taeTime)
  * 
  * @return uint16_t The Acceleration enrichment modifier as a %. 100% = No modification.
  * 

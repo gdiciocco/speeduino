@@ -16,6 +16,8 @@ struct table3d8RpmLoad vvt2Table; ///< 8x8 vvt2 map
 struct table3d8RpmLoad wmiTable; ///< 8x8 wmi map
 struct table3d6RpmLoad trimTables[INJ_CHANNELS];
 struct table3d4RpmLoad dwellTable; ///< 4x4 Dwell map
+struct table3d8RpmLoad wallWettingAddTable; ///< 8x8 wall wetting "added to wall" coefficient (X)
+struct table3d8RpmLoad wallWettingRemoveTable; ///< 8x8 wall wetting "removed from wall" coefficient (Y)
 
 //These are variables used across multiple files
 uint8_t softLimitTime = 0; //The time (in 0.1 seconds, based on seclx10) that the soft limiter started

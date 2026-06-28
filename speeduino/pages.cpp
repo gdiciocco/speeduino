@@ -365,6 +365,10 @@ static page_map_t getPageMap(uint8_t pageNumber)
     makeEntity(&boostTableLookupDuty),
     makeEntity(&configPage15, sizeof(configPage15)),
   };
+  static constexpr entity_t wallWettingPageMap[] PROGMEM = {
+    makeEntity(&wallWettingAddTable),
+    makeEntity(&wallWettingRemoveTable),
+  };
 
   static constexpr page_map_t pageMaps[MAX_PAGE_NUM] PROGMEM = {
     { pageZeroMap, _countof(pageZeroMap) },
@@ -383,6 +387,7 @@ static page_map_t getPageMap(uint8_t pageNumber)
     { progOutsPageMap, _countof(progOutsPageMap) },    
     { ign2PageMap, _countof(ign2PageMap) },
     { boostVvt2PageMap, _countof(boostVvt2PageMap) },
+    { wallWettingPageMap, _countof(wallWettingPageMap) },
   };
 
   if (pageNumber>=MAX_PAGE_NUM)
