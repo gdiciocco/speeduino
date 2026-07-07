@@ -178,6 +178,9 @@ void __attribute__((always_inline)) loop(void)
           // if ( BIT_CHECK(LOOP_TIMER, BIT_TIMER_15HZ) or (CANbus0.available())
           while (CAN_read()) 
           {
+          #if defined(CAPONORD_BOARD)
+            if (caponordPreloadHandleCanFrame(inMsg)) { continue; }
+          #endif
             can_Command();
             readAuxCanBus();
             if (configPage2.canWBO > 0) { receiveCANwbo(); }

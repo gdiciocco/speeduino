@@ -14,7 +14,7 @@
 #ifndef UNIT_TEST // Scope guard for unit testing
   #if defined(CAPONORD_BOARD)
     #define CAPONORD_TS_OUTPUT_BASE 192U
-    #define LOG_ENTRY_SIZE      224 /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
+    #define LOG_ENTRY_SIZE      230 /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
   #else
     #define LOG_ENTRY_SIZE      130 /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
   #endif
