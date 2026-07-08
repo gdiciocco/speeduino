@@ -386,6 +386,16 @@ void initPrimaryTriggerCapture(uint8_t pin, uint8_t edge);
 uint32_t primaryTriggerEdgeTimeMicros(void);
 bool primaryTriggerCaptureActive(void);
 
+/*
+***********************************************************************************************************
+* Hardware CRC32
+* The CRC unit computes over 32-bit words with the standard 0x04C11DB7 polynomial but without bit
+* reflection; feeding __RBIT()ed words and reflecting the result yields the standard (Ethernet/zlib)
+* CRC32 used by the TS comms protocol. A boot-time self test against a known vector falls the
+* implementation back to FastCRC if the technique does not hold on the running silicon.
+*/
+#define BOARD_HAS_HW_CRC32
+
 /** @brief Analog pin mapping */
 #if NUM_ANALOG_INPUTS==10
 constexpr uint8_t ANALOG_PINS[NUM_ANALOG_INPUTS-1] = { _ANALOG_PINS_A0_A8  };

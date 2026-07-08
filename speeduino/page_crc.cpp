@@ -1,19 +1,17 @@
-#include <FastCRC.h>
+#include "crc32.h"
 #include "page_crc.h"
 #include "pages.h"
 
 uint32_t __attribute__((optimize("Os"))) calculatePageCRC32(uint8_t pageNum)
 {
-    FastCRC32 crcCalc;
-    
-    byte buffer = getPageValue(pageNum, 0);
-    uint32_t crc = crcCalc.crc32(&buffer, 1U);
+    crc32ByteStream_t crcStream;
+    crcStream.begin();
 
+    crcStream.push(getPageValue(pageNum, 0));
     for (uint16_t offset=1; offset<getPageSize(pageNum); ++offset)
     {
-        buffer = getPageValue(pageNum, offset);
-        crc = crcCalc.crc32_upd(&buffer, 1U);
+        crcStream.push(getPageValue(pageNum, offset));
     }
 
-    return crc;
+    return crcStream.finish();
 }

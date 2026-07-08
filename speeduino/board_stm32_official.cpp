@@ -10,6 +10,86 @@
 #include "scheduler_fuel_controller.h"
 #include "PeripheralPins.h"
 #include "pinmap.h"
+#include "crc32.h"
+#include <FastCRC.h>
+
+/*
+***********************************************************************************************************
+* Hardware CRC32 (see board_stm32_official.h)
+*/
+static bool hwCrcAvailable = false;
+static bool hwCrcBusy = false; //A byte stream currently owns the unit: one-shots must not clobber its state
+
+//One step of the standard reflected CRC32, used for the <4 byte tail the word-only hardware cannot take
+static inline uint32_t crc32_soft_update(uint32_t crc, uint8_t data)
+{
+  crc ^= data;
+  for (uint8_t i = 0U; i < 8U; i++) { crc = (crc >> 1U) ^ (0xEDB88320UL & (0UL - (crc & 1UL))); }
+  return crc;
+}
+
+uint32_t crc32_oneshot(const uint8_t *pData, uint16_t length)
+{
+  if (hwCrcAvailable && (!hwCrcBusy))
+  {
+    CRC->CR = CRC_CR_RESET;
+    const uint8_t *pWord = pData;
+    uint16_t words = length >> 2U;
+    while (words != 0U)
+    {
+      uint32_t word;
+      (void)memcpy(&word, pWord, sizeof(word));
+      CRC->DR = __RBIT(word);
+      pWord += sizeof(word);
+      words--;
+    }
+    uint32_t crc = __RBIT(CRC->DR); //After reset with no words fed this reads as the 0xFFFFFFFF init value
+    for (uint16_t i = length & ~(uint16_t)3U; i < length; i++) { crc = crc32_soft_update(crc, pData[i]); }
+    return ~crc;
+  }
+
+  FastCRC32 crcCalc;
+  return crcCalc.crc32(pData, length);
+}
+
+void crc32ByteStream_t::begin(void)
+{
+  window = 0U;
+  count = 0U;
+  crc = 0xFFFFFFFFUL;
+  useHw = hwCrcAvailable && (!hwCrcBusy);
+  if (useHw)
+  {
+    hwCrcBusy = true;
+    CRC->CR = CRC_CR_RESET;
+  }
+}
+
+void crc32ByteStream_t::push(uint8_t value)
+{
+  if (useHw)
+  {
+    window |= (uint32_t)value << (8U * (count & 3U));
+    count++;
+    if ((count & 3U) == 0U)
+    {
+      CRC->DR = __RBIT(window);
+      window = 0U;
+    }
+  }
+  else { crc = crc32_soft_update(crc, value); }
+}
+
+uint32_t crc32ByteStream_t::finish(void)
+{
+  if (useHw)
+  {
+    crc = __RBIT(CRC->DR);
+    for (uint16_t i = 0U; i < (count & 3U); i++) { crc = crc32_soft_update(crc, (uint8_t)(window >> (8U * i))); }
+    hwCrcBusy = false;
+  }
+  return ~crc;
+}
 
 /*
 ***********************************************************************************************************
@@ -523,6 +603,24 @@ STM32RTC& rtc = STM32RTC::getInstance();
     #endif
     Timer4.attachInterrupt(4, IGNITION_INTERRUPT_NAME(8));
     #endif
+
+    /*
+    ***********************************************************************************************************
+    * Hardware CRC32
+    */
+    #if defined(RCC_AHB1ENR_CRCEN)
+      RCC->AHB1ENR |= RCC_AHB1ENR_CRCEN;
+      (void)RCC->AHB1ENR; //Read back to ensure the clock is running before first use
+    #elif defined(RCC_AHBENR_CRCEN)
+      RCC->AHBENR |= RCC_AHBENR_CRCEN;
+      (void)RCC->AHBENR;
+    #endif
+    hwCrcAvailable = true;
+    {
+      //Verify the RBIT technique against the standard CRC32 check vector (exercises both the word path and the tail path). On failure fall back to FastCRC
+      static const uint8_t crcCheckVector[9] = {'1','2','3','4','5','6','7','8','9'};
+      hwCrcAvailable = (crc32_oneshot(crcCheckVector, sizeof(crcCheckVector)) == 0xCBF43926UL);
+    }
 
     /*
     ***********************************************************************************************************

@@ -18,6 +18,7 @@ A full copy of the license may be found in the projects root directory
 #include "logger.h"
 #include "comms_legacy.h"
 #include <FastCRC.h>
+#include "crc32.h"
 #ifdef RTC_ENABLED
   #include "rtc_common.h"
   #include "comms_sd.h"
@@ -263,7 +264,7 @@ static uint16_t sendBufferAndCrcNonBlocking(const byte *buffer, size_t start, si
   
   if (start>=length && start<length+sizeof(crc_t))
   {
-    start = start + writeNonBlocking(start-length, CRC32_serial.crc32(buffer, length));
+    start = start + writeNonBlocking(start-length, crc32_oneshot(buffer, length));
   }
 
   return start;
@@ -301,7 +302,7 @@ static void sendReturnCodeMsg(byte returnCode)
 {
   serialWrite((uint16_t)sizeof(returnCode));
   writeByteReliableBlocking(returnCode);
-  (void)serialWrite(CRC32_serial.crc32(&returnCode, sizeof(returnCode)));
+  (void)serialWrite(crc32_oneshot(&returnCode, sizeof(returnCode)));
 }
 
 // ====================================== Command/Action Support =============================
@@ -455,7 +456,7 @@ static void processTemperatureCalibrationTableUpdate(uint16_t calibrationLength,
       values[x] = toTemperature(serialPayload[(2U * x) + 7U], serialPayload[(2U * x) + 8U]);
       bins[x] = (x * 33U); // 0*33=0 to 31*33=1023
     }
-    saveCalibrationCrc(calibrationPage, CRC32_serial.crc32(&serialPayload[7], 64));
+    saveCalibrationCrc(calibrationPage, crc32_oneshot(&serialPayload[7], 64));
     saveCalibrationTable(calibrationPage);
     sendReturnCodeMsg(SERIAL_RC_OK);
   }
@@ -531,7 +532,7 @@ void serialReceive(void)
 
       if (!isRxTimeout()) // CRC read can timeout also!
       {
-        if (incomingCrc == CRC32_serial.crc32(serialPayload, serialPayloadLength))
+        if (incomingCrc == crc32_oneshot(serialPayload, serialPayloadLength))
         {
           //CRC is correct. Process the command
           processSerialCommand();
