@@ -170,7 +170,40 @@ static byte buildEngineProtectStatus(const statuses &current)
   return setStatusBits(0, bits);
 }
 
-/** 
+#if defined(CAPONORD_BOARD)
+/**
+ * @brief Caponord custom output block, appended after the stock live data fields.
+ *
+ * Starts with a 16-bit marker (0xCA50) and a layout version byte so the
+ * consumer (custom .ini / dash) can validate what it is reading.
+ * @param byteNum Byte offset *within* the custom block (0 based)
+ */
+static byte getCaponordTSLogEntry(uint16_t byteNum)
+{
+  byte statusValue = 0;
+
+  switch(byteNum)
+  {
+    case 0: statusValue = lowByte(0xCA50U); break; //Block marker
+    case 1: statusValue = highByte(0xCA50U); break;
+    case 2: statusValue = 1U; break; //Custom block layout version
+    case 4: statusValue = lowByte(currentStatus.RPM); break;
+    case 5: statusValue = highByte(currentStatus.RPM); break;
+    case 6: statusValue = lowByte(currentStatus.MAP); break;
+    case 7: statusValue = highByte(currentStatus.MAP); break;
+    case 8: statusValue = currentStatus.oilPressure; break;
+    case 9: statusValue = currentStatus.fuelPressure; break;
+    case 10: statusValue = buildStatus5(currentStatus); break;
+    case 11: statusValue = currentStatus.knockCount; break;
+    case 12: statusValue = currentStatus.knockRetard; break;
+    default: statusValue = 0; break;
+  }
+
+  return statusValue;
+}
+#endif
+
+/**
  * Returns a numbered byte-field (partial field in case of multi-byte fields) from "current status" structure in the format expected by TunerStudio
  * Notes on fields:
  * - Numbered field will be fields from @ref currentStatus, but not at all in the internal order of strct (e.g. field RPM value, number 14 will be
@@ -183,6 +216,13 @@ static byte buildEngineProtectStatus(const statuses &current)
 byte getTSLogEntry(uint16_t byteNum)
 {
   byte statusValue = 0;
+
+#if defined(CAPONORD_BOARD)
+  if(byteNum >= CAPONORD_TS_OUTPUT_BASE)
+  {
+    return getCaponordTSLogEntry(byteNum - CAPONORD_TS_OUTPUT_BASE);
+  }
+#endif
 
   switch(byteNum)
   {
