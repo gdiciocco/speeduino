@@ -370,8 +370,8 @@ extern STM32_CAN Can0;
 
 class inputPin_t;
 using boardInputPin_t = inputPin_t;
-class outputPin_t;
-using boardOutputPin_t = outputPin_t;
+class fastOutputPin_t;
+using boardOutputPin_t = fastOutputPin_t;
 
 /** @brief Analog pin mapping */
 #if NUM_ANALOG_INPUTS==10

@@ -418,6 +418,27 @@ STM32RTC& rtc = STM32RTC::getInstance();
     Timer4.attachInterrupt(4, IGNITION_INTERRUPT_NAME(8));
     #endif
 
+    /*
+    ***********************************************************************************************************
+    * Interrupt priorities (0 = highest. Core defaults: SysTick=0, EXTI/trigger=6, USB=1, UART=1, all timers=14)
+    * The fuel/ignition compare ISRs must sit below the trigger wheel EXTI (so a compare ISR can never delay a
+    * trigger edge timestamp) but above everything non engine-critical. USB/UART default to priority 1, which
+    * lets comms preempt the trigger: they are lowered via the USBD_IRQ_PRIO/UART_IRQ_PRIO build flags in
+    * platformio.ini, as those apply to core files compiled outside this project.
+    */
+    #if ( STM32_CORE_VERSION_MAJOR >= 2 ) //setInterruptPriority is not available on old cores; their default (14) still leaves the trigger EXTI (6) on top
+    Timer1.setInterruptPriority(8, 0);  //Idle/boost/VVT/fan software PWM
+    Timer2.setInterruptPriority(7, 0);  //Schedules
+    Timer3.setInterruptPriority(7, 0);  //Schedules
+    #if defined(ARDUINO_BLUEPILL_F103C8) || defined(ARDUINO_BLUEPILL_F103CB)
+      Timer4.setInterruptPriority(9, 0);  //1ms tick
+    #else
+      Timer4.setInterruptPriority(7, 0);  //Schedules 5-8
+      Timer5.setInterruptPriority(7, 0);  //Schedules 5-8
+      Timer11.setInterruptPriority(9, 0); //1ms tick
+    #endif
+    #endif
+
     Serial.begin(baudRate);
   }
 
