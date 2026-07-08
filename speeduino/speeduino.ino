@@ -182,8 +182,11 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
         if (configPage9.enable_intcan == 1) // use internal can module
         {            
           //check local can module
-          while (CAN_read()) 
+          while (CAN_read())
           {
+          #if defined(CAPONORD_BOARD)
+            if (caponordPreloadHandleCanFrame(inMsg)) { continue; }
+          #endif
             can_Command();
             readAuxCanBus();
             if (configPage2.canWBO > 0) { receiveCANwbo(); }

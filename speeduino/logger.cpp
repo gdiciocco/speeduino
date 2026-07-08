@@ -11,6 +11,9 @@
 #include "resetControl.h"
 #include "scheduler.h"
 #include "scheduler_fuel_controller.h"
+#if defined(CAPONORD_BOARD)
+  #include "opf_core.h"
+#endif
 
 static byte setStatusBit(byte status, uint8_t index, bool bit)
 {
@@ -186,7 +189,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 1U; break; //Custom block layout version
+    case 2: statusValue = 2U; break; //Custom block layout version
     case 4: statusValue = lowByte(currentStatus.RPM); break;
     case 5: statusValue = highByte(currentStatus.RPM); break;
     case 6: statusValue = lowByte(currentStatus.MAP); break;
@@ -196,6 +199,31 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     case 10: statusValue = buildStatus5(currentStatus); break;
     case 11: statusValue = currentStatus.knockCount; break;
     case 12: statusValue = currentStatus.knockRetard; break;
+    case 13: statusValue = caponordPreloadGetCommand(); break;
+    case 14: statusValue = caponordPreloadGetTarget(); break;
+    case 15: statusValue = caponordPreloadGetSlot(); break;
+    case 16: statusValue = caponordPreloadGetPosition(); break;
+    case 17: statusValue = caponordPreloadGetControllerTarget(); break;
+    case 18: statusValue = caponordPreloadGetState(); break;
+    case 19: statusValue = lowByte(caponordPreloadGetAlarms()); break;
+    case 20: statusValue = highByte(caponordPreloadGetAlarms()); break;
+    case 21: statusValue = lowByte(caponordPreloadGetCurrent()); break;
+    case 22: statusValue = highByte(caponordPreloadGetCurrent()); break;
+    case 23: statusValue = lowByte(caponordPreloadGetAgeMs()); break;
+    case 24: statusValue = highByte(caponordPreloadGetAgeMs()); break;
+    case 25: statusValue = caponordPreloadGetLastCommand(); break;
+    case 26: statusValue = caponordPreloadGetCanFlags(); break;
+    case 27: statusValue = caponordPreloadGetAnyRxCount(); break;
+    case 28: statusValue = lowByte(caponordPreloadGetLastRxId()); break;
+    case 29: statusValue = highByte(caponordPreloadGetLastRxId()); break;
+    case 30: statusValue = caponordPreloadGetLastRxDlc(); break;
+    case 31: statusValue = caponordPreloadGetLastRxByte0(); break;
+    case 32: statusValue = caponordPreloadGetPresetSeenMask(); break;
+    case 33: statusValue = caponordPreloadGetPresetValue(0U); break;
+    case 34: statusValue = caponordPreloadGetPresetValue(1U); break;
+    case 35: statusValue = caponordPreloadGetPresetValue(2U); break;
+    case 36: statusValue = caponordPreloadGetPresetValue(3U); break;
+    case 37: statusValue = caponordPreloadGetPresetValue(4U); break;
     default: statusValue = 0; break;
   }
 

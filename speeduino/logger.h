@@ -14,7 +14,7 @@
 #if defined(CAPONORD_BOARD)
   /** Byte offset where the Caponord custom output block starts inside the live data packet */
   constexpr uint16_t CAPONORD_TS_OUTPUT_BASE = 192U;
-  constexpr uint8_t LOG_ENTRY_SIZE = 224; /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
+  constexpr uint8_t LOG_ENTRY_SIZE = 230; /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
 #else
   constexpr uint8_t LOG_ENTRY_SIZE = 138; /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
 #endif

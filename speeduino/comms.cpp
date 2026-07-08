@@ -29,6 +29,9 @@ A full copy of the license may be found in the projects root directory
 #include "units.h"
 #include "sensors.h"
 #include "resetControl.h"
+#if defined(CAPONORD_BOARD)
+  #include "opf_core.h"
+#endif
 
 /** @defgroup group-serial-comms-impl Serial comms implementation
  * @{
@@ -956,6 +959,23 @@ void processSerialCommand(void)
 
     case 'w':
     {
+#if defined(CAPONORD_BOARD)
+      if ((serialPayloadLength >= 4U) && (serialPayload[2] == CAPONORD_TS_PRELOAD_WRITE_COMMAND))
+      {
+        const uint16_t preloadValue = (serialPayloadLength >= 6U) ? word(serialPayload[5], serialPayload[4]) : 0U;
+        const uint8_t preloadSlot = (serialPayloadLength >= 7U) ? serialPayload[6] : 0U;
+
+        if (caponordPreloadHandleSerialCommand(serialPayload[3], preloadValue, preloadSlot))
+        {
+          sendReturnCodeMsg(SERIAL_RC_OK);
+        }
+        else
+        {
+          sendReturnCodeMsg(SERIAL_RC_RANGE_ERR);
+        }
+        break;
+      }
+#endif
 #ifdef COMMS_SD
       uint8_t cmd = serialPayload[2];
       uint16_t SD_arg1 = word(serialPayload[3], serialPayload[4]);
