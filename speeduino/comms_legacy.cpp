@@ -39,6 +39,11 @@ byte inProgressLength;
 SerialStatus serialStatusFlag;
 SerialStatus serialSecondaryStatusFlag;
 
+static inline bool pageMayChangeADCConfiguration(uint8_t pageNum)
+{
+  return (pageNum == afrSetPage) || (pageNum == canbusPage) || (pageNum == warmupPage);
+}
+
 static bool isMap(void) {
     // Detecting if the current page is a table/map
   return (currentPage == veMapPage) || (currentPage == ignMapPage) || (currentPage == afrMapPage) || (currentPage == fuelMap2Page) || (currentPage == ignMap2Page);
@@ -609,7 +614,15 @@ void legacySerialHandler(byte cmd, Stream &targetPort, SerialStatus &targetStatu
           setPageValue(currentPage, (valueOffset + chunkComplete), targetPort.read());
           chunkComplete++;
         }
-        if(chunkComplete >= chunkSize) { targetStatusFlag = SERIAL_INACTIVE; chunkPending = false; }
+        if(chunkComplete >= chunkSize)
+        {
+          targetStatusFlag = SERIAL_INACTIVE;
+          chunkPending = false;
+          if(pageMayChangeADCConfiguration(currentPage))
+          {
+            refreshADCConfiguration();
+          }
+        }
       }
       break;
 

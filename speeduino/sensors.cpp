@@ -30,6 +30,7 @@ A full copy of the license may be found in the projects root directory
 #include "src/pins/fastInputPin.h"
 #include "src/pins/inputPin.h"
 #include "src/pins/pinMapping.h"
+#include "src/STM32_ADC/stm32_adc_cache.h"
 
 uint8_t statusSensors = 0;
 
@@ -90,10 +91,154 @@ TESTABLE_STATIC int16_t postProcessAnalogRead(int16_t pinValue)
 
 static inline uint16_t readAnalogPin(uint8_t pin)
 {
+#if defined(STM32_ADC_CACHE_AVAILABLE)
+  uint16_t cachedValue = 0U;
+  if(stm32AdcCacheRead(pin, cachedValue))
+  {
+    return (uint16_t)clamp(postProcessAnalogRead((int16_t)cachedValue), (int16_t)0, (int16_t)1023);
+  }
+#endif
+
   // Why do we read twice? Who knows.....
   analogRead(pin);
   // Read and clamp to 0-1023 range, which is the range of return values for analogRead()
   return (uint16_t)clamp(postProcessAnalogRead(analogRead(pin)), (int16_t)0, (int16_t)1023);
+}
+
+#if defined(STM32_ADC_CACHE_AVAILABLE)
+static inline void registerStm32AdcPin(uint8_t pin)
+{
+  (void)stm32AdcCacheRegisterPin(pin);
+}
+
+static inline void registerConfiguredStm32AdcPins(void)
+{
+  registerStm32AdcPin(pinMAP);
+  registerStm32AdcPin(pinO2);
+  registerStm32AdcPin(pinTPS);
+  registerStm32AdcPin(pinIAT);
+  registerStm32AdcPin(pinCLT);
+  registerStm32AdcPin(pinBat);
+  registerStm32AdcPin(pinBaro);
+
+  if(pinO2_2 != 0U) { registerStm32AdcPin(pinO2_2); }
+  if(configPage6.useEMAP != 0U) { registerStm32AdcPin(pinEMAP); }
+  if(configPage10.fuelPressureEnable && !pinIsOutput(pinFuelPressure)) { registerStm32AdcPin(pinFuelPressure); }
+  if(configPage10.oilPressureEnable && !pinIsOutput(pinOilPressure)) { registerStm32AdcPin(pinOilPressure); }
+  if(configPage10.knock_pin >= 47U) { registerStm32AdcPin(pinTranslateAnalog(configPage10.knock_pin - 47U)); }
+}
+#endif
+
+static inline void configureAnalogInputPin(uint8_t pin)
+{
+#if defined(CORE_STM32) && defined(INPUT_ANALOG)
+  pinMode(pin, INPUT_ANALOG);
+#else
+  pinMode(pin, INPUT);
+#endif
+}
+
+static inline bool isAuxExternalInputActive(uint8_t auxInChan)
+{
+  return ((configPage9.caninput_sel[auxInChan] & 12U) == 4U)
+      && ((configPage9.enable_secondarySerial == 1U) || ((configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 1U)));
+}
+
+static inline bool isAuxAnalogInputActive(uint8_t auxInChan)
+{
+  return ((((configPage9.enable_secondarySerial == 1U) || ((configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 1U))) && ((configPage9.caninput_sel[auxInChan] & 12U) == 8U))
+       || (((configPage9.enable_secondarySerial == 0U) && ((configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 0U))) && ((configPage9.caninput_sel[auxInChan] & 3U) == 2U))
+       || (((configPage9.enable_secondarySerial == 0U) && (configPage9.enable_intcan == 0U)) && ((configPage9.caninput_sel[auxInChan] & 3U) == 2U)));
+}
+
+static inline bool isAuxDigitalInputActive(uint8_t auxInChan)
+{
+  return ((((configPage9.enable_secondarySerial == 1U) || ((configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 1U))) && ((configPage9.caninput_sel[auxInChan] & 12U) == 12U))
+       || (((configPage9.enable_secondarySerial == 0U) && ((configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 0U))) && ((configPage9.caninput_sel[auxInChan] & 3U) == 3U))
+       || (((configPage9.enable_secondarySerial == 0U) && (configPage9.enable_intcan == 0U)) && ((configPage9.caninput_sel[auxInChan] & 3U) == 3U)));
+}
+
+static inline void refreshRuntimeAnalogPins(void)
+{
+  if((configPage6.useExtBaro != 0U) && (configPage6.baroPin < BOARD_MAX_IO_PINS))
+  {
+    pinBaro = pinTranslateAnalog(configPage6.baroPin);
+    configureAnalogInputPin(pinBaro);
+  }
+  if((configPage6.useEMAP != 0U) && (configPage10.EMAPPin < BOARD_MAX_IO_PINS))
+  {
+    pinEMAP = pinTranslateAnalog(configPage10.EMAPPin);
+    configureAnalogInputPin(pinEMAP);
+  }
+  if((configPage10.fuelPressureEnable) && (configPage10.fuelPressurePin < BOARD_MAX_IO_PINS))
+  {
+    pinFuelPressure = pinTranslateAnalog(configPage10.fuelPressurePin);
+    if(!pinIsOutput(pinFuelPressure)) { configureAnalogInputPin(pinFuelPressure); }
+  }
+  if((configPage10.oilPressureEnable) && (configPage10.oilPressurePin < BOARD_MAX_IO_PINS))
+  {
+    pinOilPressure = pinTranslateAnalog(configPage10.oilPressurePin);
+    if(!pinIsOutput(pinOilPressure)) { configureAnalogInputPin(pinOilPressure); }
+  }
+}
+
+static inline void refreshAuxInputConfiguration(void)
+{
+  BIT_CLEAR(statusSensors, BIT_SENSORS_AUX_ENBL);
+  for(uint8_t auxInChan = 0U; auxInChan < 16U; auxInChan++)
+  {
+    currentStatus.current_caninchannel = auxInChan;
+    if(isAuxExternalInputActive(auxInChan))
+    {
+      BIT_SET(statusSensors, BIT_SENSORS_AUX_ENBL);
+    }
+    else if(isAuxAnalogInputActive(auxInChan))
+    {
+      uint8_t pinNumber = pinTranslateAnalog(configPage9.Auxinpina[auxInChan] & 63U);
+      if(pinIsUsed(pinNumber))
+      {
+        currentStatus.ioError = true;
+      }
+      else
+      {
+        configureAnalogInputPin(pinNumber);
+#if defined(STM32_ADC_CACHE_AVAILABLE)
+        registerStm32AdcPin(pinNumber);
+#endif
+        BIT_SET(statusSensors, BIT_SENSORS_AUX_ENBL);
+      }
+    }
+    else if(isAuxDigitalInputActive(auxInChan))
+    {
+      uint8_t pinNumber = (configPage9.Auxinpinb[auxInChan] & 63U) + 1U;
+      if(pinIsUsed(pinNumber))
+      {
+        currentStatus.ioError = true;
+      }
+      else
+      {
+        pinMode(pinNumber, INPUT);
+        BIT_SET(statusSensors, BIT_SENSORS_AUX_ENBL);
+      }
+    }
+    else
+    {
+      // Do nothing. Keep MISRA checker happy.
+    }
+  }
+}
+
+void refreshADCConfiguration(void)
+{
+  refreshRuntimeAnalogPins();
+#if defined(STM32_ADC_CACHE_AVAILABLE)
+  stm32AdcCacheBegin();
+  registerConfiguredStm32AdcPins();
+#endif
+  refreshAuxInputConfiguration();
+#if defined(STM32_ADC_CACHE_AVAILABLE)
+  stm32AdcCacheStart();
+#endif
 }
 
 
@@ -193,58 +338,7 @@ void initialiseADC(void)
   analogReadResolution(10); //use 10bits for analog reading on STM32 boards
 #endif
 
-  //The following checks the aux inputs and initialises pins if required
-  BIT_CLEAR(statusSensors, BIT_SENSORS_AUX_ENBL);
-  for (uint8_t AuxinChan = 0U; AuxinChan <16U ; AuxinChan++)
-  {
-    currentStatus.current_caninchannel = AuxinChan;                   
-    if (((configPage9.caninput_sel[currentStatus.current_caninchannel]&12U) == 4U)
-    && ((configPage9.enable_secondarySerial == 1U) || ((configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 1U))))
-    { //if current input channel is enabled as external input in caninput_selxb(bits 2:3) and secondary serial or internal canbus is enabled(and is mcu supported)                 
-      //currentStatus.canin[14] = 22;  Dev test use only!
-      BIT_SET(statusSensors, BIT_SENSORS_AUX_ENBL);
-    }
-    else if ((((configPage9.enable_secondarySerial == 1U) || ((configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 1U))) && (configPage9.caninput_sel[currentStatus.current_caninchannel]&12U) == 8U)
-            || (((configPage9.enable_secondarySerial == 0U) && ( (configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 0U) )) && (configPage9.caninput_sel[currentStatus.current_caninchannel]&3U) == 2U)  
-            || (((configPage9.enable_secondarySerial == 0U) && (configPage9.enable_intcan == 0U)) && ((configPage9.caninput_sel[currentStatus.current_caninchannel]&3U) == 2U)))  
-    {  //if current input channel is enabled as analog local pin check caninput_selxb(bits 2:3) with &12 and caninput_selxa(bits 0:1) with &3
-      uint8_t pinNumber = pinTranslateAnalog(configPage9.Auxinpina[currentStatus.current_caninchannel]&63U);
-      if( pinIsUsed(pinNumber) )
-      {
-        //Do nothing here as the pin is already in use.
-        currentStatus.ioError = true; //Tell user that there is problem by lighting up the I/O error indicator
-      }
-      else
-      {
-        //Channel is active and analog
-        pinMode( pinNumber, INPUT);
-        //currentStatus.canin[14] = 33;  Dev test use only!
-        BIT_SET(statusSensors, BIT_SENSORS_AUX_ENBL);
-      }  
-    }
-    else if ((((configPage9.enable_secondarySerial == 1U) || ((configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 1U))) && (configPage9.caninput_sel[currentStatus.current_caninchannel]&12U) == 12U)
-            || (((configPage9.enable_secondarySerial == 0U) && ( (configPage9.enable_intcan == 1U) && (configPage9.intcan_available == 0U) )) && (configPage9.caninput_sel[currentStatus.current_caninchannel]&3U) == 3U)
-            || (((configPage9.enable_secondarySerial == 0U) && (configPage9.enable_intcan == 0U)) && ((configPage9.caninput_sel[currentStatus.current_caninchannel]&3U) == 3U)))
-    {  //if current input channel is enabled as digital local pin check caninput_selxb(bits 2:3) with &12 and caninput_selxa(bits 0:1) with &3
-       uint8_t pinNumber = (configPage9.Auxinpinb[currentStatus.current_caninchannel]&63U) + 1U;
-       if( pinIsUsed(pinNumber) )
-       {
-          //Do nothing here as the pin is already in use.
-          currentStatus.ioError = true; //Tell user that there is problem by lighting up the I/O error indicator
-       }
-       else
-       {
-         //Channel is active and digital
-         pinMode( pinNumber, INPUT);
-         //currentStatus.canin[14] = 44;  Dev test use only!
-         BIT_SET(statusSensors, BIT_SENSORS_AUX_ENBL);
-       }  
-    }
-    else {
-      //  Do nothing. Keep MISRA checker happy
-    }
-  } //For loop iterating through aux in lines
-  
+  refreshADCConfiguration();
 
   //Sanity checks to ensure none of the filter values are set above 240 (Which would include the 255 value which is the default on a new arduino)
   //If an invalid value is detected, it's reset to the default the value and burned to EEPROM. 

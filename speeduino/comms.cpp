@@ -310,6 +310,11 @@ static void sendReturnCodeMsg(byte returnCode)
 // The functions in this section are abstracted out to prevent enlarging callers stack frame, 
 // which in turn throws off free ram reporting.
 
+static inline bool pageMayChangeADCConfiguration(uint8_t pageNum)
+{
+  return (pageNum == afrSetPage) || (pageNum == canbusPage) || (pageNum == warmupPage);
+}
+
 /**
  * @brief Update a pages contents from a buffer
  * 
@@ -329,6 +334,10 @@ static bool updatePageValues(uint8_t pageNum, uint16_t offset, const byte *buffe
       setPageValue(pageNum, (offset + i), buffer[i]);
     }
     setStorageWriteTimeout(micros() + EEPROM_DEFER_DELAY);
+    if(pageMayChangeADCConfiguration(pageNum))
+    {
+      refreshADCConfiguration();
+    }
     return true;
   }
 

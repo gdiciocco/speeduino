@@ -37,6 +37,7 @@ extern volatile uint32_t flexPulseWidth;
 extern uint8_t statusSensors; //Uses the above status bits
 
 void initialiseADC(void);
+void refreshADCConfiguration(void);
 void flexPulse(void);
 void initialiseFlexSensor(config2 &page2, statuses &current, uint8_t pin);
 void knockPulse(void);
