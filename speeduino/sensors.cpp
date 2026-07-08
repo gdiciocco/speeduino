@@ -32,6 +32,10 @@ A full copy of the license may be found in the projects root directory
 #include "src/pins/pinMapping.h"
 #include "src/STM32_ADC/stm32_adc_cache.h"
 
+#ifdef OIL_SENSOR_OPST
+#include "opst_sensor.h"
+#endif
+
 uint8_t statusSensors = 0;
 
 static volatile uint32_t vssTimes[VSS_SAMPLES] = {0};
@@ -52,6 +56,11 @@ table2D_u16_u8_32 iatCalibrationTable(&iatCalibration_bins, &iatCalibration_valu
 static uint16_t o2Calibration_bins[32];
 static uint8_t o2Calibration_values[32];
 table2D_u16_u8_32 o2CalibrationTable(&o2Calibration_bins, &o2Calibration_values); 
+
+#ifdef OIL_SENSOR_OPST
+volatile struct oilSensorOPStData oilSensorOPStData;
+volatile struct oilSensorOPStPulse oilSensorOPStPulse;
+#endif
 
 /**
  * @brief A specialist function to map a value in the range [0, 1023] (I.e. 10-bit) to a different range.
@@ -984,6 +993,11 @@ static inline byte getOilPressure(void)
 {
   int16_t tempOilPressure = 0;
 
+#ifdef OIL_SENSOR_OPST
+  tempOilPressure = oilSensorOPStData.pressure;
+  const int16_t oilPressureMax = (configPage10.oilPressureMax > 0U) ? configPage10.oilPressureMax : UINT8_MAX;
+  tempOilPressure = clamp(tempOilPressure, (int16_t)0, oilPressureMax);
+#else
   if(configPage10.oilPressureEnable > 0U)
   {
     //Perform ADC read
@@ -992,6 +1006,7 @@ static inline byte getOilPressure(void)
     //Sanity check
     tempOilPressure = clamp(tempOilPressure, (int16_t)0, (int16_t)configPage10.oilPressureMax);
   }
+#endif
 
 
   return (byte)tempOilPressure;

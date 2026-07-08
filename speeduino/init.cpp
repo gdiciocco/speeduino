@@ -35,6 +35,9 @@
 #include "scheduler_ignition_controller.h"
 #include "maths.h"
 #include "src/controllers/fuelPump/fuelPumpController.h"
+#if defined(CAPONORD_BOARD)
+#include "opf_core.h"
+#endif
 
 #if defined(CORE_AVR)
 #pragma GCC push_options
@@ -178,6 +181,9 @@ void initialiseAll(void)
       configPage2.pinMapping = 3; //Force board to v0.4
     }
     setPinMapping(configPage2.pinMapping);
+#if defined(CAPONORD_BOARD)
+    caponordSetPins();
+#endif
 
     // Repeatedly initialising the CAN bus hangs the system when
     // running initialisation tests on Teensy 3.5

@@ -21,6 +21,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 #include <stdint.h> //developer.mbed.org/handbook/C-Data-Types
 //************************************************
+#ifdef CAPONORD_BOARD
+#include "opf_core.h"
+#endif
 #include "globals.h"
 #include "scheduler.h"
 #include "comms.h"
@@ -67,7 +70,11 @@ constexpr table2D_u8_u8_10 idleTargetTable(&configPage6.iacBins, &configPage6.ia
 void setup(void)
 {
   currentStatus.initialisationComplete = false; //Tracks whether the initialiseAll() function has run completely
+#ifdef CAPONORD_BOARD
+  setupBoard();
+#else
   initialiseAll();
+#endif
 }
 
 /** Lookup the current VE value from the primary 3D fuel map.
@@ -147,6 +154,10 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
 
       if(mainLoopCount < UINT16_MAX) { mainLoopCount++; }
       currentStatus.LOOP_TIMER = getAndClearTimerMask();
+
+#ifdef CAPONORD_BOARD
+      runLoop();
+#endif
 
       //SERIAL Comms
       //Initially check that the last serial send values request is not still outstanding
