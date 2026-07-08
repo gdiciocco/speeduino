@@ -8,6 +8,112 @@
 #include "comms_secondary.h"
 #include "scheduler_ignition_controller.h"
 #include "scheduler_fuel_controller.h"
+#include "PeripheralPins.h"
+#include "pinmap.h"
+
+/*
+***********************************************************************************************************
+* Primary trigger input capture (see board_stm32_official.h)
+*
+* The trigger keeps using the EXTI interrupt to run the decoder; the spare timer channel only latches
+* the exact edge time in hardware. primaryTriggerEdgeTimeMicros() reconstructs the edge time from the
+* capture register: age_of_edge = CNT - CCR (the timer ticks at 1MHz, so ticks are µS), edge time =
+* micros() - age. The CCxIF flag is consumed on each read: if the capture ever stops following the pin
+* (E.g. a pinMode()/attachInterrupt() call reverted the pin out of AF mode), the flag stays clear and
+* the function silently degrades to plain micros().
+*/
+static HardwareTimer *captureTimer = nullptr;
+static TIM_TypeDef * volatile captureTIM = nullptr; //nullptr disables the ISR side. Must be written last during setup
+static volatile uint32_t *captureCCR = nullptr;
+static uint32_t captureFlag = 0;
+
+static bool timerIsFreeForCapture(const void *peripheral)
+{
+  //Timers not used for schedules (TIM1-5) or the 1ms tick (TIM11, or TIM4 on F103)
+  bool isFree = false;
+  #if defined(TIM8_BASE)
+    isFree = isFree || (peripheral == TIM8);
+  #endif
+  #if defined(TIM9_BASE)
+    isFree = isFree || (peripheral == TIM9);
+  #endif
+  #if defined(TIM10_BASE)
+    isFree = isFree || (peripheral == TIM10);
+  #endif
+  #if defined(TIM12_BASE)
+    isFree = isFree || (peripheral == TIM12);
+  #endif
+  #if defined(TIM13_BASE)
+    isFree = isFree || (peripheral == TIM13);
+  #endif
+  #if defined(TIM14_BASE)
+    isFree = isFree || (peripheral == TIM14);
+  #endif
+  return isFree;
+}
+
+void initPrimaryTriggerCapture(uint8_t pin, uint8_t edge)
+{
+  captureTIM = nullptr; //Disable the ISR side while reconfiguring
+
+  if (captureTimer != nullptr)
+  {
+    captureTimer->pause();
+    delete captureTimer;
+    captureTimer = nullptr;
+  }
+
+  if ((edge != RISING) && (edge != FALLING) && (edge != CHANGE)) { return; }
+  const PinName pinName = digitalPinToPinName(pin);
+  if (pinName == NC) { return; }
+
+  for (const PinMap *entry = PinMap_TIM; entry->pin != NC; entry++)
+  {
+    if ( ((uint32_t)entry->pin & ~(uint32_t)ALTX_MASK) == (uint32_t)pinName
+      && timerIsFreeForCapture(entry->peripheral)
+      && (STM_PIN_INVERTED(entry->function) == 0U) ) //TIMx_CHxN complementary inputs cannot capture
+    {
+      TIM_TypeDef *tim = (TIM_TypeDef *)entry->peripheral;
+      const uint32_t channel = STM_PIN_CHANNEL(entry->function);
+
+      captureTimer = new HardwareTimer(tim);
+      captureTimer->setPrescaleFactor(captureTimer->getTimerClkFreq() / 1000000U); //1 tick = 1µS, so capture ages are directly in µS
+      captureTimer->setOverflow(0x10000U, TICK_FORMAT); //Free running over the full 16 bit range
+      const TimerModes_t mode = (edge == RISING) ? TIMER_INPUT_CAPTURE_RISING :
+                               ((edge == FALLING) ? TIMER_INPUT_CAPTURE_FALLING : TIMER_INPUT_CAPTURE_BOTHEDGE);
+      //Passing the map entry's own PinName (which may be an ALTx alias) guarantees the pin is AF-routed to *this* timer.
+      //This must run after attachInterrupt(): AF mode keeps the input path alive, so the EXTI keeps firing
+      captureTimer->setMode(channel, mode, entry->pin);
+      captureTimer->resume(); //No channel interrupt is attached; the capture register is read from the trigger ISR
+
+      captureCCR = &tim->CCR1 + (channel - 1U);
+      captureFlag = (uint32_t)TIM_SR_CC1IF << (channel - 1U);
+      tim->SR = 0U; //Discard captures that occurred during setup
+      captureTIM = tim;
+      return;
+    }
+  }
+}
+
+uint32_t primaryTriggerEdgeTimeMicros(void)
+{
+  TIM_TypeDef *tim = captureTIM;
+  if (tim != nullptr)
+  {
+    if ((tim->SR & captureFlag) != 0U)
+    {
+      tim->SR = ~captureFlag; //Registers are rc_w0: this clears only our channel's capture flag
+      const uint16_t age = (uint16_t)tim->CNT - (uint16_t)*captureCCR;
+      return micros() - age;
+    }
+  }
+  return micros();
+}
+
+bool primaryTriggerCaptureActive(void)
+{
+  return captureTIM != nullptr;
+}
 
 #if defined(BOARD_FCR_MICRO_F4)
 extern "C" void __real_pinMode(uint8_t pin, uint8_t mode);

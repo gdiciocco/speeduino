@@ -34,6 +34,7 @@ A full copy of the license may be found in the projects root directory
  */
 #include <limits.h>
 #include "globals.h"
+#include "board_definition.h"
 #include "decoders.h"
 #include "scheduler.h"
 #include "crankMaths.h"
@@ -564,7 +565,7 @@ static uint8_t getConfigTerTriggerEdge(const config10 &page10)
 */
 static void triggerPri_missingTooth(void)
 {
-   curTime = micros();
+   curTime = primaryTriggerEdgeTimeMicros();
    curGap = curTime - toothLastToothTime;
    if ( curGap >= triggerFilterTime ) //Pulses should never be less than triggerFilterTime, so if they are it means a false trigger. (A 36-1 wheel at 8000pm will have triggers approx. every 200uS)
    {
@@ -950,7 +951,7 @@ Note: There can be no missing teeth on the primary wheel.
  * */
 static void triggerPri_DualWheel(void)
 {
-    curTime = micros();
+    curTime = primaryTriggerEdgeTimeMicros();
     curGap = curTime - toothLastToothTime;
     if ( curGap >= triggerFilterTime )
     {
@@ -1162,7 +1163,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_DualWheel(void)
 */
 static void triggerPri_BasicDistributor(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
   if ( (curGap >= triggerFilterTime) )
   {
@@ -1373,7 +1374,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_BasicDistributor(void)
 static void triggerPri_GM7X(void)
 {
     lastGap = curGap;
-    curTime = micros();
+    curTime = primaryTriggerEdgeTimeMicros();
     curGap = curTime - toothLastToothTime;
     toothCurrentCount++; //Increment the tooth counter
     decoderStatus.validTrigger = true; //Flag this pulse as being a valid trigger (ie that it passed filters)
@@ -1518,7 +1519,7 @@ Tooth number one is at 355* ATDC.
 */
 static void triggerPri_4G63(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
   if ( (curGap >= triggerFilterTime) || (currentStatus.startRevolutions == 0) )
   {
@@ -1956,7 +1957,7 @@ static void triggerPri_24X(void)
   if(toothCurrentCount == 25) { decoderStatus.syncStatus = SyncStatus::None; } //Indicates sync has not been achieved (Still waiting for 1 revolution of the crank to take place)
   else
   {
-    curTime = micros();
+    curTime = primaryTriggerEdgeTimeMicros();
     curGap = curTime - toothLastToothTime;
 
     if(toothCurrentCount == 0)
@@ -2084,7 +2085,7 @@ static void triggerPri_Jeep2000(void)
   if(toothCurrentCount == 13) { decoderStatus.syncStatus = SyncStatus::None; } //Indicates sync has not been achieved (Still waiting for 1 revolution of the crank to take place)
   else
   {
-    curTime = micros();
+    curTime = primaryTriggerEdgeTimeMicros();
     curGap = curTime - toothLastToothTime;
     if ( curGap >= triggerFilterTime )
     {
@@ -2192,7 +2193,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_Jeep2000(void)
 */
 static void triggerPri_Audi135(void)
 {
-   curTime = micros();
+   curTime = primaryTriggerEdgeTimeMicros();
    curGap = curTime - toothSystemLastToothTime;
    if ( (curGap > triggerFilterTime) || (currentStatus.startRevolutions == 0) )
    {
@@ -2318,7 +2319,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_Audi135(void)
 static void triggerPri_HondaD17(void)
 {
    lastGap = curGap;
-   curTime = micros();
+   curTime = primaryTriggerEdgeTimeMicros();
    curGap = curTime - toothLastToothTime;
    toothCurrentCount++; //Increment the tooth counter
 
@@ -2437,7 +2438,7 @@ static void triggerPri_HondaJ32(void)
   // This function is called only on rising edges, which occur as we lose sight of a tooth.
   // This function sets the following state variables for use in other functions:
   // toothLastToothTime, toothOneTime, revolutionOne (just toggles - not correct)
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
   toothLastToothTime = curTime;
 
@@ -2567,7 +2568,7 @@ Tooth number one is at 355* ATDC.
 */
 static void triggerPri_Miata9905(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
   if ( (curGap >= triggerFilterTime) || (currentStatus.startRevolutions == 0) )
   {
@@ -2848,7 +2849,7 @@ Tooth number one is at 348* ATDC.
 */
 static void triggerPri_MazdaAU(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
   if ( curGap >= triggerFilterTime )
   {
@@ -3073,7 +3074,7 @@ See http://wiki.r31skylineclub.com/index.php/Crank_Angle_Sensor .
 */
 static void triggerPri_Nissan360(void)
 {
-   curTime = micros();
+   curTime = primaryTriggerEdgeTimeMicros();
    curGap = curTime - toothLastToothTime;
    if ( curGap < triggerFilterTime ) { return; }
    
@@ -3323,7 +3324,7 @@ This seems to be present in late 90's Subaru. In 2001 Subaru moved to 36-2-2-2 (
 */
 static void triggerPri_Subaru67(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
   if ( curGap < triggerFilterTime ) 
   { return; }
@@ -3607,7 +3608,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_Subaru67(void)
 */
 static void triggerPri_Daihatsu(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
 
   //if ( curGap >= triggerFilterTime || (currentStatus.startRevolutions == 0 )
@@ -3776,7 +3777,7 @@ Only rising Edge is used for simplicity.The second input is ignored, as it does 
 static void triggerPri_Harley(void)
 {
   lastGap = curGap;
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
   setFilter(curGap); // Filtering adjusted according to setting
   if (curGap > triggerFilterTime)
@@ -3913,7 +3914,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_Harley(void)
 */
 static void triggerPri_ThirtySixMinus222(void)
 {
-   curTime = micros();
+   curTime = primaryTriggerEdgeTimeMicros();
    curGap = curTime - toothLastToothTime;
    if ( curGap >= triggerFilterTime ) //Pulses should never be less than triggerFilterTime, so if they are it means a false trigger. (A 36-1 wheel at 8000pm will have triggers approx. every 200uS)
    {
@@ -4091,7 +4092,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_ThirtySixMinus222(void)
 */
 static void triggerPri_ThirtySixMinus21(void)
 {
-   curTime = micros();
+   curTime = primaryTriggerEdgeTimeMicros();
    curGap = curTime - toothLastToothTime;
    if ( curGap >= triggerFilterTime ) //Pulses should never be less than triggerFilterTime, so if they are it means a false trigger. (A 36-1 wheel at 8000pm will have triggers approx. every 200uS)
    {
@@ -4223,7 +4224,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_ThirtySixMinus21(void)
 */
 static void triggerPri_420a(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
   if ( curGap >= triggerFilterTime ) //Pulses should never be less than triggerFilterTime, so if they are it means a false trigger. (A 36-1 wheel at 8000pm will have triggers approx. every 200uS)
   {
@@ -4413,7 +4414,7 @@ Uses DualWheel decoders, There can be no missing teeth on the primary wheel.
 */
 static void triggerPri_Webber(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;
   if ( curGap >= triggerFilterTime )
   {
@@ -4746,7 +4747,7 @@ The 6 and 8-cyl cam decoder uses the amount of teeth in the two previous groups 
 */
 static void triggerPri_NGC(void) 
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   // We need to know the polarity of the missing tooth to determine position
   if (triggerPri_pin.isPinHigh() == HIGH) {
     toothLastToothRisingTime = curTime;
@@ -5101,7 +5102,7 @@ Trigger is based on 'CHANGE' so we get a signal on the up and downward edges of 
 static void triggerPri_Vmax(void)
 {
   bool primaryEdge = configPage4.TrigEdge == 0;
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   if(triggerPri_pin.isPinHigh() == primaryEdge){// Forwarded from the config page to setup the primary trigger edge (rising or falling). Inverting VR-conditioners require FALLING, non-inverting VR-conditioners require RISING in the Trigger edge setup.
     curGap2 = curTime;
     curGap = curTime - toothLastToothTime;
@@ -5300,7 +5301,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_Vmax(void)
 
 static void triggerPri_Renix(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - renixSystemLastToothTime;
 
   if ( curGap >= triggerFilterTime )   
@@ -5477,7 +5478,7 @@ volatile unsigned long roverMEMSTeethSeen = 0; // used for flywheel gap pattern 
 
 static void triggerPri_RoverMEMS(void)
 {
-  curTime = micros();
+  curTime = primaryTriggerEdgeTimeMicros();
   curGap = curTime - toothLastToothTime;      
 
   if ( curGap >= triggerFilterTime ) //Pulses should never be less than triggerFilterTime, so if they are it means a false trigger. (A 36-1 wheel at 8000pm will have triggers approx. every 200uS)
@@ -5838,7 +5839,7 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_RoverMEMS(void)
 */
 static void triggerPri_SuzukiK6A(void)
 {
-  curTime = micros();  
+  curTime = primaryTriggerEdgeTimeMicros();  
   curGap = curTime - toothLastToothTime;
   if ( (curGap >= triggerFilterTime) || (currentStatus.startRevolutions == 0U) )
   {    
@@ -6177,7 +6178,7 @@ Evenly spaced rising edge triggers, Cylinder 1 has a narrow teeth and will have 
  * */
 static void triggerPri_FordTFI(void)
 {
-  curTime = micros(); // Get current time and gap duration with micros rollover
+  curTime = primaryTriggerEdgeTimeMicros(); // Get current time and gap duration with micros rollover
   if (curTime >= toothLastToothTime) 
     { curGap = curTime - toothLastToothTime; } 
   else

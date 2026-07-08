@@ -705,6 +705,8 @@ static inline void attachLoggerInterrupt(uint8_t pin, void (*loggerISR)(void))
 {
   detachInterrupt( digitalPinToInterrupt(pin) );
   attachInterrupt( digitalPinToInterrupt(pin), loggerISR, CHANGE );
+  //attachInterrupt() reconfigures the pin, so the hardware edge timestamping must be set up again
+  if (pin == pinTrigger) { initPrimaryTriggerCapture(pin, currentStatus.decoder.primary.edge); }
 }
 
 void startToothLogger(void)
@@ -727,6 +729,8 @@ static inline void detachLoggerInterrupt(uint8_t pin, const interrupt_t &decoder
 {
   detachInterrupt( digitalPinToInterrupt(pin) );
   decoderInterrupt.attach(pin);
+  //attach() reconfigures the pin, so the hardware edge timestamping must be set up again
+  if (pin == pinTrigger) { initPrimaryTriggerCapture(pin, decoderInterrupt.edge); }
 }
 
 void stopToothLogger(void)

@@ -75,6 +75,22 @@ storage_api_t getBoardStorageApi(void);
 void boardInitRTC(void);
 #endif
 
+/*
+ * Hardware assisted trigger timestamping (optional).
+ * Boards that can latch a timer capture register on the primary trigger edge define
+ * BOARD_HAS_PRIMARY_TRIGGER_CAPTURE and implement these functions, removing the interrupt
+ * entry latency (and its jitter) from the tooth timestamp. Other boards fall back to
+ * reading micros() from within the ISR.
+ */
+#if !defined(BOARD_HAS_PRIMARY_TRIGGER_CAPTURE)
+/** @brief Set up edge timestamping for the primary trigger. Must be called again after every attachInterrupt()/pinMode() on the trigger pin */
+static inline void initPrimaryTriggerCapture(uint8_t pin, uint8_t edge) { (void)pin; (void)edge; }
+/** @brief The time (µS, micros() epoch) of the primary trigger edge currently being serviced. Only valid from within the primary trigger ISR */
+static inline uint32_t primaryTriggerEdgeTimeMicros(void) { return micros(); }
+/** @brief Whether hardware edge timestamping is active */
+static inline bool primaryTriggerCaptureActive(void) { return false; }
+#endif
+
 // It is important that we cast this to the actual overflow limit of the timer. 
 // The compare variables type can be wider than the timer overflow.
 #define SET_COMPARE(compare, value) (compare) = (COMPARE_TYPE)(value)

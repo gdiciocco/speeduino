@@ -2,6 +2,7 @@
 #include "decoder_init.h"
 #include "decoders.h"
 #include "decoder_builder.h"
+#include "board_definition.h"
 #include "globals.h"
 #include "preprocessor.h"
 #include "unit_testing.h"
@@ -127,8 +128,11 @@ decoder_t buildDecoder(uint8_t decoderIndex)
   decoder.primary.attach(pinTrigger);
   decoder.secondary.attach(pinTrigger2);
   decoder.tertiary.attach(pinTrigger3);
-  
+
   initDecoderPins(pinTrigger, pinTrigger2, pinTrigger3);
+
+  //Must be last: both attach() and initDecoderPins() reconfigure the pin, undoing the capture routing
+  initPrimaryTriggerCapture(pinTrigger, decoder.primary.edge);
 
   // Turn off per tooth ignition if the decoder doesn't support it
   configPage2.perToothIgn = configPage2.perToothIgn && decoder.getFeatures().supportsPerToothIgnition;

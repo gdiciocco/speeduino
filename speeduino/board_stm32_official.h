@@ -373,6 +373,19 @@ using boardInputPin_t = inputPin_t;
 class fastOutputPin_t;
 using boardOutputPin_t = fastOutputPin_t;
 
+/*
+***********************************************************************************************************
+* Primary trigger input capture
+* If the primary trigger pin can be routed to a spare timer channel, that channel latches the timer
+* counter in hardware on the exact trigger edge. The decoder ISR then reconstructs the true edge time,
+* removing the interrupt entry latency (EXTI dispatch, higher priority ISRs, flash wait states) and its
+* jitter from the tooth timestamp. Falls back to plain micros() when the pin has no usable timer channel.
+*/
+#define BOARD_HAS_PRIMARY_TRIGGER_CAPTURE
+void initPrimaryTriggerCapture(uint8_t pin, uint8_t edge);
+uint32_t primaryTriggerEdgeTimeMicros(void);
+bool primaryTriggerCaptureActive(void);
+
 /** @brief Analog pin mapping */
 #if NUM_ANALOG_INPUTS==10
 constexpr uint8_t ANALOG_PINS[NUM_ANALOG_INPUTS-1] = { _ANALOG_PINS_A0_A8  };
