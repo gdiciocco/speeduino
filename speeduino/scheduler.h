@@ -43,6 +43,7 @@ See page 136 of the processors datasheet: http://www.atmel.com/Images/doc2549.pd
 
 #include "globals.h"
 #include "crankMaths.h"
+#include "knock_window.h"
 
 
 /** \enum ScheduleStatus
@@ -52,14 +53,20 @@ enum ScheduleStatus {
   // We use powers of 2 so we can check multiple states with a single bitwise AND
 
   /** Not running */
-  OFF              = 0b00000000U, 
+  OFF              = 0b00000000U,
   /** The delay phase of the schedule is active */
   PENDING          = 0b00000001U,
   /** The schedule action is running */
   RUNNING          = 0b00000010U,
   /** The schedule is running, with a next schedule queued up */
   RUNNING_WITHNEXT = 0b00000100U,
-}; 
+  /** Ignition only: spark has fired and the optional knock window start is scheduled.
+   * Only reachable when KNOCK_WINDOW_OUTPUT_PIN is defined */
+  KNOCK_PENDING    = 0b00001000U,
+  /** Ignition only: the optional knock window GPIO is active.
+   * Only reachable when KNOCK_WINDOW_OUTPUT_PIN is defined */
+  KNOCK_RUNNING    = 0b00010000U,
+};
 
 /** @brief A scheduler callback that does nothing */
 void nullCallback(void);
@@ -182,10 +189,27 @@ struct IgnitionSchedule : public Schedule {
   volatile uint32_t _startTime = 0U;///< The system time (in uS) that the schedule started, used by the overdwell protection in timers.ino
   int16_t chargeAngle = 0U;         ///< Angle the coil should begin charging.
   int16_t dischargeAngle = 0U;      ///< Angle the coil should discharge at. I.e. spark.
-  uint16_t channelDegrees = 0U;     ///< The number of crank degrees until cylinder is at TDC  
+  uint16_t channelDegrees = 0U;     ///< The number of crank degrees until cylinder is at TDC
+
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+  /** @brief A next schedule was queued while the knock window states own the timer.
+   * Replaces the RUNNING_WITHNEXT encoding, which the KNOCK_* states cannot carry. */
+  volatile bool _knockNextQueued = false;
+#endif
 
   void reset(void) override;
 };
+
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+/**
+ * @brief Ignition specific overload of setSchedule().
+ *
+ * Identical to the generic version, except that when the schedule is in one of
+ * the KNOCK_* states (the timer is driving the knock window output) the new
+ * event is queued behind the window instead of clobbering it.
+ */
+void setSchedule(IgnitionSchedule &schedule, uint32_t delay, uint16_t duration, bool allowQueuedSchedule);
+#endif
 
 /**
  * @brief Shared ignition schedule timer ISR *implementation*. Should be called by the actual ignition timer ISRs

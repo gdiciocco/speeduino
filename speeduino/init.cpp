@@ -196,6 +196,10 @@ void initialiseAll(void)
   
     //Set the tacho output default state
     digitalWrite(pinTachOut, HIGH);
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+    //Claim the (build-time selected) knock window output pin, if it's free
+    initialiseKnockWindowOutput();
+#endif
     //Perform all initialisations
     initialiseIgnitionSchedules(configPage4.sparkMode, configPage2.nCylinders, configPage10.rotaryType);
     initialiseFuelSchedules(currentStatus, configPage2, configPage4);

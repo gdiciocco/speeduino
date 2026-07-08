@@ -42,8 +42,14 @@ void Schedule::reset(void)
     setCallbacks(*this, nullCallback, nullCallback);
 }
 
-void IgnitionSchedule::reset(void) 
+void IgnitionSchedule::reset(void)
 {
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+    // If a knock window is open on this channel, release the shared output
+    // before the status is cleared or the pin would latch active
+    if(_status == KNOCK_RUNNING) { knockWindowOutputOff(); }
+    _knockNextQueued = false;
+#endif
     Schedule::reset();
     chargeAngle = 0;
     dischargeAngle = 0;
@@ -111,9 +117,42 @@ void setSchedule(Schedule &schedule, uint32_t delay, uint16_t duration, bool all
   }  
 }
 
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+void setSchedule(IgnitionSchedule &schedule, uint32_t delay, uint16_t duration, bool allowQueuedSchedule)
+{
+  if((delay>0U) && (delay < MAX_TIMER_PERIOD) && (duration > 0U))
+  {
+    ATOMIC()
+    {
+      if((schedule._status == KNOCK_PENDING) || (schedule._status == KNOCK_RUNNING))
+      {
+        // The timer is driving the knock window; queue the ignition event behind it
+        if(allowQueuedSchedule)
+        {
+          schedule._duration = uS_TO_TIMER_COMPARE(clipDuration(duration));
+          schedule._nextStartCompare = schedule._counter + uS_TO_TIMER_COMPARE(delay);
+          schedule._knockNextQueued = true;
+        }
+      }
+      //Check that we're not already part way through a schedule
+      else if(!isRunning(schedule))
+      {
+        setScheduleRunning(schedule, delay, duration);
+      }
+      else if(allowQueuedSchedule)
+      {
+        setScheduleNext(schedule, delay, duration);
+      } else {
+        // Cannot schedule next event, as it would exceed the maximum future time
+      }
+    }
+  }
+}
+#endif
+
 /**
- * @defgroup fuel-schedule-ISR Fuel schedule timer ISRs 
- *   
+ * @defgroup fuel-schedule-ISR Fuel schedule timer ISRs
+ *
  * @{
  */
 
@@ -179,6 +218,56 @@ END_LTO_INLINE()
 
 void moveToNextState(IgnitionSchedule &schedule)  noexcept
 {
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+  if (schedule._status == KNOCK_PENDING)
+  {
+    // Window start delay has elapsed: open the window
+    knockWindowOutputOn();
+    schedule._status = KNOCK_RUNNING;
+    SET_COMPARE(schedule._compare, schedule._counter + knockWindowDurationCompare);
+  }
+  else if (schedule._status == KNOCK_RUNNING)
+  {
+    // Window has elapsed: close it and promote any schedule queued behind it
+    knockWindowOutputOff();
+    if (schedule._knockNextQueued)
+    {
+      schedule._knockNextQueued = false;
+      SET_COMPARE(schedule._compare, schedule._nextStartCompare);
+      schedule._status = PENDING;
+    }
+    else
+    {
+      schedule._status = OFF;
+    }
+  }
+  else if (isRunning(schedule) && isKnockWindowScheduled())
+  {
+    // The spark fires now: run the knock window before going OFF or promoting
+    // a queued schedule (mirrors ignitionRunningToOff/ignitionRunningToPending)
+    schedule._pEndCallback();
+    onEndIgnitionEvent(&schedule);
+    schedule._knockNextQueued = (schedule._status == RUNNING_WITHNEXT);
+
+    COMPARE_TYPE delayCompare = knockWindowDelayCompare;
+    if (delayCompare == 0U)
+    {
+      knockWindowOutputOn();
+      schedule._status = KNOCK_RUNNING;
+      SET_COMPARE(schedule._compare, schedule._counter + knockWindowDurationCompare);
+    }
+    else
+    {
+      schedule._status = KNOCK_PENDING;
+      SET_COMPARE(schedule._compare, schedule._counter + delayCompare);
+    }
+  }
+  else
+  {
+    movetoNextState(schedule, ignitionPendingToRunning, ignitionRunningToOff, ignitionRunningToPending);
+  }
+#else
   movetoNextState(schedule, ignitionPendingToRunning, ignitionRunningToOff, ignitionRunningToPending);
+#endif
 }
 

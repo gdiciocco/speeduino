@@ -1,6 +1,29 @@
 #ifndef OPF_CORE_H
 #define OPF_CORE_H
 
+#if defined(CAPONORD_BOARD)
+// Optional knock-window GPIO output. The pin is build-time selected to avoid
+// EEPROM/page layout churn and keep the ignition timing path lean.
+#ifndef CAPONORD_KNOCK_WINDOW_OUTPUT_ENABLED
+#define CAPONORD_KNOCK_WINDOW_OUTPUT_ENABLED 0
+#endif
+
+#ifndef CAPONORD_KNOCK_WINDOW_OUTPUT_PIN
+#define CAPONORD_KNOCK_WINDOW_OUTPUT_PIN PG8
+#endif
+
+#ifndef CAPONORD_KNOCK_WINDOW_OUTPUT_ACTIVE_LOW
+#define CAPONORD_KNOCK_WINDOW_OUTPUT_ACTIVE_LOW 0
+#endif
+
+#if CAPONORD_KNOCK_WINDOW_OUTPUT_ENABLED
+#define KNOCK_WINDOW_OUTPUT_PIN CAPONORD_KNOCK_WINDOW_OUTPUT_PIN
+#if CAPONORD_KNOCK_WINDOW_OUTPUT_ACTIVE_LOW
+#define KNOCK_WINDOW_OUTPUT_ACTIVE_LOW
+#endif
+#endif
+#endif
+
 void setupBoard();
 void runLoop();
 

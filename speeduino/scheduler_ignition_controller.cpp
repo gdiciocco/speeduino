@@ -426,7 +426,13 @@ BEGIN_LTO_ALWAYS_INLINE(void) __attribute__((flatten)) calculateIgnitionAngles(c
   {
     calculateNonRotaryIgnitionAngles(dwellAngle, current);
   }
-  
+
+#if defined(KNOCK_WINDOW_OUTPUT_PIN)
+  // Refresh the knock window compare deltas here so the ignition ISRs never
+  // perform degree/time conversion themselves
+  updateKnockWindowSchedule(current);
+#endif
+
   //If ignition timing is being tracked per tooth, perform the calcs to get the end teeth
   if (page2.perToothIgn == true) { current.decoder.setEndTeeth(); }
 }
