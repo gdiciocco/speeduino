@@ -5,6 +5,7 @@
 statuses::statuses(void)
 {
   (void)memset(this, 0, sizeof(*this));
+  battery10 = 125; //Set battery voltage to sensible value for dwell correction for "flying start" (else ignition gets spurious pulses after boot)
   decoder = decoder_builder_t().build();
 }
 
