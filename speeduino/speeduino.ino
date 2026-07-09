@@ -231,9 +231,11 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
       currentStatus.isAcceleratingTPS = false; //Same as above but the accel enrich (If using MAP accel enrich a stall will cause this to trigger)
       currentStatus.isDeceleratingTPS = false; //Same as above but the decel enleanment
       //This is a safety check. If for some reason the interrupts have got screwed up (Leading to 0rpm), this resets them.
-      //It can possibly be run much less frequently.
+      //Gated to 4Hz: rebuilding on every loop dominates the stalled-engine loop time (attachInterrupt plus,
+      //on STM32, the full input capture timer teardown/rebuild), tanking loopsPerSecond at engine off.
       //This should only be run if the high speed logger are off because it will change the trigger interrupts back to defaults rather than the logger versions
-      if( (currentStatus.toothLogEnabled == false) && (currentStatus.compositeTriggerUsed == 0) ) { 
+      if( (currentStatus.toothLogEnabled == false) && (currentStatus.compositeTriggerUsed == 0)
+          && BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_4HZ) ) {
         currentStatus.decoder = buildDecoder(configPage4.TrigPattern);
       }
 

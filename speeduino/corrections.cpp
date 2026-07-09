@@ -106,7 +106,10 @@ void initialiseCorrections(void)
   currentStatus.knockCount = 1;
   knockLastRecoveryStep = 0;
   knockStartTime = 0;
-  currentStatus.battery10 = 125; //Set battery voltage to sensible value for dwell correction for "flying start" (else ignition gets spurious pulses after boot)  
+  if(currentStatus.initialisationComplete == false)
+  {
+    currentStatus.battery10 = 125; //Set battery voltage to sensible value for dwell correction for "flying start" (else ignition gets spurious pulses after boot)
+  }
 }
 
 // ============================= Warm Up Enrichment =============================
