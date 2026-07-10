@@ -80,6 +80,7 @@ static constexpr byte PRELOAD_MAX_POSITION = 100U;
 static constexpr byte PRELOAD_PRESET_COUNT = 5U;
 static constexpr uint16_t PRELOAD_CAN_TIMEOUT_MS = 1000U;
 static constexpr uint16_t PRELOAD_CAN_POLL_MS = 100U;
+static constexpr byte PRELOAD_TX_MAX_ATTEMPTS = 8U;
 
 static constexpr byte PRELOAD_CAN_FLAG_STATUS_SEEN = 1U << 0;
 static constexpr byte PRELOAD_CAN_FLAG_ALARM_SEEN = 1U << 1;
@@ -112,6 +113,7 @@ static bool preloadCommandPending = false;
 static byte preloadPendingCommand = 0U;
 static uint16_t preloadPendingValue = 0U;
 static byte preloadPendingSlot = 0U;
+static byte preloadPendingAttempts = 0U;
 static uint32_t preloadLastPollMs = 0U;
 
 static uint16_t caponordPreloadAgeMs()
@@ -200,6 +202,7 @@ static void caponordPreloadQueueCommand(byte command, uint16_t value, byte slot)
   preloadPendingCommand = command;
   preloadPendingValue = value;
   preloadPendingSlot = slot;
+  preloadPendingAttempts = 0U;
   preloadCommandPending = true;
 }
 
@@ -222,9 +225,19 @@ static void caponordPreloadRunCanBridge()
     preloadCanFlags &= static_cast<byte>(~PRELOAD_CAN_FLAG_FALLBACK_RX);
   }
 
-  if (preloadCommandPending && caponordPreloadSendCommand(preloadPendingCommand, preloadPendingValue, preloadPendingSlot))
+  if (preloadCommandPending)
   {
-    preloadCommandPending = false;
+    if (caponordPreloadSendCommand(preloadPendingCommand, preloadPendingValue, preloadPendingSlot))
+    {
+      preloadCommandPending = false;
+    }
+    else
+    {
+      //With the controller off or the bus dead the TX can never succeed:
+      //drop the command instead of retrying forever
+      preloadPendingAttempts++;
+      if (preloadPendingAttempts >= PRELOAD_TX_MAX_ATTEMPTS) { preloadCommandPending = false; }
+    }
   }
 
   const uint32_t nowMs = millis();
@@ -235,6 +248,7 @@ static void caponordPreloadRunCanBridge()
   }
 #else
   preloadCanFlags &= static_cast<byte>(~PRELOAD_CAN_FLAG_BRIDGE_ACTIVE);
+  preloadCommandPending = false; //No CAN peripheral: a queued command can never be sent
 #endif
 
   caponordPreloadRefreshTimeoutFlag();
@@ -393,7 +407,9 @@ void caponordResetPins()
 
 void runLoop()
 {
-  if (preloadCommandPending || BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ))
+  //A fresh command gets its first TX attempt on the next loop; retries run
+  //on the 10Hz tick only, so a dead bus cannot drag every loop iteration
+  if ((preloadCommandPending && (preloadPendingAttempts == 0U)) || BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ))
   {
     caponordPreloadRunCanBridge();
   }
