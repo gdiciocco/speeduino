@@ -14,6 +14,9 @@
 #if defined(CAPONORD_BOARD)
   #include "opf_core.h"
 #endif
+#if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
+  #include "src/BackupSram/BackupSramAsEEPROM.h"
+#endif
 
 static byte setStatusBit(byte status, uint8_t index, bool bit)
 {
@@ -175,6 +178,29 @@ static byte buildEngineProtectStatus(const statuses &current)
 
 #if defined(CAPONORD_BOARD)
 /**
+ * @brief Outcome of the boot-time backup SRAM integrity check as a status bitfield.
+ *
+ * Bits 0/1 set mean the battery backed SRAM content was lost (VBAT battery flat/removed);
+ * bit 2 flags a failed flash snapshot write; bit 3 is informational (snapshot refreshed).
+ * Always 0 on builds that don't use SRAM_AS_EEPROM.
+ */
+static byte buildStorageStatus(void)
+{
+#if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
+  const BackupSramBootStatus bootStatus = getBackupSramBootStatus();
+  bool bits[] = {
+    bootStatus == BackupSramBootStatus::SramRestored,     //SRAM corrupt, restored from the flash snapshot
+    bootStatus == BackupSramBootStatus::Formatted,        //No valid copy anywhere, storage was blanked
+    bootStatus == BackupSramBootStatus::FlashWriteFailed, //Snapshot erase/program did not verify
+    bootStatus == BackupSramBootStatus::FlashUpdated,     //Snapshot refreshed from SRAM at boot
+  };
+  return setStatusBits(0U, bits);
+#else
+  return 0U;
+#endif
+}
+
+/**
  * @brief Caponord custom output block, appended after the stock live data fields.
  *
  * Starts with a 16-bit marker (0xCA50) and a layout version byte so the
@@ -189,7 +215,8 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 2U; break; //Custom block layout version
+    case 2: statusValue = 3U; break; //Custom block layout version
+    case 3: statusValue = buildStorageStatus(); break; //Backup SRAM integrity status (see buildStorageStatus)
     case 4: statusValue = lowByte(currentStatus.RPM); break;
     case 5: statusValue = highByte(currentStatus.RPM); break;
     case 6: statusValue = lowByte(currentStatus.MAP); break;
