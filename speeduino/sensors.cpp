@@ -769,6 +769,10 @@ static inline void setBaroFromMAP(void)
 
 static inline void readBaro(void)
 {
+#if defined(CAPONORD_BOARD)
+  // Caponord uses the LPS25HB I2C barometer in opf_core.cpp.
+  // Do not overwrite it here with the generic analog/MAP baro path.
+#else
   if ( configPage6.useExtBaro != 0U  ) 
   {
     // readings
@@ -779,13 +783,15 @@ static inline void readBaro(void)
   } else {
     // Do nothing - baro remains at last read value & MISRA checker is kept happy.
   }
+#endif
 }
 
 void initialiseMAPBaro(void) 
 {
   //Initialise MAP values to all 0's
   (void)memset(&mapAlgorithmState, 0, sizeof(mapAlgorithmState));
-  
+
+#if !defined(CAPONORD_BOARD)
   //Initialise baro
   if ( configPage6.useExtBaro != 0U  )
   {
@@ -801,6 +807,7 @@ void initialiseMAPBaro(void)
     // We assume external callers already made sure the engine isn't running
     setBaroFromMAP();
   }
+#endif
 }
 
 void resetMAPcycleAndEvent(void)

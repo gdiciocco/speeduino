@@ -21,6 +21,35 @@
 #include <src/LPS25HB/LPS25HBSensor.h>
 static TwoWire LPS_dev(PB11, PB10);
 static LPS25HBSensor LPS_Sensor(&LPS_dev, LPS25HB_ADDRESS_LOW);
+
+// A faulty or disconnected sensor makes every Wire transfer run to its HAL
+// timeout, stalling the main loop for hundreds of ms per read: track sensor
+// health and stop polling after repeated failures
+static bool baroSensorOk = false;
+static uint8_t baroFailCount = 0U;
+static constexpr uint8_t BARO_MAX_FAILURES = 5U;
+
+static bool updateI2CBaro()
+{
+  if (!baroSensorOk) { return false; }
+
+  float pressure = 0.0f;
+  float temperature = 0.0f;
+  if ((LPS_Sensor.GetPressure(&pressure) == LPS25HB_STATUS_OK) &&
+      (LPS_Sensor.GetTemperature(&temperature) == LPS25HB_STATUS_OK))
+  {
+    baroFailCount = 0U;
+    const uint8_t pressureKpa = static_cast<uint8_t>(pressure / 10.0f);
+    currentStatus.fuelTemp = static_cast<int8_t>(temperature);
+    currentStatus.baro = pressureKpa;
+    currentStatus.baroADC = pressureKpa;
+    return true;
+  }
+
+  baroFailCount++;
+  if (baroFailCount >= BARO_MAX_FAILURES) { baroSensorOk = false; }
+  return false;
+}
 #endif
 
 static constexpr byte CAPONORD_PIN_MAPPING = 60U;
@@ -241,12 +270,15 @@ void setupBoard()
 
 #ifdef USE_I2C_BARO
   LPS_dev.begin();
-  if ((LPS_Sensor.begin() != LPS25HB_STATUS_OK) ||
-      (LPS_Sensor.SetODR(7.0f) != LPS25HB_STATUS_OK) ||
-      (LPS_Sensor.Enable() != LPS25HB_STATUS_OK))
+  baroSensorOk = (LPS_Sensor.begin() == LPS25HB_STATUS_OK) &&
+                 (LPS_Sensor.SetODR(7.0f) == LPS25HB_STATUS_OK) &&
+                 (LPS_Sensor.Enable() == LPS25HB_STATUS_OK);
+  if (baroSensorOk)
   {
-    digitalWrite(LED_ALERT, HIGH);
+    (void)updateI2CBaro();
   }
+  //A failed sensor is reported via LED_ALERT in runLoop, which keeps the
+  //indication persistent instead of being overwritten at the first 10Hz tick
 #endif
 }
 
@@ -377,20 +409,17 @@ void runLoop()
       digitalWrite(LED_COMS, LOW);
     }
 
-    digitalWrite(LED_ALERT, currentStatus.engineProtect.isActive());
+    bool alertActive = currentStatus.engineProtect.isActive();
+#ifdef USE_I2C_BARO
+    alertActive = alertActive || (!baroSensorOk);
+#endif
+    digitalWrite(LED_ALERT, alertActive);
   }
 
   if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_1HZ))
   {
 #ifdef USE_I2C_BARO
-    float pressure = 0.0f;
-    float temperature = 0.0f;
-    if ((LPS_Sensor.GetPressure(&pressure) == LPS25HB_STATUS_OK) &&
-        (LPS_Sensor.GetTemperature(&temperature) == LPS25HB_STATUS_OK))
-    {
-      currentStatus.fuelTemp = static_cast<int8_t>(temperature);
-      currentStatus.baroADC = static_cast<uint16_t>(pressure / 10.0f);
-    }
+    (void)updateI2CBaro();
 #endif
   }
 
