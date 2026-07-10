@@ -622,6 +622,13 @@ STM32RTC& rtc = STM32RTC::getInstance();
       hwCrcAvailable = (crc32_oneshot(crcCheckVector, sizeof(crcCheckVector)) == 0xCBF43926UL);
     }
 
+    #if defined(SRAM_AS_EEPROM)
+    //rtc.begin()/setClockSource above can force a backup domain reset, which clears the RTC backup
+    //registers holding the backup SRAM CRC seal (the SRAM itself is unaffected). Reseal now, which
+    //also covers any storage writes made by doUpdates()/reset handling before initBoard() ran.
+    EEPROM.sealCrc();
+    #endif
+
     /*
     ***********************************************************************************************************
     * Interrupt priorities (0 = highest. Core defaults: SysTick=0, EXTI/trigger=6, USB=1, UART=1, all timers=14)
@@ -739,6 +746,13 @@ static uint16_t getEepromWriteBlockSize(const statuses &current)
 /** @brief Get the EEPROM storage API for the board */
 storage_api_t getBoardStorageApi(void)
 {
+#if defined(SRAM_AS_EEPROM)
+  //Boot-time integrity check of the battery backed SRAM against its flash snapshot.
+  //This is the first storage call made by initialiseAll(), before any page is loaded and before
+  //initBoard()/schedules/triggers run: ALL flash operations (erase included) happen inside here,
+  //never once the ECU is operational. Runs once; later calls are a no-op.
+  (void)backupSramBootSync();
+#endif
   return getEEPROMStorageApi(getEepromWriteBlockSize);
 }
 

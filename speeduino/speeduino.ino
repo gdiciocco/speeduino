@@ -45,6 +45,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "load_source.h"
 #include "board_definition.h"
 #include "unit_testing.h"
+#if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
+#include "src/BackupSram/BackupSramAsEEPROM.h"
+#endif
 #include RTC_LIB_H //Defined in each boards .h file
 #include "units.h"
 #include "fuel_calcs.h"
@@ -267,7 +270,13 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
       #endif
 
       //Check for any outstanding EEPROM writes.
-      if( (isEepromWritePending() == true) && (serialStatusFlag == SERIAL_INACTIVE) && storageWriteTimeoutExpired()) { saveAllPages(); } 
+      if( (isEepromWritePending() == true) && (serialStatusFlag == SERIAL_INACTIVE) && storageWriteTimeoutExpired()) { saveAllPages(); }
+
+      #if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
+      //Refresh the backup SRAM CRC seal if any storage write (page burn, calibration, baro) happened
+      //since the last seal. No-op when clean; ~25µs on the HW CRC unit when a burn occurred this tick.
+      EEPROM.sealCrcIfDirty();
+      #endif
     }
     if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_15HZ)) //Every 32 loops
     {

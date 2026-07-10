@@ -11,6 +11,9 @@
 #include "resetControl.h"
 #include "scheduler.h"
 #include "scheduler_fuel_controller.h"
+#if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
+  #include "src/BackupSram/BackupSramAsEEPROM.h"
+#endif
 
 static byte setStatusBit(byte status, uint8_t index, bool bit)
 {
@@ -92,6 +95,28 @@ static byte buildStatus4(const statuses &current)
   return setStatusBits(0U, bits);
 }
 
+/** @brief Battery backed SRAM was lost at boot (restored from flash or blanked): VBAT battery probably flat.
+ * Always false on builds that don't use SRAM_AS_EEPROM. */
+static bool sramBackupAlarm(void)
+{
+#if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
+  const BackupSramBootStatus bootStatus = getBackupSramBootStatus();
+  return (bootStatus == BackupSramBootStatus::SramRestored) || (bootStatus == BackupSramBootStatus::Formatted);
+#else
+  return false;
+#endif
+}
+
+/** @brief The boot-time flash snapshot of the backup SRAM failed to erase/program/verify */
+static bool sramFlashBackupFailed(void)
+{
+#if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
+  return getBackupSramBootStatus() == BackupSramBootStatus::FlashWriteFailed;
+#else
+  return false;
+#endif
+}
+
 static byte buildStatus5(const statuses &current)
 {
   bool bits[] = {
@@ -101,6 +126,8 @@ static byte buildStatus5(const statuses &current)
     current.knockRetardActive,
     current.knockPulseDetected,
     current.clutchTriggerActive,
+    sramBackupAlarm(),      //Previously unused: set once at boot when the battery backed tune was lost
+    sramFlashBackupFailed(),//Previously unused: set once at boot when the flash tune backup failed
   };
   return setStatusBits(0U, bits);
 }
