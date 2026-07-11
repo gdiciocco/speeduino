@@ -36,6 +36,7 @@ A full copy of the license may be found in the projects root directory
 #include "globals.h"
 #include "board_definition.h"
 #include "decoders.h"
+#include "elapsed_time.h"
 #include "scheduler.h"
 #include "crankMaths.h"
 #include "timers.h"
@@ -354,7 +355,7 @@ TESTABLE_STATIC bool sharedEngineIsRunning(uint32_t curTime) {
   // If it was more than MAX_STALL_TIME then the engine is probably stopped. 
   // toothLastToothTime can be greater than curTime if a pulse occurs between getting the latest time and doing the comparison
   ATOMIC() {
-    return (toothLastToothTime > curTime) || ((curTime - toothLastToothTime) < MAX_STALL_TIME); 
+    return (toothLastToothTime > curTime) || (timeElapsed(curTime, toothLastToothTime) < MAX_STALL_TIME);
   }
   return false; // Just here to avoid compiler warning.
 }

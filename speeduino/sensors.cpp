@@ -18,6 +18,7 @@ A full copy of the license may be found in the projects root directory
 #include "pages.h"
 #include "decoder_init.h"
 #include "auxiliaries.h"
+#include "elapsed_time.h"
 #include "unit_testing.h"
 #include "sensors_map_structs.h"
 #include "units.h"
@@ -927,7 +928,7 @@ static inline uint16_t getSpeed(void)
 
     pulseTime = fast_div(vssTotalTime,  VSS_SAMPLES - 1UL);
     noInterrupts();
-    uint32_t timeSinceLastPulse = (micros() - vssTimes[vssIndex]);
+    uint32_t timeSinceLastPulse = timeElapsed(micros(), vssTimes[vssIndex]);
     interrupts();
     if ( timeSinceLastPulse > MICROS_PER_SEC ) { tempSpeed = 0; } // Check that the car hasn't come to a stop. Is true if last pulse was more than 1 second ago
     else 
@@ -1069,7 +1070,7 @@ void flexPulse(void)
 {
   if(flex_pin.isPinHigh())
   {
-    uint16_t tempPW = clamp(micros() - flexStartTime, 0UL, (unsigned long)UINT16_MAX); //Calculate the pulse width
+    uint16_t tempPW = clamp((unsigned long)timeElapsed(micros(), flexStartTime), 0UL, (unsigned long)UINT16_MAX); //Calculate the pulse width
     flexPulseWidth = LOW_PASS_FILTER(tempPW, configPage4.FILTER_FLEX, flexPulseWidth);
     ++flexCounter;
   }
