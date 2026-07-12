@@ -39,6 +39,7 @@
 #if defined(CAPONORD_BOARD)
 #include "opf_core.h"
 #endif
+#include "ww_autotune.h"
 
 #if defined(CORE_AVR)
 #pragma GCC push_options
@@ -212,6 +213,7 @@ void initialiseAll(void)
     initialiseAirCon();
     initialiseAuxPWM();
     initialiseCorrections();
+    wwAutotuneInit();
     currentStatus.ioError = false; //Clear the I/O error bit. The bit will be set in initialiseADC() if there is problem in there.
     initialiseADC();
     initialiseMAPBaro();
