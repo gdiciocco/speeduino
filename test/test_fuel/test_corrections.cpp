@@ -999,6 +999,9 @@ static void setup_TAE()
 
 extern uint16_t correctionAccel(void);
 
+// Mirrors the file-local constant in corrections.cpp
+static constexpr uint16_t NO_FUEL_CORRECTION = ONE_HUNDRED_PCT;
+
 static void disable_AE_taper(void) {
   //Disable the taper
   currentStatus.setRpm( 2000U);
