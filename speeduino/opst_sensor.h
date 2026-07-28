@@ -25,6 +25,7 @@ extern volatile struct oilSensorOPStPulse {
   unsigned long lastEvent;
   uint8_t lastLevel;
   uint8_t gotSync;
+  uint8_t periodReady;
 } oilSensorOPStPulse;
 
 extern volatile struct oilSensorOPStData {
