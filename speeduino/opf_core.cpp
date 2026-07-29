@@ -21,7 +21,9 @@
 #ifdef USE_I2C_BARO
 #include <src/LPS25HB/LPS25HBSensor.h>
 static TwoWire LPS_dev(PB11, PB10);
-static LPS25HBSensor LPS_Sensor(&LPS_dev, LPS25HB_ADDRESS_LOW);
+static LPS25HBSensor LPS_SensorLow(&LPS_dev, LPS25HB_ADDRESS_LOW);
+static LPS25HBSensor LPS_SensorHigh(&LPS_dev, LPS25HB_ADDRESS_HIGH);
+static LPS25HBSensor *LPS_Sensor = nullptr;
 
 // A faulty or disconnected sensor makes every Wire transfer run to its HAL
 // timeout, stalling the main loop for hundreds of ms per read: track sensor
@@ -29,19 +31,44 @@ static LPS25HBSensor LPS_Sensor(&LPS_dev, LPS25HB_ADDRESS_LOW);
 static bool baroSensorOk = false;
 static uint8_t baroFailCount = 0U;
 static constexpr uint8_t BARO_MAX_FAILURES = 5U;
+static constexpr float BARO_MIN_HPA = 260.0f;
+static constexpr float BARO_MAX_HPA = 1260.0f;
+
+static bool initialiseI2CBaroSensor(LPS25HBSensor &sensor)
+{
+  // Do not require one specific WHO_AM_I value here. Caponord revisions have
+  // used register-compatible LPS variants, while the original working code
+  // never gated operation on the exact model ID. The checked I2C transport,
+  // successful configuration and a physically valid sample determine health.
+  if ((sensor.begin() == LPS25HB_STATUS_OK) &&
+      (sensor.SetODR(7.0f) == LPS25HB_STATUS_OK) &&
+      (sensor.Enable() == LPS25HB_STATUS_OK))
+  {
+    LPS_Sensor = &sensor;
+    return true;
+  }
+  return false;
+}
 
 static bool updateI2CBaro()
 {
-  if (!baroSensorOk) { return false; }
+  if (!baroSensorOk || (LPS_Sensor == nullptr)) { return false; }
 
   float pressure = 0.0f;
   float temperature = 0.0f;
-  if ((LPS_Sensor.GetPressure(&pressure) == LPS25HB_STATUS_OK) &&
-      (LPS_Sensor.GetTemperature(&temperature) == LPS25HB_STATUS_OK))
+  if ((LPS_Sensor->GetPressure(&pressure) == LPS25HB_STATUS_OK) &&
+      (LPS_Sensor->GetTemperature(&temperature) == LPS25HB_STATUS_OK) &&
+      (pressure >= BARO_MIN_HPA) && (pressure <= BARO_MAX_HPA))
   {
     baroFailCount = 0U;
     const uint8_t pressureKpa = static_cast<uint8_t>(pressure / 10.0f);
     currentStatus.fuelTemp = static_cast<int8_t>(temperature);
+
+    // Caponord has no analog barometer. Publish the already converted I2C
+    // pressure directly to the canonical runtime/TS value. Keep baroADC as a
+    // diagnostic mirror for compatibility only; it must never pass through
+    // the generic ADC calibration path (which historically changed ~100 kPa
+    // into values around 76 kPa).
     currentStatus.baro = pressureKpa;
     currentStatus.baroADC = pressureKpa;
     return true;
@@ -53,7 +80,6 @@ static bool updateI2CBaro()
 }
 #endif
 
-static constexpr byte CAPONORD_PIN_MAPPING = 60U;
 static constexpr byte UNUSED_PIN = BOARD_MAX_IO_PINS - 1U;
 
 static constexpr byte LED_RUNNING = PG9;
@@ -475,10 +501,6 @@ static void resetPin(byte &pin)
 
 void setupBoard()
 {
-  caponordResetPins();
-  caponordSetPins();
-  configPage2.pinMapping = CAPONORD_PIN_MAPPING;
-
   initialiseAll();
   caponordEmpPumpSetDefaultsIfNeeded();
   emp_pump::reset(millis());
@@ -494,9 +516,8 @@ void setupBoard()
 
 #ifdef USE_I2C_BARO
   LPS_dev.begin();
-  baroSensorOk = (LPS_Sensor.begin() == LPS25HB_STATUS_OK) &&
-                 (LPS_Sensor.SetODR(7.0f) == LPS25HB_STATUS_OK) &&
-                 (LPS_Sensor.Enable() == LPS25HB_STATUS_OK);
+  baroSensorOk = initialiseI2CBaroSensor(LPS_SensorLow) ||
+                 initialiseI2CBaroSensor(LPS_SensorHigh);
   if (baroSensorOk)
   {
     (void)updateI2CBaro();
@@ -518,7 +539,9 @@ void caponordSetPins()
   pinIAT = PA4;
   pinO2 = PC1;
   pinO2_2 = PC2;
-  pinBaro = PC5;
+  // Barometric pressure is supplied by the LPS25HB on I2C2 (PB11/PB10).
+  // Deliberately leave no analog barometer pin for generic sensor code.
+  pinBaro = NOT_A_PIN;
   pinMAP = PA6;
   pinFuelPressure = PB0;
 

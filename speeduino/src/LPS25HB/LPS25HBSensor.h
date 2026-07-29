@@ -110,17 +110,23 @@ class LPS25HBSensor
       }
 
       if(dev_i2c) {
-        dev_i2c->beginTransmission(((uint8_t)(((address) >> 1) & 0x7F)));
-        dev_i2c->write(RegisterAddr);
-        dev_i2c->endTransmission(false);
-
-        dev_i2c->requestFrom(((uint8_t)(((address) >> 1) & 0x7F)), (byte) NumByteToRead);
-
-        int i=0;
-        while (dev_i2c->available())
+        const uint8_t i2cAddress = (uint8_t)((address >> 1) & 0x7FU);
+        dev_i2c->beginTransmission(i2cAddress);
+        if ((dev_i2c->write(RegisterAddr) != 1U) || (dev_i2c->endTransmission(false) != 0U))
         {
-          pBuffer[i] = dev_i2c->read();
-          i++;
+          return 1;
+        }
+
+        if (dev_i2c->requestFrom(i2cAddress, (uint8_t)NumByteToRead) != NumByteToRead)
+        {
+          while (dev_i2c->available()) { (void)dev_i2c->read(); }
+          return 1;
+        }
+
+        for (uint16_t i = 0U; i < NumByteToRead; i++)
+        {
+          if (!dev_i2c->available()) { return 1; }
+          pBuffer[i] = (uint8_t)dev_i2c->read();
         }
 
         return 0;
@@ -158,15 +164,16 @@ class LPS25HBSensor
       }
 
       if (dev_i2c) {
-        dev_i2c->beginTransmission(((uint8_t)(((address) >> 1) & 0x7F)));
+        const uint8_t i2cAddress = (uint8_t)((address >> 1) & 0x7FU);
+        dev_i2c->beginTransmission(i2cAddress);
 
-        dev_i2c->write(RegisterAddr);
+        if (dev_i2c->write(RegisterAddr) != 1U) { return 1; }
         for (int i = 0 ; i < NumByteToWrite ; i++)
-          dev_i2c->write(pBuffer[i]);
+        {
+          if (dev_i2c->write(pBuffer[i]) != 1U) { return 1; }
+        }
 
-        dev_i2c->endTransmission(true);
-
-        return 0;
+        return (dev_i2c->endTransmission(true) == 0U) ? 0U : 1U;
       }
 
       return 1;

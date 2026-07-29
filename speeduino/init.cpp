@@ -181,10 +181,13 @@ void initialiseAll(void)
       configPage4.triggerTeeth = 4; //Avoiddiv by 0 when start decoders
       configPage2.pinMapping = 3; //Force board to v0.4
     }
-    setPinMapping(configPage2.pinMapping);
 #if defined(CAPONORD_BOARD)
-    caponordSetPins();
+    // EEPROM loading happens before this point, so enforce the board mapping
+    // here and clear every inherited mapping before applying selectable pins.
+    configPage2.pinMapping = CAPONORD_PIN_MAPPING;
+    caponordResetPins();
 #endif
+    setPinMapping(configPage2.pinMapping);
 
     // Repeatedly initialising the CAN bus hangs the system when
     // running initialisation tests on Teensy 3.5
@@ -2100,6 +2103,7 @@ void setPinMapping(byte boardID)
     
  
     case 60:
+      #if !defined(CAPONORD_BOARD)
         #if defined(STM32F407xx)
         //Pin definitions for experimental board Tjeerd 
         //Black F407VE wiki.stm32duino.com/index.php?title=STM32F407
@@ -2277,7 +2281,8 @@ void setPinMapping(byte boardID)
         pinTrigger = PA10; //The CAS pin
         pinTrigger2 = PA13; //The Cam Sensor pin
       
-    #endif
+        #endif
+      #endif
       break;
 
     case 61:
@@ -2497,6 +2502,12 @@ void setPinMapping(byte boardID)
     }
     initialiseResetControl((ResetControlMode)configPage4.resetControlConfig, pinResetControl);
   }
+
+#if defined(CAPONORD_BOARD)
+  // Apply the fixed board wiring before pin modes and fast direct-I/O caches
+  // are initialised below.
+  caponordSetPins();
+#endif
   
 
   //Finally, set the relevant pin modes for outputs
@@ -2597,7 +2608,9 @@ void setPinMapping(byte boardID)
       pinMode(pinIAT, INPUT_ANALOG);
       pinMode(pinCLT, INPUT_ANALOG);
       pinMode(pinBat, INPUT_ANALOG);
+#if !defined(CAPONORD_BOARD)
       pinMode(pinBaro, INPUT_ANALOG);
+#endif
     #else
       pinMode(pinMAP, INPUT);
       pinMode(pinO2, INPUT);
@@ -2606,7 +2619,9 @@ void setPinMapping(byte boardID)
       pinMode(pinIAT, INPUT);
       pinMode(pinCLT, INPUT);
       pinMode(pinBat, INPUT);
+#if !defined(CAPONORD_BOARD)
       pinMode(pinBaro, INPUT);
+#endif
     #endif
   #elif defined(CORE_TEENSY41)
     //Teensy 4.1 has a weak pull down resistor that needs to be disabled for all analog pins. 

@@ -126,7 +126,9 @@ byte buildEngineStatus(const statuses &current)
 
 static byte buildTestOutput(const statuses &current)
 {
+  // Keep this layout aligned with testenabled[0] and testactive[1] in speeduino.ini.
   bool bits[] = {
+    current.RPM != 0U,
     current.isTestModeActive,
   };
   return setStatusBits(0, bits);
