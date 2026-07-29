@@ -30,6 +30,8 @@ void setupBoard();
 void runLoop();
 
 #ifdef CAPONORD_BOARD
+static constexpr uint8_t CAPONORD_PIN_MAPPING = 60U;
+
 void caponordResetPins();
 void caponordSetPins();
 

@@ -129,7 +129,9 @@ static inline void registerConfiguredStm32AdcPins(void)
   registerStm32AdcPin(pinIAT);
   registerStm32AdcPin(pinCLT);
   registerStm32AdcPin(pinBat);
+#if !defined(CAPONORD_BOARD)
   registerStm32AdcPin(pinBaro);
+#endif
 
   if(pinO2_2 != 0U) { registerStm32AdcPin(pinO2_2); }
   if(configPage6.useEMAP != 0U) { registerStm32AdcPin(pinEMAP); }
@@ -170,21 +172,31 @@ static inline bool isAuxDigitalInputActive(uint8_t auxInChan)
 
 static inline void refreshRuntimeAnalogPins(void)
 {
+#if !defined(CAPONORD_BOARD)
   if((configPage6.useExtBaro != 0U) && (configPage6.baroPin < BOARD_MAX_IO_PINS))
   {
     pinBaro = pinTranslateAnalog(configPage6.baroPin);
     configureAnalogInputPin(pinBaro);
   }
+#endif
   if((configPage6.useEMAP != 0U) && (configPage10.EMAPPin < BOARD_MAX_IO_PINS))
   {
     pinEMAP = pinTranslateAnalog(configPage10.EMAPPin);
     configureAnalogInputPin(pinEMAP);
   }
+#if defined(CAPONORD_BOARD)
+  // Fuel pressure is wired to PB0 and is not selectable from the tune.
+  if(configPage10.fuelPressureEnable)
+  {
+    if(!pinIsOutput(pinFuelPressure)) { configureAnalogInputPin(pinFuelPressure); }
+  }
+#else
   if((configPage10.fuelPressureEnable) && (configPage10.fuelPressurePin < BOARD_MAX_IO_PINS))
   {
     pinFuelPressure = pinTranslateAnalog(configPage10.fuelPressurePin);
     if(!pinIsOutput(pinFuelPressure)) { configureAnalogInputPin(pinFuelPressure); }
   }
+#endif
   if((configPage10.oilPressureEnable) && (configPage10.oilPressurePin < BOARD_MAX_IO_PINS))
   {
     pinOilPressure = pinTranslateAnalog(configPage10.oilPressurePin);
@@ -748,9 +760,16 @@ static inline bool isValidBaro(uint8_t baro)
 
 static inline void setBaroFromSensorReading(uint16_t sensorReading) 
 {
+#if defined(CAPONORD_BOARD)
+  // The Caponord barometer is digital and is published by updateI2CBaro().
+  // This guard intentionally recreates the protection from commit 67555ff9:
+  // no generic analog call may reinterpret or overwrite the I2C pressure.
+  (void)sensorReading;
+#else
   currentStatus.baroADC = sensorReading;
   int16_t tempValue = fastMap10Bit(currentStatus.baroADC, configPage2.baroMin, configPage2.baroMax);
   currentStatus.baro = (uint8_t)max((int16_t)0, tempValue);
+#endif
 }
 
 // Should only be called when the engine isn't running.

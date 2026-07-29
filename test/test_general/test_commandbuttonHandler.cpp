@@ -1,5 +1,6 @@
 #include "../test_utils.h"
 #include "globals.h"
+#include "logger.h"
 #include "sensors.h"
 #include "TS_CommandButtonHandler.h"
 #include "scheduledIO_direct_inj.h"
@@ -42,6 +43,8 @@ static void test_handler_test_enbl_sets_active(void)
   reset_test_mode_state();
   TEST_ASSERT_TRUE(TS_CommandButtonsHandler(TS_CMD_TEST_ENBL));
   TEST_ASSERT_TRUE(currentStatus.isTestModeActive);
+  // TunerStudio defines testactive as bit 1 of output channel 39.
+  TEST_ASSERT_EQUAL_UINT8(0x02U, getTSLogEntry(39U));
 }
 
 static void test_handler_test_dsbl_clears_active_and_pulsed(void)
@@ -54,8 +57,17 @@ static void test_handler_test_dsbl_clears_active_and_pulsed(void)
 
   TEST_ASSERT_TRUE(TS_CommandButtonsHandler(TS_CMD_TEST_DSBL));
   TEST_ASSERT_FALSE(currentStatus.isTestModeActive);
+  TEST_ASSERT_EQUAL_UINT8(0x00U, getTSLogEntry(39U));
   TEST_ASSERT_EQUAL_UINT8(0U, HWTest_INJ_Pulsed);
   TEST_ASSERT_EQUAL_UINT8(0U, HWTest_IGN_Pulsed);
+}
+
+static void test_logger_reports_running_engine_in_testenabled_bit(void)
+{
+  reset_test_mode_state();
+  currentStatus.RPM = 1000U;
+  // TunerStudio defines testenbled as bit 0 of output channel 39.
+  TEST_ASSERT_EQUAL_UINT8(0x01U, getTSLogEntry(39U));
 }
 
 static void test_handler_rejects_stop_required_when_engine_running(void)
@@ -492,6 +504,7 @@ void testTSCommandHandler(void)
     RUN_TEST(test_handler_unknown_command_returns_false);
     RUN_TEST(test_handler_test_enbl_sets_active);
     RUN_TEST(test_handler_test_dsbl_clears_active_and_pulsed);
+    RUN_TEST(test_logger_reports_running_engine_in_testenabled_bit);
     RUN_TEST(test_handler_rejects_stop_required_when_engine_running);
     RUN_TEST(test_handler_inj1_pulsed_sets_bit_when_active);
     RUN_TEST(test_handler_inj1_off_clears_pulsed_bit);
