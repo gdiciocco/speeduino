@@ -188,7 +188,7 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
           while (CAN_read())
           {
           #if defined(CAPONORD_BOARD)
-            if (caponordPreloadHandleCanFrame(inMsg)) { continue; }
+            if (caponordHandleCanFrame(inMsg)) { continue; }
           #endif
             can_Command();
             readAuxCanBus();

@@ -6,6 +6,7 @@
 #include "globals.h"
 #include "board_definition.h"
 #include "comms_CAN.h"
+#include "emp_pump.h"
 #include "init.h"
 #include "timers.h"
 
@@ -59,6 +60,170 @@ static constexpr byte LED_RUNNING = PG9;
 static constexpr byte LED_WARNING = PG10;
 static constexpr byte LED_ALERT = PG11;
 static constexpr byte LED_COMS = PG12;
+
+static emp_pump::Config caponordEmpPumpConfig()
+{
+  emp_pump::Config config = {};
+  config.flags = configPage15.empPumpFlags;
+  config.controllerAddress = configPage15.empPumpControllerAddress;
+  config.sourceAddress = configPage15.empPumpSourceAddress;
+  config.stopDebounce100ms = configPage15.empPumpStopDebounce100ms;
+  config.minimumRunRpm = configPage15.empPumpMinimumRunRpm;
+  config.maximumRpm = configPage15.empPumpMaximumRpm;
+  config.afterRunMinimumRpm = configPage15.empPumpAfterRunMinimumRpm;
+  config.failsafeRpm = configPage15.empPumpFailsafeRpm;
+  config.rampRpmPerSecond = configPage15.empPumpRampRpmPerSecond;
+  config.afterRunMaximumSeconds = configPage15.empPumpAfterRunMaximumSeconds;
+  config.afterRunStartTemperature = static_cast<int16_t>(configPage15.empPumpAfterRunStartTemperature) - 40;
+  config.afterRunStopTemperature = static_cast<int16_t>(configPage15.empPumpAfterRunStopTemperature) - 40;
+  config.batteryCutoff10 = configPage15.empPumpBatteryCutoff10;
+  config.batteryResume10 = configPage15.empPumpBatteryResume10;
+  config.manualTestRpm = configPage15.empPumpManualTestRpm;
+  config.manualTestSeconds = configPage15.empPumpManualTestSeconds;
+  config.statusTimeoutSeconds = configPage15.empPumpStatusTimeoutSeconds;
+  config.targetTemperature = static_cast<int16_t>(configPage15.empPumpTargetTemperature) - 40;
+  config.temperatureDeadband = configPage15.empPumpTemperatureDeadband;
+  config.proportionalGain = configPage15.empPumpProportionalGain;
+  config.integralGain = configPage15.empPumpIntegralGain;
+  config.integralLimitRpm = configPage15.empPumpIntegralLimitRpm;
+  config.derivativeGain = configPage15.empPumpDerivativeGain;
+  config.loadFeedForwardGain = configPage15.empPumpLoadFeedForwardGain;
+  config.iatReferenceTemperature =
+      static_cast<int16_t>(configPage15.empPumpIatReferenceTemperature) - 40;
+  config.iatCompensationGain = configPage15.empPumpIatCompensationGain;
+  config.airflowFullSpeedKph = configPage15.empPumpAirflowFullSpeedKph;
+  config.airflowReliefRpm = configPage15.empPumpAirflowReliefRpm;
+  config.fanEquivalentSpeedKph = configPage15.empPumpFanEquivalentSpeedKph;
+  config.coolingLimitedDelta = configPage15.empPumpCoolingLimitedDelta;
+  config.overloadDelta = configPage15.empPumpOverloadDelta;
+  config.overloadDelaySeconds = configPage15.empPumpOverloadDelaySeconds;
+
+  bool binsAscending = true;
+  for (uint8_t index = 0U; index < 6U; index++)
+  {
+    config.temperatureBins[index] = static_cast<int16_t>(configPage15.empPumpTemperatureBins[index]) - 40;
+    config.rpmBins[index] = configPage15.empPumpRpmBins[index];
+    if ((index > 0U) && (config.temperatureBins[index] <= config.temperatureBins[index - 1U]))
+    {
+      binsAscending = false;
+    }
+  }
+  bool engineBinsAscending = true;
+  bool minimumFlowValid = true;
+  for (uint8_t index = 0U; index < 4U; index++)
+  {
+    config.engineRpmBins[index] = configPage15.empPumpEngineRpmBins[index];
+    config.minimumFlowRpmBins[index] = configPage15.empPumpMinimumFlowRpmBins[index];
+    if ((index > 0U) && (config.engineRpmBins[index] <= config.engineRpmBins[index - 1U]))
+    {
+      engineBinsAscending = false;
+    }
+    if ((config.minimumFlowRpmBins[index] < config.minimumRunRpm) ||
+        (config.minimumFlowRpmBins[index] > config.maximumRpm))
+    {
+      minimumFlowValid = false;
+    }
+  }
+
+  config.valid = (configPage15.empPumpConfigMagic == emp_pump::CONFIG_MAGIC) &&
+                 (configPage15.empPumpConfigVersion == emp_pump::CONFIG_VERSION) &&
+                 (config.controllerAddress <= 0xF0U) &&
+                 (config.sourceAddress <= 0xF0U) &&
+                 (config.controllerAddress != config.sourceAddress) &&
+                 (config.minimumRunRpm > 0U) &&
+                 (config.maximumRpm >= config.minimumRunRpm) &&
+                 (config.maximumRpm <= 32767U) &&
+                 (config.afterRunMinimumRpm >= config.minimumRunRpm) &&
+                 (config.afterRunMinimumRpm <= config.maximumRpm) &&
+                 (config.failsafeRpm >= config.minimumRunRpm) &&
+                 (config.failsafeRpm <= config.maximumRpm) &&
+                 (config.afterRunStopTemperature < config.afterRunStartTemperature) &&
+                 (config.afterRunMaximumSeconds > 0U) &&
+                 (config.batteryCutoff10 <= config.batteryResume10) &&
+                 (config.statusTimeoutSeconds > 0U) &&
+                 (config.targetTemperature >= -20) &&
+                 (config.targetTemperature <= 130) &&
+                 (config.temperatureDeadband <= 10U) &&
+                 (config.proportionalGain <= 2000U) &&
+                 (config.integralGain <= 1000U) &&
+                 (config.integralLimitRpm <= config.maximumRpm) &&
+                 (config.derivativeGain <= 200U) &&
+                 (config.loadFeedForwardGain <= 2000U) &&
+                 (config.iatCompensationGain <= 500U) &&
+                 (config.airflowFullSpeedKph > 0U) &&
+                 (config.airflowReliefRpm <= config.maximumRpm) &&
+                 (config.coolingLimitedDelta > 0U) &&
+                 (config.overloadDelta >= config.coolingLimitedDelta) &&
+                 (config.overloadDelaySeconds > 0U) &&
+                 binsAscending && engineBinsAscending && minimumFlowValid;
+  return config;
+}
+
+static void caponordEmpPumpSetDefaultsIfNeeded()
+{
+  if ((configPage15.empPumpConfigMagic == emp_pump::CONFIG_MAGIC) &&
+      (configPage15.empPumpConfigVersion == emp_pump::CONFIG_VERSION))
+  {
+    return;
+  }
+
+  //Safe default: parameters are ready for inspection, but pump control remains disabled.
+  configPage15.empPumpFlags = emp_pump::AFTER_RUN_ENABLED |
+                              emp_pump::POWER_HOLD_ENABLED |
+                              emp_pump::RUN_DURING_CRANKING |
+                              emp_pump::CLOSED_LOOP_ENABLED;
+  configPage15.empPumpControllerAddress = 0x96U;
+  configPage15.empPumpSourceAddress = 0xA3U;
+  configPage15.empPumpStopDebounce100ms = 10U;
+  configPage15.empPumpMinimumRunRpm = 1500U;
+  configPage15.empPumpMaximumRpm = 6000U;
+  configPage15.empPumpAfterRunMinimumRpm = 1800U;
+  configPage15.empPumpFailsafeRpm = 3000U;
+  configPage15.empPumpRampRpmPerSecond = 2000U;
+  configPage15.empPumpAfterRunMaximumSeconds = 180U;
+  configPage15.empPumpAfterRunStartTemperature = 135U; //95 C, temperatures are stored +40
+  configPage15.empPumpAfterRunStopTemperature = 125U; //85 C
+  configPage15.empPumpBatteryCutoff10 = 115U;
+  configPage15.empPumpBatteryResume10 = 120U;
+
+  static constexpr byte temperatureBins[6] = {80U, 110U, 125U, 135U, 145U, 155U};
+  static constexpr uint16_t rpmBins[6] = {1500U, 1500U, 2000U, 3000U, 4500U, 6000U};
+  for (uint8_t index = 0U; index < 6U; index++)
+  {
+    configPage15.empPumpTemperatureBins[index] = temperatureBins[index];
+    configPage15.empPumpRpmBins[index] = rpmBins[index];
+  }
+
+  configPage15.empPumpManualTestRpm = 2000U;
+  configPage15.empPumpManualTestSeconds = 10U;
+  configPage15.empPumpStatusTimeoutSeconds = 3U;
+  configPage15.empPumpTargetTemperature = 130U; //90 C, temperatures are stored +40
+  configPage15.empPumpTemperatureDeadband = 1U;
+  configPage15.empPumpProportionalGain = 250U; //RPM per degree C outside the deadband
+  configPage15.empPumpIntegralGain = 12U; //RPM per degree C per second
+  configPage15.empPumpIntegralLimitRpm = 2000U;
+  configPage15.empPumpDerivativeGain = 8U; //RPM per degree C/minute of positive slope
+  configPage15.empPumpLoadFeedForwardGain = 220U;
+  configPage15.empPumpIatReferenceTemperature = 60U; //20 C
+  configPage15.empPumpIatCompensationGain = 18U; //RPM per degree C from reference
+  configPage15.empPumpAirflowFullSpeedKph = 100U;
+  configPage15.empPumpAirflowReliefRpm = 600U;
+  configPage15.empPumpFanEquivalentSpeedKph = 35U;
+  configPage15.empPumpCoolingLimitedDelta = 3U;
+  configPage15.empPumpOverloadDelta = 8U;
+  configPage15.empPumpOverloadDelaySeconds = 5U;
+  static constexpr uint16_t engineRpmBins[4] = {0U, 2000U, 5000U, 9000U};
+  static constexpr uint16_t minimumFlowRpmBins[4] = {1500U, 1800U, 2300U, 3000U};
+  for (uint8_t index = 0U; index < 4U; index++)
+  {
+    configPage15.empPumpEngineRpmBins[index] = engineRpmBins[index];
+    configPage15.empPumpMinimumFlowRpmBins[index] = minimumFlowRpmBins[index];
+  }
+  for (uint8_t index = 0U; index < 66U; index++) { configPage15.Unused15_190_255[index] = 0U; }
+  configPage15.empPumpConfigMagic = emp_pump::CONFIG_MAGIC;
+  configPage15.empPumpConfigVersion = emp_pump::CONFIG_VERSION;
+  configPage15.empPumpReserved151 = 0U;
+}
 
 //Shock absorber preload controller CAN interface
 static constexpr uint32_t PRELOAD_CAN_COMMAND_ID = 0x720UL;
@@ -216,7 +381,7 @@ static void caponordPreloadRunCanBridge()
     //Internal CAN disabled: the main loop is not draining the bus, do it here
     while (CAN_read())
     {
-      (void)caponordPreloadHandleCanFrame(inMsg);
+      (void)caponordHandleCanFrame(inMsg);
     }
     preloadCanFlags |= PRELOAD_CAN_FLAG_FALLBACK_RX;
   }
@@ -254,6 +419,49 @@ static void caponordPreloadRunCanBridge()
   caponordPreloadRefreshTimeoutFlag();
 }
 
+static void caponordEmpPumpRunCanBridge()
+{
+  const emp_pump::Config config = caponordEmpPumpConfig();
+  emp_pump::Inputs inputs = {};
+  inputs.coolant = static_cast<int16_t>(currentStatus.coolant);
+  inputs.intakeAirTemperature = static_cast<int16_t>(currentStatus.IAT);
+  inputs.engineRpm = currentStatus.RPM;
+  inputs.manifoldPressure = (currentStatus.MAP <= 0L) ? 0U :
+                            ((currentStatus.MAP > 65535L) ? 65535U :
+                             static_cast<uint16_t>(currentStatus.MAP));
+  inputs.vehicleSpeedKph = currentStatus.vss;
+  inputs.battery10 = currentStatus.battery10;
+  inputs.coolantValid = (currentStatus.cltADC > 2U) && (currentStatus.cltADC < 1021U) &&
+                        (currentStatus.coolant >= -40) && (currentStatus.coolant <= 215);
+  inputs.intakeAirTemperatureValid =
+      (currentStatus.iatADC > 2U) && (currentStatus.iatADC < 1021U) &&
+      (currentStatus.IAT >= -40) && (currentStatus.IAT <= 215);
+  inputs.vehicleSpeedValid = configPage2.vssMode != VSS_MODE_OFF;
+  inputs.fanOn = currentStatus.fanOn;
+  inputs.airflowAtMaximumCapacity =
+      (configPage2.fanEnable == 0U) ||
+      ((configPage2.fanEnable == 1U) && currentStatus.fanOn) ||
+      ((configPage2.fanEnable == 2U) && (currentStatus.fanDuty >= 200U));
+  inputs.engineRunning = currentStatus.rotationStatus == EngineRotationStatus::Running;
+  inputs.engineCranking = currentStatus.rotationStatus == EngineRotationStatus::Cranking;
+
+  const uint32_t nowMs = millis();
+  emp_pump::update(nowMs, config, inputs);
+
+#if defined(NATIVE_CAN_AVAILABLE)
+  emp_pump::Command command = {};
+  if (emp_pump::takeCommand(nowMs, config, command))
+  {
+    CAN_message_t txMsg = {};
+    txMsg.id = command.id;
+    txMsg.flags.extended = true;
+    txMsg.len = 8U;
+    for (uint8_t index = 0U; index < 8U; index++) { txMsg.buf[index] = command.data[index]; }
+    emp_pump::recordTransmitResult(Can0.write(txMsg));
+  }
+#endif
+}
+
 static void setStatusLedOff(byte pin)
 {
   pinMode(pin, OUTPUT);
@@ -272,6 +480,8 @@ void setupBoard()
   configPage2.pinMapping = CAPONORD_PIN_MAPPING;
 
   initialiseAll();
+  caponordEmpPumpSetDefaultsIfNeeded();
+  emp_pump::reset(millis());
 
   setStatusLedOff(LED_RUNNING);
   setStatusLedOff(LED_WARNING);
@@ -416,6 +626,8 @@ void runLoop()
 
   if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ))
   {
+    caponordEmpPumpRunCanBridge();
+
     if (Serial.available() > 0)
     {
       digitalToggle(LED_COMS);
@@ -574,6 +786,36 @@ bool caponordPreloadHandleCanFrame(const CAN_message_t &msg)
 #endif
 }
 
+bool caponordHandleCanFrame(const CAN_message_t &msg)
+{
+  if (caponordPreloadHandleCanFrame(msg)) { return true; }
+
+#if defined(NATIVE_CAN_AVAILABLE)
+  emp_pump::CanFrame frame = {};
+  frame.id = msg.id;
+  frame.extended = msg.flags.extended;
+  frame.len = msg.len;
+  for (uint8_t index = 0U; (index < msg.len) && (index < 8U); index++)
+  {
+    frame.data[index] = msg.buf[index];
+  }
+  return emp_pump::handleFrame(frame, millis(), caponordEmpPumpConfig());
+#else
+  (void)msg;
+  return false;
+#endif
+}
+
+bool caponordEmpPumpHandleSerialCommand(uint8_t command, uint16_t rpm, uint8_t durationSeconds)
+{
+  const emp_pump::Config config = caponordEmpPumpConfig();
+  if ((command == 1U) && (rpm == 0U)) { rpm = config.manualTestRpm; }
+  if ((command == 1U) && (durationSeconds == 0U)) { durationSeconds = config.manualTestSeconds; }
+  const bool accepted = emp_pump::handleServiceCommand(command, rpm, durationSeconds, millis(), config);
+  if (accepted) { caponordEmpPumpRunCanBridge(); }
+  return accepted;
+}
+
 uint8_t caponordPreloadGetCommand()
 {
   return preloadCommand;
@@ -664,6 +906,34 @@ uint8_t caponordPreloadGetPresetValue(uint8_t slot)
 
   return preloadPresetValues[slot];
 }
+
+uint8_t caponordEmpPumpGetState() { return static_cast<uint8_t>(emp_pump::getState()); }
+uint8_t caponordEmpPumpGetCapabilities() { return emp_pump::getCapabilities(); }
+uint16_t caponordEmpPumpGetFaults() { return emp_pump::getFaults(millis(), caponordEmpPumpConfig()); }
+uint16_t caponordEmpPumpGetTargetRpm() { return emp_pump::getTargetRpm(); }
+uint16_t caponordEmpPumpGetActualRpm() { return emp_pump::getActualRpm(); }
+uint8_t caponordEmpPumpGetActualPercentRaw() { return emp_pump::getActualPercentRaw(); }
+uint8_t caponordEmpPumpGetControllerStatus() { return emp_pump::getControllerStatus(); }
+uint8_t caponordEmpPumpGetStatusSummary() { return emp_pump::getStatusSummary(); }
+uint16_t caponordEmpPumpGetVoltageRaw() { return emp_pump::getVoltageRaw(); }
+uint16_t caponordEmpPumpGetCurrentRaw() { return emp_pump::getCurrentRaw(); }
+uint16_t caponordEmpPumpGetPowerWatts() { return emp_pump::getPowerWatts(); }
+uint16_t caponordEmpPumpGetExternalTemperatureRaw() { return emp_pump::getExternalTemperatureRaw(); }
+uint16_t caponordEmpPumpGetMainStatusAgeMs() { return emp_pump::getMainStatusAgeMs(millis()); }
+uint16_t caponordEmpPumpGetAfterRunRemainingSeconds() { return emp_pump::getAfterRunRemainingSeconds(millis()); }
+uint8_t caponordEmpPumpGetTransmitFailureCount() { return emp_pump::getTransmitFailureCount(); }
+uint8_t caponordEmpPumpGetLastCommandControl() { return emp_pump::getLastCommandControl(); }
+uint8_t caponordEmpPumpGetThermalState() { return static_cast<uint8_t>(emp_pump::getThermalState()); }
+uint8_t caponordEmpPumpGetControlFlags() { return emp_pump::getControlFlags(); }
+int16_t caponordEmpPumpGetTargetTemperature() { return emp_pump::getTargetTemperature(); }
+int16_t caponordEmpPumpGetFilteredIat() { return emp_pump::getFilteredIntakeAirTemperature(); }
+int8_t caponordEmpPumpGetTemperatureError() { return emp_pump::getTemperatureError(); }
+int16_t caponordEmpPumpGetCoolantSlopePerMinute() { return emp_pump::getCoolantSlopePerMinute(); }
+uint16_t caponordEmpPumpGetMinimumFlowRpm() { return emp_pump::getMinimumFlowRpm(); }
+int16_t caponordEmpPumpGetFeedForwardRpm() { return emp_pump::getFeedForwardRpm(); }
+int16_t caponordEmpPumpGetPiCorrectionRpm() { return emp_pump::getPiCorrectionRpm(); }
+uint8_t caponordEmpPumpGetCoolingDemandRaw() { return emp_pump::getCoolingDemandRaw(); }
+uint16_t caponordEmpPumpGetSaturationSeconds() { return emp_pump::getSaturationSeconds(millis()); }
 
 #else
 

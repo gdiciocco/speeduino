@@ -977,6 +977,21 @@ void processSerialCommand(void)
         }
         break;
       }
+      if ((serialPayloadLength >= 4U) && (serialPayload[2] == CAPONORD_TS_EMP_PUMP_WRITE_COMMAND))
+      {
+        const uint16_t pumpRpm = (serialPayloadLength >= 6U) ? word(serialPayload[5], serialPayload[4]) : 0U;
+        const uint8_t durationSeconds = (serialPayloadLength >= 7U) ? serialPayload[6] : 0U;
+
+        if (caponordEmpPumpHandleSerialCommand(serialPayload[3], pumpRpm, durationSeconds))
+        {
+          sendReturnCodeMsg(SERIAL_RC_OK);
+        }
+        else
+        {
+          sendReturnCodeMsg(SERIAL_RC_RANGE_ERR);
+        }
+        break;
+      }
 #endif
 #ifdef COMMS_SD
       uint8_t cmd = serialPayload[2];

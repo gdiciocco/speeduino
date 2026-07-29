@@ -929,7 +929,52 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-255
-  byte Unused15_106_255[150];
+  //Bytes 106-151 - Caponord EMP coolant pump
+  byte empPumpFlags;
+  byte empPumpControllerAddress;
+  byte empPumpSourceAddress;
+  byte empPumpStopDebounce100ms;
+  uint16_t empPumpMinimumRunRpm;
+  uint16_t empPumpMaximumRpm;
+  uint16_t empPumpAfterRunMinimumRpm;
+  uint16_t empPumpFailsafeRpm;
+  uint16_t empPumpRampRpmPerSecond;
+  uint16_t empPumpAfterRunMaximumSeconds;
+  byte empPumpAfterRunStartTemperature;
+  byte empPumpAfterRunStopTemperature;
+  byte empPumpBatteryCutoff10;
+  byte empPumpBatteryResume10;
+  byte empPumpTemperatureBins[6];
+  uint16_t empPumpRpmBins[6];
+  uint16_t empPumpManualTestRpm;
+  byte empPumpManualTestSeconds;
+  byte empPumpStatusTimeoutSeconds;
+  uint16_t empPumpConfigMagic;
+  byte empPumpConfigVersion;
+  byte empPumpReserved151;
+
+  //Bytes 152-189 - Caponord EMP closed-loop thermal control
+  byte empPumpTargetTemperature;
+  byte empPumpTemperatureDeadband;
+  uint16_t empPumpProportionalGain;
+  uint16_t empPumpIntegralGain;
+  uint16_t empPumpIntegralLimitRpm;
+  uint16_t empPumpDerivativeGain;
+  uint16_t empPumpLoadFeedForwardGain;
+  byte empPumpIatReferenceTemperature;
+  uint16_t empPumpIatCompensationGain;
+  byte empPumpAirflowFullSpeedKph;
+  uint16_t empPumpAirflowReliefRpm;
+  byte empPumpFanEquivalentSpeedKph;
+  byte empPumpCoolingLimitedDelta;
+  byte empPumpOverloadDelta;
+  byte empPumpOverloadDelaySeconds;
+  uint16_t empPumpEngineRpmBins[4];
+  uint16_t empPumpMinimumFlowRpmBins[4];
+
+  //Bytes 190-255
+  byte Unused15_190_255[66];
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
+
+static_assert(sizeof(config15) == 176U, "Page 15 configuration layout must remain 176 bytes");

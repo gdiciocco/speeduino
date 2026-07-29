@@ -215,7 +215,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 3U; break; //Custom block layout version
+    case 2: statusValue = 5U; break; //Custom block layout version
     case 3: statusValue = buildStorageStatus(); break; //Backup SRAM integrity status (see buildStorageStatus)
     case 4: statusValue = lowByte(currentStatus.RPM); break;
     case 5: statusValue = highByte(currentStatus.RPM); break;
@@ -251,6 +251,47 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     case 35: statusValue = caponordPreloadGetPresetValue(2U); break;
     case 36: statusValue = caponordPreloadGetPresetValue(3U); break;
     case 37: statusValue = caponordPreloadGetPresetValue(4U); break;
+    case 38: statusValue = caponordEmpPumpGetState(); break;
+    case 39: statusValue = caponordEmpPumpGetCapabilities(); break;
+    case 40: statusValue = lowByte(caponordEmpPumpGetFaults()); break;
+    case 41: statusValue = highByte(caponordEmpPumpGetFaults()); break;
+    case 42: statusValue = lowByte(caponordEmpPumpGetTargetRpm()); break;
+    case 43: statusValue = highByte(caponordEmpPumpGetTargetRpm()); break;
+    case 44: statusValue = lowByte(caponordEmpPumpGetActualRpm()); break;
+    case 45: statusValue = highByte(caponordEmpPumpGetActualRpm()); break;
+    case 46: statusValue = caponordEmpPumpGetActualPercentRaw(); break;
+    case 47: statusValue = caponordEmpPumpGetControllerStatus(); break;
+    case 48: statusValue = caponordEmpPumpGetStatusSummary(); break;
+    case 49: statusValue = lowByte(caponordEmpPumpGetVoltageRaw()); break;
+    case 50: statusValue = highByte(caponordEmpPumpGetVoltageRaw()); break;
+    case 51: statusValue = lowByte(caponordEmpPumpGetCurrentRaw()); break;
+    case 52: statusValue = highByte(caponordEmpPumpGetCurrentRaw()); break;
+    case 53: statusValue = lowByte(caponordEmpPumpGetPowerWatts()); break;
+    case 54: statusValue = highByte(caponordEmpPumpGetPowerWatts()); break;
+    case 55: statusValue = lowByte(caponordEmpPumpGetExternalTemperatureRaw()); break;
+    case 56: statusValue = highByte(caponordEmpPumpGetExternalTemperatureRaw()); break;
+    case 57: statusValue = lowByte(caponordEmpPumpGetMainStatusAgeMs()); break;
+    case 58: statusValue = highByte(caponordEmpPumpGetMainStatusAgeMs()); break;
+    case 59: statusValue = lowByte(caponordEmpPumpGetAfterRunRemainingSeconds()); break;
+    case 60: statusValue = highByte(caponordEmpPumpGetAfterRunRemainingSeconds()); break;
+    case 61: statusValue = caponordEmpPumpGetTransmitFailureCount(); break;
+    case 62: statusValue = caponordEmpPumpGetLastCommandControl(); break;
+    case 63: statusValue = caponordEmpPumpGetThermalState(); break;
+    case 64: statusValue = caponordEmpPumpGetControlFlags(); break;
+    case 65: statusValue = temperatureAddOffset(caponordEmpPumpGetTargetTemperature()); break;
+    case 66: statusValue = temperatureAddOffset(caponordEmpPumpGetFilteredIat()); break;
+    case 67: statusValue = static_cast<byte>(caponordEmpPumpGetTemperatureError()); break;
+    case 68: statusValue = lowByte(caponordEmpPumpGetCoolantSlopePerMinute()); break;
+    case 69: statusValue = highByte(caponordEmpPumpGetCoolantSlopePerMinute()); break;
+    case 70: statusValue = lowByte(caponordEmpPumpGetMinimumFlowRpm()); break;
+    case 71: statusValue = highByte(caponordEmpPumpGetMinimumFlowRpm()); break;
+    case 72: statusValue = lowByte(caponordEmpPumpGetFeedForwardRpm()); break;
+    case 73: statusValue = highByte(caponordEmpPumpGetFeedForwardRpm()); break;
+    case 74: statusValue = lowByte(caponordEmpPumpGetPiCorrectionRpm()); break;
+    case 75: statusValue = highByte(caponordEmpPumpGetPiCorrectionRpm()); break;
+    case 76: statusValue = caponordEmpPumpGetCoolingDemandRaw(); break;
+    case 77: statusValue = lowByte(caponordEmpPumpGetSaturationSeconds()); break;
+    case 78: statusValue = highByte(caponordEmpPumpGetSaturationSeconds()); break;
     default: statusValue = 0; break;
   }
 
