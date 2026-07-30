@@ -231,6 +231,11 @@ struct statuses {
   byte gear;         /**< Current gear (Calculated from vss) */
   byte fuelPressure; /**< Fuel pressure in PSI */
   byte oilPressure;  /**< Oil pressure in PSI */
+  int16_t oilTemperature;          /**< Oil temperature in degrees Celsius */
+  uint16_t oilPressureAbsoluteKpa; /**< OPS-T absolute oil pressure in kPa */
+  uint16_t opstAgeMs;              /**< Age of the last complete OPS-T frame in milliseconds */
+  byte opstStatus;                 /**< Raw, oscillator-compensated OPS-T diagnostic value */
+  byte opstFlags;                  /**< OPS-T frame freshness and diagnostic flags */
 
   /** @brief Engine protection status fields. */
   struct engine_protect_flags_t

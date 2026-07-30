@@ -6,9 +6,11 @@ void runAllSensorTests(void)
 {
     extern void test_fastMap10Bit(void);
     extern void test_map_sampling(void);
+    extern void test_opst_sensor_math(void);
 
     test_fastMap10Bit();
     test_map_sampling();
+    test_opst_sensor_math();
 }
 
 TEST_HARNESS(runAllSensorTests)

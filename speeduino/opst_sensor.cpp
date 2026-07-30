@@ -1,11 +1,15 @@
 #ifdef OIL_SENSOR_OPST
 
 #include "opst_sensor.h"
+#include "opst_sensor_math.h"
+#include "atomic.h"
+#include "bit_manip.h"
 
 static constexpr unsigned long OPST_STATUS_PERIOD_MIN_US = 500UL;
 static constexpr unsigned long OPST_STATUS_PERIOD_MAX_US = 1500UL;
 static constexpr unsigned long OPST_DATA_PERIOD_MIN_US = 2500UL;
 static constexpr unsigned long OPST_DATA_PERIOD_MAX_US = 5500UL;
+static constexpr unsigned long OPST_DATA_FRESH_MAX_US = 1000000UL;
 
 static bool isOPStStatusPeriod(unsigned long period)
 {
@@ -21,7 +25,7 @@ static void syncOPStFromStatus()
 {
   oilSensorOPStPulse.index = 1U;
   oilSensorOPStPulse.gotSync = 1U;
-  oilSensorOPStData.status = ((1024.0f / oilSensorOPStPulse.totalTime) * oilSensorOPStPulse.onTime) / 4.0f;
+  oilSensorOPStPulse.pendingStatus = decodeOPStDiagnostic(oilSensorOPStPulse.totalTime, oilSensorOPStPulse.onTime);
 }
 
 static void oilSensorOPStISR()
@@ -52,7 +56,8 @@ static void oilSensorOPStISR()
     {
       if (isOPStDataPeriod(oilSensorOPStPulse.totalTime))
       {
-        oilSensorOPStData.temperature = (((4096.0f / oilSensorOPStPulse.totalTime) * oilSensorOPStPulse.onTime) - 128.0f) / 19.2f - 40.0f;
+        oilSensorOPStPulse.pendingTemperature =
+          decodeOPStTemperatureC(oilSensorOPStPulse.totalTime, oilSensorOPStPulse.onTime);
         oilSensorOPStPulse.index = 2U;
       }
       else if (isOPStStatusPeriod(oilSensorOPStPulse.totalTime))
@@ -69,7 +74,12 @@ static void oilSensorOPStISR()
     {
       if (isOPStDataPeriod(oilSensorOPStPulse.totalTime))
       {
-        oilSensorOPStData.pressure = (((4096.0f / oilSensorOPStPulse.totalTime) * oilSensorOPStPulse.onTime) - 128.0f) / 26.475f + 7.252f - 10.0f;
+        oilSensorOPStData.temperature = oilSensorOPStPulse.pendingTemperature;
+        oilSensorOPStData.absolutePressureKpa =
+          decodeOPStAbsolutePressureKpa(oilSensorOPStPulse.totalTime, oilSensorOPStPulse.onTime);
+        oilSensorOPStData.status = oilSensorOPStPulse.pendingStatus;
+        oilSensorOPStData.lastFrameTime = oilSensorOPStPulse.curEvent;
+        oilSensorOPStData.hasFrame = 1U;
         oilSensorOPStPulse.index = 0U;
         oilSensorOPStPulse.gotSync = 0U;
         detachInterrupt(digitalPinToInterrupt(PIN_OPST));
@@ -111,8 +121,51 @@ void readOPSt()
   oilSensorOPStPulse.lastLevel = READ_OPST_TRIGGER() ? 1U : 0U;
   oilSensorOPStPulse.gotSync = 0U;
   oilSensorOPStPulse.periodReady = 0U;
+  oilSensorOPStPulse.pendingTemperature = 0;
+  oilSensorOPStPulse.pendingStatus = 0U;
 
   attachInterrupt(digitalPinToInterrupt(PIN_OPST), oilSensorOPStISR, CHANGE);
+}
+
+oilSensorOPStSnapshot getOPStSnapshot()
+{
+  oilSensorOPStSnapshot snapshot = {};
+  uint32_t lastFrameTime = 0U;
+  uint8_t hasFrame = 0U;
+
+  ATOMIC()
+  {
+    snapshot.temperature = oilSensorOPStData.temperature;
+    snapshot.absolutePressureKpa = oilSensorOPStData.absolutePressureKpa;
+    snapshot.status = oilSensorOPStData.status;
+    lastFrameTime = oilSensorOPStData.lastFrameTime;
+    hasFrame = oilSensorOPStData.hasFrame;
+  }
+
+  snapshot.ageUs = (hasFrame != 0U) ? (micros() - lastFrameTime) : UINT32_MAX;
+  if (hasFrame != 0U) { BIT_SET(snapshot.flags, OPST_FLAG_HAS_FRAME); }
+  if ((hasFrame != 0U) && (snapshot.ageUs <= OPST_DATA_FRESH_MAX_US))
+  {
+    BIT_SET(snapshot.flags, OPST_FLAG_FRESH);
+  }
+  if (isOPStDiagnosticNear(snapshot.status, OPST_DIAGNOSTIC_OK))
+  {
+    BIT_SET(snapshot.flags, OPST_FLAG_DIAGNOSTIC_OK);
+  }
+  else if (isOPStDiagnosticNear(snapshot.status, OPST_DIAGNOSTIC_PRESSURE_FAULT))
+  {
+    BIT_SET(snapshot.flags, OPST_FLAG_PRESSURE_FAULT);
+  }
+  else if (isOPStDiagnosticNear(snapshot.status, OPST_DIAGNOSTIC_TEMPERATURE_FAULT))
+  {
+    BIT_SET(snapshot.flags, OPST_FLAG_TEMPERATURE_FAULT);
+  }
+  else if (isOPStDiagnosticNear(snapshot.status, OPST_DIAGNOSTIC_HARDWARE_FAULT))
+  {
+    BIT_SET(snapshot.flags, OPST_FLAG_HARDWARE_FAULT);
+  }
+
+  return snapshot;
 }
 
 #endif

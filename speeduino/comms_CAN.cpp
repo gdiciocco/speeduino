@@ -195,6 +195,7 @@ void DashMessage(uint16_t DashMessageID)
   uint16_t temp_VVT2;
   uint16_t temp_fuelLoad;
   uint16_t temp_fuelTemp;
+  uint16_t temp_oilTemp;
   uint16_t temp_fuelPressure;
   uint16_t temp_oilPressure;
   int16_t temp_Advance;
@@ -291,7 +292,11 @@ void DashMessage(uint16_t DashMessageID)
     case CAN_HALTECH_DATA2:
       temp_fuelLoad = currentStatus.fuelLoad * 10U;
       temp_fuelPressure = div100(currentStatus.fuelPressure * 6894UL) + 1013; //Convert from PSI to KPA and add 101.3kPa (1 atmosphere) offset. 0.1 scale
-      temp_oilPressure = div100(currentStatus.oilPressure * 6894UL) + 1013; //Convert from PSI to KPA and add 101.3kPa (1 atmosphere) offset. 0.1 scale
+#ifdef OIL_SENSOR_OPST
+      temp_oilPressure = currentStatus.oilPressureAbsoluteKpa * 10U;
+#else
+      temp_oilPressure = div100(currentStatus.oilPressure * 6894UL) + 1013; //Convert from PSI to kPa and add 101.3kPa (1 atmosphere) offset. 0.1 scale
+#endif
       outMsg.len = 8;
       outMsg.buf[0] = highByte(temp_fuelPressure); //Fuel pressure
       outMsg.buf[1] = lowByte(temp_fuelPressure);
@@ -379,6 +384,9 @@ void DashMessage(uint16_t DashMessageID)
       temp_CLT = (currentStatus.coolant + 273U) * 10U; //Convert to Kelvin and adjust to 0.1
       temp_IAT = (currentStatus.IAT + 273U) * 10U; //Convert to Kelvin and adjust to 0.1
       temp_fuelTemp = (currentStatus.fuelTemp + 273U) * 10U; //Convert to Kelvin and adjust to 0.1
+      temp_oilTemp = BIT_CHECK(currentStatus.opstFlags, 0U)
+        ? static_cast<uint16_t>((static_cast<int32_t>(currentStatus.oilTemperature) + 273L) * 10L)
+        : 0U;
       outMsg.len = 8;
       outMsg.buf[0] = highByte(temp_CLT);
       outMsg.buf[1] = lowByte(temp_CLT);
@@ -386,8 +394,8 @@ void DashMessage(uint16_t DashMessageID)
       outMsg.buf[3] = lowByte(temp_IAT);
       outMsg.buf[4] = highByte(temp_fuelTemp);
       outMsg.buf[5] = lowByte(temp_fuelTemp);
-      outMsg.buf[6] = 0x00; //Oil Temperature
-      outMsg.buf[7] = 0x00; //Oil Temperature
+      outMsg.buf[6] = highByte(temp_oilTemp);
+      outMsg.buf[7] = lowByte(temp_oilTemp);
     break;
 
     default:
@@ -712,9 +720,9 @@ void obd_response(uint8_t PIDmode, uint8_t requestedPIDlow, uint8_t requestedPID
       break;
 
       case 92:        //PID-0x5C Engine oil temperature , range is -40 to 210 deg C , formula == A-40
-        uint16_t temp_engineoiltemp;
-        temp_engineoiltemp = 40;              // TEST VALUE !!!!!!!!!! 
-        obdcalcA = temperatureAddOffset(temp_engineoiltemp);
+        obdcalcA = BIT_CHECK(currentStatus.opstFlags, 0U)
+          ? temperatureAddOffset(currentStatus.oilTemperature)
+          : 0U;
         outMsg.buf[0] =  0x03;                // sending 3 byte
         outMsg.buf[1] =  0x41;                // Same as query, except that 40h is added to the mode value. So:41h = show current data ,42h = freeze frame ,etc. 
         outMsg.buf[2] =  0x5C;                // pid code

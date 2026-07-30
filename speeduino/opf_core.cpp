@@ -33,14 +33,108 @@ static uint8_t baroFailCount = 0U;
 static constexpr uint8_t BARO_MAX_FAILURES = 5U;
 static constexpr float BARO_MIN_HPA = 260.0f;
 static constexpr float BARO_MAX_HPA = 1260.0f;
+static constexpr uint8_t LPS25HB_RESET_TIMEOUT_MS = 10U;
+
+static bool waitForLPS25HBBitClear(LPS25HBSensor &sensor, uint8_t reg, uint8_t mask)
+{
+  for (uint8_t elapsedMs = 0U; elapsedMs < LPS25HB_RESET_TIMEOUT_MS; elapsedMs++)
+  {
+    uint8_t value = mask;
+    if ((sensor.ReadReg(reg, &value) == LPS25HB_STATUS_OK) && ((value & mask) == 0U))
+    {
+      return true;
+    }
+    delay(1U);
+  }
+  return false;
+}
+
+static bool resetI2CBaroSensor(LPS25HBSensor &sensor)
+{
+  uint8_t deviceId = 0U;
+  if ((sensor.ReadID(&deviceId) != LPS25HB_STATUS_OK) || (deviceId != LPS25HB_WHO_AM_I_VAL))
+  {
+    return false;
+  }
+
+  // The sensor may stay powered through an MCU-only reset. Restore its power-on
+  // configuration so AUTO_ZERO and a previously programmed reference cannot
+  // turn an absolute pressure measurement into a differential one.
+  if ((sensor.WriteReg(LPS25HB_CTRL_REG2, LPS25HB_SW_RESET_MASK) != LPS25HB_STATUS_OK) ||
+      !waitForLPS25HBBitClear(sensor, LPS25HB_CTRL_REG2, LPS25HB_SW_RESET_MASK))
+  {
+    return false;
+  }
+
+  // Reload the factory calibration after the software reset. BOOT takes about
+  // 2.2 ms according to the LPS25HB datasheet and self-clears when complete.
+  if ((sensor.WriteReg(LPS25HB_CTRL_REG2, LPS25HB_BOOT_MASK) != LPS25HB_STATUS_OK) ||
+      !waitForLPS25HBBitClear(sensor, LPS25HB_CTRL_REG2, LPS25HB_BOOT_MASK))
+  {
+    return false;
+  }
+
+  deviceId = 0U;
+  return (sensor.ReadID(&deviceId) == LPS25HB_STATUS_OK) &&
+         (deviceId == LPS25HB_WHO_AM_I_VAL);
+}
+
+static bool configureI2CBaroForAbsolutePressure(LPS25HBSensor &sensor)
+{
+  static constexpr uint8_t offsetRegisters[] = {
+    LPS25HB_REF_P_XL_REG,
+    LPS25HB_REF_P_L_REG,
+    LPS25HB_REF_P_H_REG,
+    LPS25HB_RPDS_L_REG,
+    LPS25HB_RPDS_H_REG
+  };
+
+  for (uint8_t reg : offsetRegisters)
+  {
+    if (sensor.WriteReg(reg, 0U) != LPS25HB_STATUS_OK) { return false; }
+  }
+
+  // begin() configures averaging and BDU, but the bundled ST driver also
+  // enables DIFF_EN. Caponord needs absolute pressure and no pressure interrupt.
+  if (sensor.begin() != LPS25HB_STATUS_OK) { return false; }
+
+  uint8_t ctrlReg1 = 0U;
+  uint8_t ctrlReg2 = 0U;
+  if ((sensor.ReadReg(LPS25HB_CTRL_REG1, &ctrlReg1) != LPS25HB_STATUS_OK) ||
+      (sensor.ReadReg(LPS25HB_CTRL_REG2, &ctrlReg2) != LPS25HB_STATUS_OK))
+  {
+    return false;
+  }
+
+  ctrlReg1 &= static_cast<uint8_t>(~(LPS25HB_DIFF_EN_MASK | LPS25HB_RESET_AZ_MASK));
+  ctrlReg2 &= static_cast<uint8_t>(~LPS25HB_AUTO_ZERO_MASK);
+  if ((sensor.WriteReg(LPS25HB_CTRL_REG1, ctrlReg1) != LPS25HB_STATUS_OK) ||
+      (sensor.WriteReg(LPS25HB_CTRL_REG2, ctrlReg2) != LPS25HB_STATUS_OK))
+  {
+    return false;
+  }
+
+  // Read back every setting that could offset PRESS_OUT. Treat a sensor which
+  // does not retain this configuration as unavailable rather than publishing
+  // a plausible but incorrect barometric pressure.
+  for (uint8_t reg : offsetRegisters)
+  {
+    uint8_t value = 0U;
+    if ((sensor.ReadReg(reg, &value) != LPS25HB_STATUS_OK) || (value != 0U)) { return false; }
+  }
+
+  ctrlReg1 = 0U;
+  ctrlReg2 = 0U;
+  return (sensor.ReadReg(LPS25HB_CTRL_REG1, &ctrlReg1) == LPS25HB_STATUS_OK) &&
+         (sensor.ReadReg(LPS25HB_CTRL_REG2, &ctrlReg2) == LPS25HB_STATUS_OK) &&
+         ((ctrlReg1 & (LPS25HB_DIFF_EN_MASK | LPS25HB_RESET_AZ_MASK)) == 0U) &&
+         ((ctrlReg2 & LPS25HB_AUTO_ZERO_MASK) == 0U);
+}
 
 static bool initialiseI2CBaroSensor(LPS25HBSensor &sensor)
 {
-  // Do not require one specific WHO_AM_I value here. Caponord revisions have
-  // used register-compatible LPS variants, while the original working code
-  // never gated operation on the exact model ID. The checked I2C transport,
-  // successful configuration and a physically valid sample determine health.
-  if ((sensor.begin() == LPS25HB_STATUS_OK) &&
+  if (resetI2CBaroSensor(sensor) &&
+      configureI2CBaroForAbsolutePressure(sensor) &&
       (sensor.SetODR(7.0f) == LPS25HB_STATUS_OK) &&
       (sensor.Enable() == LPS25HB_STATUS_OK))
   {

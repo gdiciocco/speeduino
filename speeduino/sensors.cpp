@@ -35,6 +35,7 @@ A full copy of the license may be found in the projects root directory
 
 #ifdef OIL_SENSOR_OPST
 #include "opst_sensor.h"
+#include "opst_sensor_math.h"
 #endif
 
 uint8_t statusSensors = 0;
@@ -1020,11 +1021,7 @@ static inline byte getOilPressure(void)
 {
   int16_t tempOilPressure = 0;
 
-#ifdef OIL_SENSOR_OPST
-  tempOilPressure = oilSensorOPStData.pressure;
-  const int16_t oilPressureMax = (configPage10.oilPressureMax > 0U) ? configPage10.oilPressureMax : UINT8_MAX;
-  tempOilPressure = clamp(tempOilPressure, (int16_t)0, oilPressureMax);
-#else
+#ifndef OIL_SENSOR_OPST
   if(configPage10.oilPressureEnable > 0U)
   {
     //Perform ADC read
@@ -1041,7 +1038,30 @@ static inline byte getOilPressure(void)
 
 static inline void updateOilPressure(void)
 {
+#ifdef OIL_SENSOR_OPST
+  const oilSensorOPStSnapshot opst = getOPStSnapshot();
+  currentStatus.oilTemperature = opst.temperature;
+  currentStatus.oilPressureAbsoluteKpa = opst.absolutePressureKpa;
+  currentStatus.opstAgeMs = (opst.ageUs == UINT32_MAX)
+    ? UINT16_MAX
+    : static_cast<uint16_t>(min(opst.ageUs / 1000UL, static_cast<uint32_t>(UINT16_MAX)));
+  currentStatus.opstStatus = opst.status;
+  currentStatus.opstFlags = opst.flags;
+
+  if (BIT_CHECK(opst.flags, OPST_FLAG_FRESH))
+  {
+    const uint16_t barometricPressureKpa =
+      ((currentStatus.baro >= 50U) && (currentStatus.baro <= 120U)) ? currentStatus.baro : 101U;
+    currentStatus.oilPressure =
+      convertOPStGaugePressureToPsi(opst.absolutePressureKpa, barometricPressureKpa);
+  }
+  else
+  {
+    currentStatus.oilPressure = 0U;
+  }
+#else
   currentStatus.oilPressure = getOilPressure();
+#endif
 }
 
 BEGIN_LTO_ALWAYS_INLINE(void) readPolledSensors(byte loopTimer)

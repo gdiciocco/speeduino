@@ -217,7 +217,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 5U; break; //Custom block layout version
+    case 2: statusValue = 6U; break; //Custom block layout version
     case 3: statusValue = buildStorageStatus(); break; //Backup SRAM integrity status (see buildStorageStatus)
     case 4: statusValue = lowByte(currentStatus.RPM); break;
     case 5: statusValue = highByte(currentStatus.RPM); break;
@@ -493,6 +493,15 @@ byte getTSLogEntry(uint16_t byteNum)
     case 137: statusValue = highByte(fuelSchedule8.pw); break;
 #endif
     case 138: statusValue = currentStatus.systemTemp; break;
+#if defined(CAPONORD_BOARD)
+    case 139: statusValue = temperatureAddOffset(currentStatus.oilTemperature); break;
+    case 140: statusValue = lowByte(currentStatus.oilPressureAbsoluteKpa); break;
+    case 141: statusValue = highByte(currentStatus.oilPressureAbsoluteKpa); break;
+    case 142: statusValue = currentStatus.opstStatus; break;
+    case 143: statusValue = currentStatus.opstFlags; break;
+    case 144: statusValue = lowByte(currentStatus.opstAgeMs); break;
+    case 145: statusValue = highByte(currentStatus.opstAgeMs); break;
+#endif
     default: statusValue = 0; // MISRA check
   }
 
