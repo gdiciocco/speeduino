@@ -136,7 +136,12 @@ static inline void registerConfiguredStm32AdcPins(void)
 
   if(pinO2_2 != 0U) { registerStm32AdcPin(pinO2_2); }
   if(configPage6.useEMAP != 0U) { registerStm32AdcPin(pinEMAP); }
+#if defined(CAPONORD_BOARD)
+  // Fuel pressure uses the Caponord board's fixed analog input (PC4/A4).
+  if(configPage10.fuelPressureEnable) { registerStm32AdcPin(pinFuelPressure); }
+#else
   if(configPage10.fuelPressureEnable && !pinIsOutput(pinFuelPressure)) { registerStm32AdcPin(pinFuelPressure); }
+#endif
   if(configPage10.oilPressureEnable && !pinIsOutput(pinOilPressure)) { registerStm32AdcPin(pinOilPressure); }
   if(configPage10.knock_pin >= 47U) { registerStm32AdcPin(pinTranslateAnalog(configPage10.knock_pin - 47U)); }
 }
@@ -186,10 +191,10 @@ static inline void refreshRuntimeAnalogPins(void)
     configureAnalogInputPin(pinEMAP);
   }
 #if defined(CAPONORD_BOARD)
-  // Fuel pressure is wired to PB0 and is not selectable from the tune.
+  // Fuel pressure is wired to PC4/A4 and is not selectable from the tune.
   if(configPage10.fuelPressureEnable)
   {
-    if(!pinIsOutput(pinFuelPressure)) { configureAnalogInputPin(pinFuelPressure); }
+    configureAnalogInputPin(pinFuelPressure);
   }
 #else
   if((configPage10.fuelPressureEnable) && (configPage10.fuelPressurePin < BOARD_MAX_IO_PINS))
@@ -997,16 +1002,53 @@ static inline void readGear(void)
   currentStatus.gear = getGear();
 }
 
+#if defined(CAPONORD_BOARD) && defined(CORE_STM32)
+static inline uint8_t getCaponordFuelPressurePinState(void)
+{
+  constexpr uint8_t PIN_SHIFT = 4U; //PC4, A4 on black_f407zg
+  const uint8_t mode = (uint8_t)((GPIOC->MODER >> (PIN_SHIFT * 2U)) & 0x3U);
+  const uint8_t pull = (uint8_t)((GPIOC->PUPDR >> (PIN_SHIFT * 2U)) & 0x3U);
+  const uint8_t output = (uint8_t)((GPIOC->ODR >> PIN_SHIFT) & 0x1U);
+  const uint8_t input = (uint8_t)((GPIOC->IDR >> PIN_SHIFT) & 0x1U);
+  return mode | (uint8_t)(pull << 2U) | (uint8_t)(output << 4U) | (uint8_t)(input << 5U);
+}
+
+static inline void guardCaponordFuelPressurePin(void)
+{
+  const uint8_t pinState = getCaponordFuelPressurePinState();
+  currentStatus.fuelPressurePinState = pinState;
+
+  // Correct PC4 is MODER=11 (analog), PUPDR=00 (no pull). Preserve PC4 as
+  // an analog input even if a late peripheral/tune initialisation changes it.
+  if((pinState & 0x0FU) != 0x03U)
+  {
+    configureAnalogInputPin(pinFuelPressure);
+    if(currentStatus.fuelPressureGuardCount < UINT8_MAX)
+    {
+      currentStatus.fuelPressureGuardCount++;
+    }
+  }
+}
+#endif
+
 static inline byte getFuelPressure(void)
 {
   int16_t tempFuelPressure = 0;
 
   if(configPage10.fuelPressureEnable > 0U)
   {
-    tempFuelPressure = fastMap10Bit(readAnalogSensor(pinFuelPressure), configPage10.fuelPressureMin, configPage10.fuelPressureMax);
+#if defined(CAPONORD_BOARD) && defined(CORE_STM32)
+    guardCaponordFuelPressurePin();
+#endif
+    currentStatus.fuelPressureRaw = readAnalogSensor(pinFuelPressure);
+    tempFuelPressure = fastMap10Bit(currentStatus.fuelPressureRaw, configPage10.fuelPressureMin, configPage10.fuelPressureMax);
     tempFuelPressure = LOW_PASS_FILTER(tempFuelPressure, ADCFILTER_PSI_DEFAULT, currentStatus.fuelPressure); //Apply smoothing factor
     //Sanity checks
     tempFuelPressure = clamp(tempFuelPressure, (int16_t)0, (int16_t)configPage10.fuelPressureMax);
+  }
+  else
+  {
+    currentStatus.fuelPressureRaw = 0U;
   }
 
   return (byte)tempFuelPressure;

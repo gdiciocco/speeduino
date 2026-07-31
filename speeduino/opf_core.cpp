@@ -637,7 +637,7 @@ void caponordSetPins()
   // Deliberately leave no analog barometer pin for generic sensor code.
   pinBaro = NOT_A_PIN;
   pinMAP = PA6;
-  pinFuelPressure = PB0;
+  pinFuelPressure = PC4; // A4 on the black_f407zg variant
 
   pinInjector2 = PF14;
   pinInjector1 = PF13;

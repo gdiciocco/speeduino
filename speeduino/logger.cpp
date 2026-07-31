@@ -501,6 +501,10 @@ byte getTSLogEntry(uint16_t byteNum)
     case 143: statusValue = currentStatus.opstFlags; break;
     case 144: statusValue = lowByte(currentStatus.opstAgeMs); break;
     case 145: statusValue = highByte(currentStatus.opstAgeMs); break;
+    case 146: statusValue = lowByte(currentStatus.fuelPressureRaw); break;
+    case 147: statusValue = highByte(currentStatus.fuelPressureRaw); break;
+    case 148: statusValue = currentStatus.fuelPressurePinState; break;
+    case 149: statusValue = currentStatus.fuelPressureGuardCount; break;
 #endif
     default: statusValue = 0; // MISRA check
   }
