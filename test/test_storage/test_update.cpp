@@ -10,6 +10,7 @@
 extern void updateTableU16toU8(table2D_u16_u8_32 &targetTable, uint16_t u16EEpromBinAddress);
 extern void upgradeV25toV26(void);
 extern void upgradeV27toV28(void);
+extern void upgradeV28toV29(void);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -101,8 +102,6 @@ static void test_upgradeV27toV28_initialises_idle_advance_closed_loop(void)
     configPage2.idleAdvEnabled = IDLEADVANCE_MODE_CLOSED_LOOP; //Previously INVALID.
     configPage9.idleAdvClMinAdvance = 0U;
     configPage9.idleAdvClMaxAdvance = 0U;
-    configPage9.idleAdvClRpmBand = 0U;
-    configPage9.idleAdvClRpmDotBand = 0U;
     setStorageAPI(setupEepromReadApi(27U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
 
     upgradeV27toV28();
@@ -110,8 +109,34 @@ static void test_upgradeV27toV28_initialises_idle_advance_closed_loop(void)
     TEST_ASSERT_EQUAL(IDLEADVANCE_MODE_OFF, configPage2.idleAdvEnabled);
     TEST_ASSERT_EQUAL(IGNITION_ADVANCE_LARGE.toRaw(0), configPage9.idleAdvClMinAdvance);
     TEST_ASSERT_EQUAL(IGNITION_ADVANCE_LARGE.toRaw(20), configPage9.idleAdvClMaxAdvance);
-    TEST_ASSERT_EQUAL(RPM_MEDIUM.toRaw(200), configPage9.idleAdvClRpmBand);
-    TEST_ASSERT_EQUAL(RPM_MEDIUM.toRaw(500), configPage9.idleAdvClRpmDotBand);
+}
+
+static void test_upgradeV28toV29_replaces_bands_with_gains(void)
+{
+    //The V28 authority bands carried no information that maps onto a gain, so
+    //every closed-loop setting is rewritten from the defaults.
+    configPage9.idleAdvClKp = 0U;
+    configPage9.idleAdvClKd = 0U;
+    configPage15.idleAdvClCenter = 0U;
+    configPage15.idleAdvClDeadband = 0U;
+    configPage15.idleAdvClRpmFilter = 0U;
+    configPage15.idleAdvClTrimRate = 99U;
+    configPage15.idleAdvClTrimRange = 0U;
+    configPage15.idleAdvClTrimRequiresIacLimit = 0U;
+    setStorageAPI(setupEepromReadApi(28U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV28toV29();
+
+    TEST_ASSERT_EQUAL(40U, configPage9.idleAdvClKp);
+    TEST_ASSERT_EQUAL(60U, configPage9.idleAdvClKd);
+    TEST_ASSERT_EQUAL(IGNITION_ADVANCE_LARGE.toRaw(10), configPage15.idleAdvClCenter);
+    TEST_ASSERT_EQUAL(15U, configPage15.idleAdvClDeadband);
+    TEST_ASSERT_EQUAL(50U, configPage15.idleAdvClRpmFilter);
+    //The trim defaults to off: with a closed-loop IAC a second integrator on the
+    //same measurement is what makes the two loops hunt against each other.
+    TEST_ASSERT_EQUAL(0U, configPage15.idleAdvClTrimRate);
+    TEST_ASSERT_EQUAL(5U, configPage15.idleAdvClTrimRange);
+    TEST_ASSERT_EQUAL(1U, configPage15.idleAdvClTrimRequiresIacLimit);
 }
 
 void test_update(void) {
@@ -120,5 +145,6 @@ void test_update(void) {
         RUN_TEST(test_upgradeV25toV26_positive);  
         RUN_TEST(test_upgradeV25toV26_negative); 
         RUN_TEST(test_upgradeV27toV28_initialises_idle_advance_closed_loop);
+        RUN_TEST(test_upgradeV28toV29_replaces_bands_with_gains);
     }
 }

@@ -32,6 +32,7 @@ There are 2 top level functions that call more detailed corrections for Fuel and
 #include "unit_testing.h"
 #include "preprocessor.h"
 #include "src/PID/PID.h"
+#include "idle.h"
 #include "units.h"
 #include "fuel_calcs.h"
 #include "unit_testing.h"
@@ -56,13 +57,18 @@ static uint8_t dfcoTaper;
 
 // Idle ignition control state. These are module scoped so initialiseCorrections()
 // can reset them and unit tests do not inherit state from a previous test.
+// The closed loop works internally in tenths of a degree: the output is whole
+// degrees, but the center and its learned trim must move in finer steps than
+// that or they quantise into a limit cycle of their own.
 static bool idleAdvanceArmed;
 static bool idleAdvanceDelayStarted;
 static uint32_t idleAdvanceDelayStart;
-static bool idleAdvanceClCenterInitialized;
-TESTABLE_STATIC int16_t idleAdvanceClCenter;
-static int32_t idleAdvanceClIntegral;
-static bool idleAdvanceClOutputInitialized;
+static bool idleAdvanceClEngaged;
+TESTABLE_STATIC int16_t idleAdvanceClCenter;      //Slewed working center, tenths of a degree
+TESTABLE_STATIC int16_t idleAdvanceClTrim;        //Learned offset from the configured center, tenths of a degree
+static int32_t idleAdvanceClTrimAccumulator;
+static int32_t idleAdvanceClRpmFiltered;          //Low pass filtered RPM, hundredths of an RPM
+static bool idleAdvanceClFilterPrimed;
 static int8_t idleAdvanceClOutput;
 static bool idleAdvanceClLastUpdateValid;
 static uint32_t idleAdvanceClLastUpdate;
@@ -124,10 +130,12 @@ void initialiseCorrections(void)
   idleAdvanceArmed = false;
   idleAdvanceDelayStarted = false;
   idleAdvanceDelayStart = 0U;
-  idleAdvanceClCenterInitialized = false;
+  idleAdvanceClEngaged = false;
   idleAdvanceClCenter = 0;
-  idleAdvanceClIntegral = 0L;
-  idleAdvanceClOutputInitialized = false;
+  idleAdvanceClTrim = 0;
+  idleAdvanceClTrimAccumulator = 0L;
+  idleAdvanceClRpmFiltered = 0L;
+  idleAdvanceClFilterPrimed = false;
   idleAdvanceClOutput = 0;
   idleAdvanceClLastUpdateValid = false;
   idleAdvanceClLastUpdate = 0U;
@@ -1005,11 +1013,14 @@ TESTABLE_INLINE_STATIC int8_t correctionIATretard(int8_t advance)
  */
 static constexpr uint16_t IGN_IDLE_THRESHOLD = 200U; //RPM threshold (below CL idle target) for when ign based idle control will engage
 static constexpr int16_t IDLE_ADVANCE_RPM_OFFSET = 500;
-static constexpr int16_t IDLE_ADVANCE_RPM_ERROR_DEADBAND = 20;
-static constexpr int16_t IDLE_ADVANCE_RPM_DOT_DEADBAND = 50;
-static constexpr int16_t IDLE_ADVANCE_CL_SCORE_MAX = 100;
-static constexpr int16_t IDLE_ADVANCE_CL_SLEW_PER_TICK = 3; //Degrees per 100ms
-static constexpr int16_t IDLE_ADVANCE_CL_ADAPT_TICKS_PER_DEGREE = 20; //2 seconds at full configured error
+//The closed loop keeps its center and trim in tenths of a degree. The output is
+//whole degrees, but a whole degree step is far too coarse for the states that
+//integrate, and quantising them produces a limit cycle of their own.
+static constexpr int16_t IDLE_ADVANCE_CL_TENTHS = 10;
+//Applied to the center only, never to the proportional or derivative terms.
+static constexpr int16_t IDLE_ADVANCE_CL_CENTER_SLEW_TENTHS = 5; //0.5 degrees per 100ms tick
+static constexpr int32_t IDLE_ADVANCE_CL_RPM_DOT_LIMIT = 20000L; //RPM/s
+static constexpr uint8_t IDLE_ADVANCE_CL_RPM_FILTER_MAX = 95U; //%
 
 static inline uint8_t computeIdleAdvanceRpmDelta(void) {
   const int32_t targetRpm = (int32_t)RPM_MEDIUM.toUser(currentStatus.CLIdleTarget);
@@ -1077,63 +1088,136 @@ static inline void getIdleAdvanceClosedLoopRange(int16_t &minimumAdvance, int16_
   }
 }
 
-static inline int16_t normalizeIdleAdvanceFuzzyInput(int32_t value, int16_t deadband, uint16_t fullScale) {
-  const int32_t magnitude = (value < 0L) ? -value : value;
-  if(magnitude <= deadband) { return 0; }
-
-  const int32_t usableScale = (fullScale > (uint16_t)deadband)
-      ? (int32_t)fullScale - deadband
-      : 1L;
-  const int32_t activeMagnitude = clamp(magnitude - deadband, 0L, usableScale);
-  const int16_t normalized = (int16_t)((activeMagnitude * IDLE_ADVANCE_CL_SCORE_MAX) / usableScale);
-  return (value < 0L) ? -normalized : normalized;
-}
-
+/** @brief Signed idle RPM error. Positive means the engine is running slow. */
 static inline int32_t getIdleAdvanceRpmError(void) {
   return (int32_t)RPM_MEDIUM.toUser(currentStatus.CLIdleTarget) - (int32_t)currentStatus.RPM;
 }
 
-/** Compute the closed-loop fuzzy-PD target before output slew limiting. */
-TESTABLE_INLINE_STATIC int8_t computeIdleAdvanceClosedLoopTarget(int16_t centerAdvance) {
+/** @brief Remove the deadband from an error without stepping at its edge. */
+static inline int32_t applyIdleAdvanceDeadband(int32_t error, int32_t deadband) {
+  if(error > deadband)  { return error - deadband; }
+  if(error < -deadband) { return error + deadband; }
+  return 0L;
+}
+
+/** @brief Advance the RPM low pass one 10Hz tick and return its rate of change in RPM/s.
+ *
+ * currentStatus.rpmDOT is a single sample backward difference of the raw per
+ * revolution RPM. At idle that is dominated by cycle to cycle combustion
+ * variation rather than by any real trend, so feeding it to a damping term
+ * injects noise into the advance instead of damping the engine. Differentiating
+ * a filtered copy of RPM here keeps the damping term working on the trend.
+ */
+static inline int32_t updateIdleAdvanceClosedLoopRpmDot(void) {
+  const int32_t scaledRpm = (int32_t)currentStatus.RPM * 100L;
+  if(!idleAdvanceClFilterPrimed) {
+    idleAdvanceClRpmFiltered = scaledRpm;
+    idleAdvanceClFilterPrimed = true;
+    return 0L;
+  }
+
+  const int32_t filterStrength =
+      (int32_t)min(configPage15.idleAdvClRpmFilter, IDLE_ADVANCE_CL_RPM_FILTER_MAX);
+  const int32_t previousFiltered = idleAdvanceClRpmFiltered;
+  idleAdvanceClRpmFiltered += ((scaledRpm - idleAdvanceClRpmFiltered) * (100L - filterStrength)) / 100L;
+
+  // The filtered value is in hundredths of an RPM and the tick is 100ms, so a
+  // difference of one unit per tick is 0.1 RPM/s.
+  return clamp((idleAdvanceClRpmFiltered - previousFiltered) / 10L,
+               -IDLE_ADVANCE_CL_RPM_DOT_LIMIT, IDLE_ADVANCE_CL_RPM_DOT_LIMIT);
+}
+
+/** @brief Closed loop idle advance target, in tenths of a degree.
+ *
+ * rpmDot is passed in rather than read from the filter so that unit tests can
+ * exercise the damping term without driving the filter state.
+ */
+TESTABLE_INLINE_STATIC int16_t computeIdleAdvanceClosedLoopTarget(int16_t centerTenths, int32_t rpmDot) {
   int16_t minimumAdvance;
   int16_t maximumAdvance;
   getIdleAdvanceClosedLoopRange(minimumAdvance, maximumAdvance);
-  centerAdvance = clamp(centerAdvance, minimumAdvance, maximumAdvance);
 
-  const uint16_t rpmBand = max((uint16_t)RPM_MEDIUM.toUser(configPage9.idleAdvClRpmBand), (uint16_t)1U);
-  const uint16_t rpmDotBand = max((uint16_t)RPM_MEDIUM.toUser(configPage9.idleAdvClRpmDotBand), (uint16_t)1U);
-  const int16_t errorScore = normalizeIdleAdvanceFuzzyInput(
-      getIdleAdvanceRpmError(), IDLE_ADVANCE_RPM_ERROR_DEADBAND, rpmBand);
+  const int32_t error = applyIdleAdvanceDeadband(getIdleAdvanceRpmError(),
+                                                 (int32_t)configPage15.idleAdvClDeadband);
 
-  int32_t rpmDot;
-  ATOMIC() { rpmDot = (int32_t)currentStatus.rpmDOT; }
-  const int16_t trendScore = normalizeIdleAdvanceFuzzyInput(
-      rpmDot, IDLE_ADVANCE_RPM_DOT_DEADBAND, rpmDotBand);
+  // Fixed gains in degrees per RPM. Scaling the authority relative to the center
+  // instead would make the gain depend on where the center currently sits, and
+  // therefore change under the loop as the trim moves.
+  // Kp is 0.05 degrees per 100 RPM, so tenths of a degree = raw * error / 200.
+  const int32_t proportionalTenths = ((int32_t)configPage9.idleAdvClKp * error) / 200L;
+  // Kd is 0.05 degrees per 1000 RPM/s, so tenths of a degree = raw * rpmDot / 2000.
+  // Rising RPM removes advance, damping the recovery before the target is crossed.
+  const int32_t derivativeTenths = -(((int32_t)configPage9.idleAdvClKd * rpmDot) / 2000L);
 
-  // Positive error (RPM low) adds advance. Positive rpmDOT (RPM rising)
-  // removes advance, providing damping before the target is crossed.
-  const int16_t controlScore = clamp((int16_t)(errorScore - trendScore),
-                                     (int16_t)-IDLE_ADVANCE_CL_SCORE_MAX,
-                                     (int16_t)IDLE_ADVANCE_CL_SCORE_MAX);
-  int32_t desiredAdvance = centerAdvance;
-  if(controlScore >= 0) {
-    desiredAdvance += ((int32_t)controlScore * (maximumAdvance - centerAdvance)) / IDLE_ADVANCE_CL_SCORE_MAX;
-  } else {
-    desiredAdvance += ((int32_t)controlScore * (centerAdvance - minimumAdvance)) / IDLE_ADVANCE_CL_SCORE_MAX;
+  return (int16_t)clamp((int32_t)centerTenths + proportionalTenths + derivativeTenths,
+                        (int32_t)minimumAdvance * IDLE_ADVANCE_CL_TENTHS,
+                        (int32_t)maximumAdvance * IDLE_ADVANCE_CL_TENTHS);
+}
+
+/** @brief Slowly trim the working center so the loop does not need a standing
+ * proportional error to hold the target.
+ *
+ * When the air path runs its own closed loop it already owns the steady state
+ * offset. Two integrators acting on one measurement hunt against each other, so
+ * by default the trim only moves once the IAC has run out of authority.
+ */
+static inline void updateIdleAdvanceClosedLoopTrim(int32_t rpmError, int16_t targetTenths,
+                                                   int16_t minimumAdvance, int16_t maximumAdvance) {
+  const int32_t trimRate = (int32_t)configPage15.idleAdvClTrimRate;
+  if(trimRate == 0L) {
+    idleAdvanceClTrim = 0;
+    idleAdvanceClTrimAccumulator = 0L;
+    return;
   }
-  return (int8_t)clamp(desiredAdvance, (int32_t)minimumAdvance, (int32_t)maximumAdvance);
+
+  // Freeze, never reset, inside the deadband. Zeroing the accumulator here makes
+  // the trim drift to the deadband edge, lose its history, and drift back again.
+  const int32_t deadband = (int32_t)configPage15.idleAdvClDeadband;
+  if((rpmError <= deadband) && (rpmError >= -deadband)) { return; }
+
+  if((configPage15.idleAdvClTrimRequiresIacLimit == 1U) && !isIdleClosedLoopAtLimit()) { return; }
+
+  // Anti windup: freeze when the output has no authority left in the direction
+  // the trim would push it.
+  if(((rpmError > 0L) && (targetTenths >= (int16_t)(maximumAdvance * IDLE_ADVANCE_CL_TENTHS)))
+  || ((rpmError < 0L) && (targetTenths <= (int16_t)(minimumAdvance * IDLE_ADVANCE_CL_TENTHS)))) { return; }
+
+  // The rate is expressed as the seconds needed to move the center one degree
+  // with 100 RPM of error, so one tenth is released every (rate * 100) RPM-ticks.
+  idleAdvanceClTrimAccumulator += rpmError;
+  const int32_t stepThreshold = trimRate * 100L;
+  const int32_t trimSteps = idleAdvanceClTrimAccumulator / stepThreshold;
+  if(trimSteps != 0L) {
+    idleAdvanceClTrim = (int16_t)((int32_t)idleAdvanceClTrim + trimSteps);
+    idleAdvanceClTrimAccumulator -= trimSteps * stepThreshold;
+  }
+
+  const int16_t trimLimit = (int16_t)configPage15.idleAdvClTrimRange * IDLE_ADVANCE_CL_TENTHS;
+  idleAdvanceClTrim = clamp(idleAdvanceClTrim, (int16_t)-trimLimit, trimLimit);
 }
 
-static inline void resetIdleAdvanceClosedLoop(bool resetLearnedCenter) {
-  idleAdvanceClIntegral = 0L;
-  idleAdvanceClOutputInitialized = false;
+/** @brief Where the center is heading: the configured base advance plus the learned trim. */
+static inline int16_t getIdleAdvanceClosedLoopCenterTarget(int16_t minimumAdvance, int16_t maximumAdvance) {
+  const int16_t configuredCenter = clamp(IGNITION_ADVANCE_LARGE.toUser(configPage15.idleAdvClCenter),
+                                         minimumAdvance, maximumAdvance);
+  return clamp((int16_t)((configuredCenter * IDLE_ADVANCE_CL_TENTHS) + idleAdvanceClTrim),
+               (int16_t)(minimumAdvance * IDLE_ADVANCE_CL_TENTHS),
+               (int16_t)(maximumAdvance * IDLE_ADVANCE_CL_TENTHS));
+}
+
+static inline void resetIdleAdvanceClosedLoop(bool resetLearnedTrim) {
+  idleAdvanceClEngaged = false;
+  idleAdvanceClFilterPrimed = false;
   idleAdvanceClLastUpdateValid = false;
-  if(resetLearnedCenter) { idleAdvanceClCenterInitialized = false; }
+  if(resetLearnedTrim) {
+    idleAdvanceClTrim = 0;
+    idleAdvanceClTrimAccumulator = 0L;
+  }
 }
 
-static inline void resetIdleAdvanceEngagement(bool resetLearnedCenter) {
+static inline void resetIdleAdvanceEngagement(bool resetLearnedTrim) {
   idleAdvanceDelayStarted = false;
-  resetIdleAdvanceClosedLoop(resetLearnedCenter);
+  resetIdleAdvanceClosedLoop(resetLearnedTrim);
 }
 
 static inline bool hasIdleAdvanceStartDelayElapsed(void) {
@@ -1146,50 +1230,18 @@ static inline bool hasIdleAdvanceStartDelayElapsed(void) {
   return hasIntervalElapsed(runSecsX10, idleAdvanceDelayStart, configPage9.idleAdvStartDelay);
 }
 
-static inline void adaptIdleAdvanceClosedLoopCenter(int32_t rpmError, int8_t desiredAdvance,
-                                                     int16_t minimumAdvance, int16_t maximumAdvance) {
-  const uint16_t rpmBand = max((uint16_t)RPM_MEDIUM.toUser(configPage9.idleAdvClRpmBand), (uint16_t)1U);
-  if((rpmError <= IDLE_ADVANCE_RPM_ERROR_DEADBAND)
-  && (rpmError >= -IDLE_ADVANCE_RPM_ERROR_DEADBAND)) {
-    idleAdvanceClIntegral = 0L;
-    return;
-  }
-
-  // Anti-windup: do not move the learned center farther toward a limit when
-  // the requested output already has no remaining authority in that direction.
-  if(((rpmError > 0L) && (desiredAdvance >= maximumAdvance))
-  || ((rpmError < 0L) && (desiredAdvance <= minimumAdvance))) {
-    idleAdvanceClIntegral = 0L;
-    return;
-  }
-
-  const int32_t limitedError = clamp(rpmError, -(int32_t)rpmBand, (int32_t)rpmBand);
-  idleAdvanceClIntegral += limitedError;
-  const int32_t stepThreshold = (int32_t)rpmBand * IDLE_ADVANCE_CL_ADAPT_TICKS_PER_DEGREE;
-  if(idleAdvanceClIntegral >= stepThreshold) {
-    ++idleAdvanceClCenter;
-    idleAdvanceClIntegral -= stepThreshold;
-  } else if(idleAdvanceClIntegral <= -stepThreshold) {
-    --idleAdvanceClCenter;
-    idleAdvanceClIntegral += stepThreshold;
-  }
-  idleAdvanceClCenter = clamp(idleAdvanceClCenter, minimumAdvance, maximumAdvance);
-}
-
 static inline int8_t updateIdleAdvanceClosedLoop(int8_t currentAdvance) {
   int16_t minimumAdvance;
   int16_t maximumAdvance;
   getIdleAdvanceClosedLoopRange(minimumAdvance, maximumAdvance);
 
-  if(!idleAdvanceClCenterInitialized) {
-    idleAdvanceClCenter = (minimumAdvance + maximumAdvance) / 2;
-    idleAdvanceClCenterInitialized = true;
-  }
-  idleAdvanceClCenter = clamp(idleAdvanceClCenter, minimumAdvance, maximumAdvance);
-
-  if(!idleAdvanceClOutputInitialized) {
-    idleAdvanceClOutput = (int8_t)clamp((int16_t)currentAdvance, minimumAdvance, maximumAdvance);
-    idleAdvanceClOutputInitialized = true;
+  if(!idleAdvanceClEngaged) {
+    // Start from the advance the ignition table was already asking for so that
+    // engaging the loop is not a torque step, then let the center slew from there.
+    const int16_t seedAdvance = clamp((int16_t)currentAdvance, minimumAdvance, maximumAdvance);
+    idleAdvanceClCenter = seedAdvance * IDLE_ADVANCE_CL_TENTHS;
+    idleAdvanceClOutput = (int8_t)seedAdvance;
+    idleAdvanceClEngaged = true;
   }
 
   // runSecsX10 identifies the 10Hz tick. This prevents a second call to
@@ -1197,14 +1249,25 @@ static inline int8_t updateIdleAdvanceClosedLoop(int8_t currentAdvance) {
   // controller or its delay twice during the same main-loop iteration.
   if(BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ)
   && ((!idleAdvanceClLastUpdateValid) || (idleAdvanceClLastUpdate != runSecsX10))) {
-    const int8_t desiredAdvance = computeIdleAdvanceClosedLoopTarget(idleAdvanceClCenter);
-    adaptIdleAdvanceClosedLoopCenter(getIdleAdvanceRpmError(), desiredAdvance,
-                                     minimumAdvance, maximumAdvance);
-    const int16_t outputDelta = (int16_t)desiredAdvance - (int16_t)idleAdvanceClOutput;
-    const int16_t limitedDelta = clamp(outputDelta,
-                                       (int16_t)-IDLE_ADVANCE_CL_SLEW_PER_TICK,
-                                       (int16_t)IDLE_ADVANCE_CL_SLEW_PER_TICK);
-    idleAdvanceClOutput = (int8_t)((int16_t)idleAdvanceClOutput + limitedDelta);
+    const int32_t rpmDot = updateIdleAdvanceClosedLoopRpmDot();
+    const int32_t rpmError = getIdleAdvanceRpmError();
+
+    // Only the center is rate limited. Rate limiting the proportional and
+    // derivative terms as well would put the fastest actuator on the engine into
+    // the same frequency band as the air path and cost the loop its phase margin.
+    const int16_t centerTarget = getIdleAdvanceClosedLoopCenterTarget(minimumAdvance, maximumAdvance);
+    idleAdvanceClCenter += clamp((int16_t)(centerTarget - idleAdvanceClCenter),
+                                 (int16_t)-IDLE_ADVANCE_CL_CENTER_SLEW_TENTHS,
+                                 (int16_t)IDLE_ADVANCE_CL_CENTER_SLEW_TENTHS);
+
+    const int16_t targetTenths = computeIdleAdvanceClosedLoopTarget(idleAdvanceClCenter, rpmDot);
+    updateIdleAdvanceClosedLoopTrim(rpmError, targetTenths, minimumAdvance, maximumAdvance);
+
+    const int16_t roundedTenths = (targetTenths >= 0)
+        ? (int16_t)(targetTenths + (IDLE_ADVANCE_CL_TENTHS / 2))
+        : (int16_t)(targetTenths - (IDLE_ADVANCE_CL_TENTHS / 2));
+    idleAdvanceClOutput = (int8_t)clamp((int16_t)(roundedTenths / IDLE_ADVANCE_CL_TENTHS),
+                                        minimumAdvance, maximumAdvance);
     idleAdvanceClLastUpdate = runSecsX10;
     idleAdvanceClLastUpdateValid = true;
   }
@@ -1215,15 +1278,15 @@ static inline int8_t updateIdleAdvanceClosedLoop(int8_t currentAdvance) {
 TESTABLE_INLINE_STATIC int8_t correctionIdleAdvance(int8_t advance)
 {
   if(!isIdleAdvanceOn()) {
-    const bool resetLearnedCenter = (configPage2.idleAdvEnabled == IDLEADVANCE_MODE_OFF)
+    const bool resetLearnedTrim = (configPage2.idleAdvEnabled == IDLEADVANCE_MODE_OFF)
         || (currentStatus.rotationStatus != EngineRotationStatus::Running);
-    resetIdleAdvanceEngagement(resetLearnedCenter);
+    resetIdleAdvanceEngagement(resetLearnedTrim);
     return advance;
   }
 
   if(!isIdleAdvanceOperational()) {
-    // Preserve the learned center during a short throttle opening or gear
-    // change, but require the configured start delay again on re-entry.
+    // Preserve the learned trim during a short throttle opening or gear change,
+    // but require the configured start delay again on re-entry.
     resetIdleAdvanceEngagement(false);
     return advance;
   }

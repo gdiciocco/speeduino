@@ -48,6 +48,11 @@ static bool lastDFCOValue;
 uint16_t idle_pwm_max_count; //Used for variable PWM frequency
 static volatile unsigned int idle_pwm_cur_value;
 static long idle_pid_target_value;
+//The PID class does not expose its output limits, so record them here as they are
+//configured. isIdleClosedLoopAtLimit() reports when the air path has run out of
+//authority, which is the only time a second integrator may safely act on idle RPM.
+static long idle_pid_output_min;
+static long idle_pid_output_max;
 static long FeedForwardTerm;
 static uint32_t idle_pwm_target_value;
 static long idle_cl_target_rpm;
@@ -79,6 +84,25 @@ static inline void enableIdle(void)
   {
     IDLE_TIMER_ENABLE();
   }
+}
+
+//Set the closed loop output limits, retaining a copy so that saturation of the air
+//path can be reported to the idle ignition controller.
+static inline void setIdleClOutputLimits(long minimumOutput, long maximumOutput)
+{
+  idle_pid_output_min = minimumOutput;
+  idle_pid_output_max = maximumOutput;
+  idlePID.SetOutputLimits(minimumOutput, maximumOutput);
+}
+
+bool isIdleClosedLoopAtLimit(void)
+{
+  if( (!isClosedLoopIac(configPage6))
+   || (currentStatus.rotationStatus != EngineRotationStatus::Running)
+   || (idle_pid_output_min >= idle_pid_output_max) ) { return false; }
+
+  return (idle_pid_target_value <= idle_pid_output_min)
+      || (idle_pid_target_value >= idle_pid_output_max);
 }
 
 static inline void initialiseIdleUpOutput(void)
@@ -122,7 +146,7 @@ void initialiseIdle(bool forcehoming)
 
     case IAC_ALGORITHM_PWM_OLCL:
       //Case 6 is PWM closed loop with open loop table used as feed forward
-      idlePID.SetOutputLimits(percentage(configPage2.iacCLminValue, idle_pwm_max_count<<2), percentage(configPage2.iacCLmaxValue, idle_pwm_max_count<<2));
+      setIdleClOutputLimits(percentage(configPage2.iacCLminValue, idle_pwm_max_count<<2), percentage(configPage2.iacCLmaxValue, idle_pwm_max_count<<2));
       idlePID.SetTunings(configPage6.idleKP, configPage6.idleKI, configPage6.idleKD);
       idlePID.SetMode(AUTOMATIC); //Turn PID on
       idle_pid_target_value = 0;
@@ -133,7 +157,7 @@ void initialiseIdle(bool forcehoming)
 
     case IAC_ALGORITHM_PWM_CL:
       //Case 3 is PWM closed loop
-      idlePID.SetOutputLimits(percentage(configPage2.iacCLminValue, idle_pwm_max_count<<2), percentage(configPage2.iacCLmaxValue, idle_pwm_max_count<<2));
+      setIdleClOutputLimits(percentage(configPage2.iacCLminValue, idle_pwm_max_count<<2), percentage(configPage2.iacCLmaxValue, idle_pwm_max_count<<2));
       idlePID.SetTunings(configPage6.idleKP, configPage6.idleKI, configPage6.idleKD);
       idlePID.SetMode(AUTOMATIC); //Turn PID on
       idle_pid_target_value = table2D_getValue(&iacCrankDutyTable, temperatureAddOffset(currentStatus.coolant));
@@ -172,7 +196,7 @@ void initialiseIdle(bool forcehoming)
       }
 
       idlePID.SetSampleTime(250); //4Hz means 250ms
-      idlePID.SetOutputLimits((configPage2.iacCLminValue * 3)<<2, (configPage2.iacCLmaxValue * 3)<<2); //Maximum number of steps; always less than home steps count.
+      setIdleClOutputLimits((configPage2.iacCLminValue * 3)<<2, (configPage2.iacCLmaxValue * 3)<<2); //Maximum number of steps; always less than home steps count.
       idlePID.SetTunings(configPage6.idleKP, configPage6.idleKI, configPage6.idleKD);
       idlePID.SetMode(AUTOMATIC); //Turn PID on
       configPage6.iacPWMrun = false; // just in case. This needs to be false with stepper idle
@@ -194,7 +218,7 @@ void initialiseIdle(bool forcehoming)
       }
 
       idlePID.SetSampleTime(250); //4Hz means 250ms
-      idlePID.SetOutputLimits((configPage2.iacCLminValue * 3)<<2, (configPage2.iacCLmaxValue * 3)<<2); //Maximum number of steps; always less than home steps count.
+      setIdleClOutputLimits((configPage2.iacCLminValue * 3)<<2, (configPage2.iacCLmaxValue * 3)<<2); //Maximum number of steps; always less than home steps count.
       idlePID.SetTunings(configPage6.idleKP, configPage6.idleKI, configPage6.idleKD);
       idlePID.SetMode(AUTOMATIC); //Turn PID on
       configPage6.iacPWMrun = false; // just in case. This needs to be false with stepper idle

@@ -562,6 +562,17 @@ static inline bool isStepperIac(const config6 &page6) {
       || page6.iacAlgorithm == IAC_ALGORITHM_STEP_OLCL;
 }
 
+/** @brief True when the air path runs a closed loop on idle RPM.
+ * The idle ignition closed loop uses this to avoid running a second integrator
+ * against the same measurement. @see isIdleClosedLoopAtLimit()
+ */
+static inline bool isClosedLoopIac(const config6 &page6) {
+  return page6.iacAlgorithm == IAC_ALGORITHM_PWM_CL
+      || page6.iacAlgorithm == IAC_ALGORITHM_PWM_OLCL
+      || page6.iacAlgorithm == IAC_ALGORITHM_STEP_CL
+      || page6.iacAlgorithm == IAC_ALGORITHM_STEP_OLCL;
+}
+
 constexpr uint8_t HARD_REV_FIXED   = 1U;
 constexpr uint8_t HARD_REV_COOLANT = 2U;
 
@@ -595,7 +606,7 @@ struct config9 : public config_page_t {
   byte canoutput_param_num_bytes[8];
 
   byte idleAdvClMaxAdvance; //Closed-loop idle ignition maximum advance, offset by 40 degrees
-  byte idleAdvClRpmBand;    //RPM error that requests full closed-loop authority, RPM/10
+  byte idleAdvClKp;         //Closed-loop idle ignition proportional gain, 0.05 degrees per 100 RPM of error
   byte egoMAPMax; //needs to be multiplied by 2 to get the proper value
   byte egoMAPMin; //needs to be multiplied by 2 to get the proper value
   byte speeduino_tsCanId:4;         //speeduino TS canid (0-14)
@@ -627,7 +638,7 @@ struct config9 : public config_page_t {
   byte coolantProtRPM[6];
   byte coolantProtTemp[6];
 
-  byte idleAdvClRpmDotBand; //RPM/s rate that requests full closed-loop damping, RPM/s/10
+  byte idleAdvClKd;         //Closed-loop idle ignition derivative gain, 0.05 degrees per 1000 RPM/s
   byte dfcoTaperTime;
   byte dfcoTaperFuel;
   byte dfcoTaperAdvance;
@@ -975,8 +986,18 @@ struct config15 : public config_page_t {
   uint16_t empPumpEngineRpmBins[4];
   uint16_t empPumpMinimumFlowRpmBins[4];
 
-  //Bytes 190-255
-  byte Unused15_190_255[66];
+  //Bytes 190-195 - Closed-loop idle ignition control
+  byte idleAdvClCenter;      //Base (feed forward) idle advance the loop works around, offset by 40 degrees
+  byte idleAdvClDeadband;    //RPM error below which the proportional term and the trim are inactive
+  byte idleAdvClRpmFilter;   //Low pass strength applied to RPM before differentiating it, %
+  byte idleAdvClTrimRate;    //Seconds to trim the center by one degree at 100 RPM of error. 0 disables the trim
+  byte idleAdvClTrimRange;   //Maximum deviation of the learned trim from the configured center, degrees
+
+  byte idleAdvClTrimRequiresIacLimit : 1; //Only trim while the IAC closed loop has run out of authority
+  byte idleAdvClUnused195 : 7;
+
+  //Bytes 196-255
+  byte Unused15_196_255[60];
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 

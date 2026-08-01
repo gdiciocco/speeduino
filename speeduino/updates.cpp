@@ -99,6 +99,26 @@ TESTABLE_STATIC void upgradeV26toV27(void) {
     }
 }
 
+/** @brief Defaults for the closed-loop idle ignition controller.
+ *
+ * The trim is off by default: with a closed-loop IAC the air path already owns
+ * the steady-state offset, and a second integrator on the same measurement is
+ * what makes the two loops hunt against each other.
+ */
+TESTABLE_STATIC void setIdleAdvanceClosedLoopDefaults(void) {
+    configPage9.idleAdvClMinAdvance = IGNITION_ADVANCE_LARGE.toRaw(0);
+    configPage9.idleAdvClMaxAdvance = IGNITION_ADVANCE_LARGE.toRaw(20);
+    configPage9.idleAdvClKp = 40U;  //2.0 degrees per 100 RPM of error
+    configPage9.idleAdvClKd = 60U;  //3.0 degrees per 1000 RPM/s
+
+    configPage15.idleAdvClCenter = IGNITION_ADVANCE_LARGE.toRaw(10);
+    configPage15.idleAdvClDeadband = 15U;  //RPM
+    configPage15.idleAdvClRpmFilter = 50U; //%
+    configPage15.idleAdvClTrimRate = 0U;   //Trim disabled
+    configPage15.idleAdvClTrimRange = 5U;  //degrees
+    configPage15.idleAdvClTrimRequiresIacLimit = 1U;
+}
+
 // V28 adds closed-loop idle ignition settings in bytes that were previously unused.
 TESTABLE_STATIC void upgradeV27toV28(void) {
     if(loadEEPROMVersion() == 27U)
@@ -110,17 +130,30 @@ TESTABLE_STATIC void upgradeV27toV28(void) {
         }
         configPage9.idleAdvClMinAdvance = IGNITION_ADVANCE_LARGE.toRaw(0);
         configPage9.idleAdvClMaxAdvance = IGNITION_ADVANCE_LARGE.toRaw(20);
-        configPage9.idleAdvClRpmBand = RPM_MEDIUM.toRaw(200);
-        configPage9.idleAdvClRpmDotBand = RPM_MEDIUM.toRaw(500);
 
         saveAllPages();
         saveEEPROMVersion(28);
     }
 }
 
+/** V29 replaces the closed-loop idle ignition authority bands with explicit
+ * proportional and derivative gains, and adds the center, deadband, RPM filter
+ * and trim settings. The two band bytes carried no information that maps onto a
+ * gain, so every closed-loop setting is rewritten from the defaults.
+ */
+TESTABLE_STATIC void upgradeV28toV29(void) {
+    if(loadEEPROMVersion() == 28U)
+    {
+        setIdleAdvanceClosedLoopDefaults();
+
+        saveAllPages();
+        saveEEPROMVersion(29);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    28
+  #define CURRENT_DATA_VERSION    29
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -900,6 +933,7 @@ void doUpdates(void)
   upgradeV25toV26();
   upgradeV26toV27();
   upgradeV27toV28();
+  upgradeV28toV29();
   //Move this #endif to only do latest updates to safe ROM space on small devices.
   #endif
 
@@ -908,11 +942,8 @@ void doUpdates(void)
   {
     configPage9.true_address = 0x200;
     configPage2.idleAdvEnabled = IDLEADVANCE_MODE_OFF;
-    configPage9.idleAdvClMinAdvance = IGNITION_ADVANCE_LARGE.toRaw(0);
-    configPage9.idleAdvClMaxAdvance = IGNITION_ADVANCE_LARGE.toRaw(20);
-    configPage9.idleAdvClRpmBand = RPM_MEDIUM.toRaw(200);
-    configPage9.idleAdvClRpmDotBand = RPM_MEDIUM.toRaw(500);
-    
+    setIdleAdvanceClosedLoopDefaults();
+
     //Programmable outputs added. Set all to disabled
     configPage13.outputPin[0] = 0;
     configPage13.outputPin[1] = 0;

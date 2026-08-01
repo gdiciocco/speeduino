@@ -263,8 +263,9 @@ static void test_correctionIATretard(void) {
 }
 
 extern int8_t correctionIdleAdvance(int8_t advance);
-extern int8_t computeIdleAdvanceClosedLoopTarget(int16_t centerAdvance);
+extern int16_t computeIdleAdvanceClosedLoopTarget(int16_t centerTenths, int32_t rpmDot);
 extern int16_t idleAdvanceClCenter;
+extern int16_t idleAdvanceClTrim;
 
 static void setup_idleadv_tps(void) {
     configPage2.idleAdvAlgorithm = IDLEADVANCE_ALGO_TPS;
@@ -481,52 +482,153 @@ static void setup_correctionIdleAdvance_closed_loop(void) {
     configPage2.idleAdvEnabled = IDLEADVANCE_MODE_CLOSED_LOOP;
     configPage9.idleAdvClMinAdvance = IGNITION_ADVANCE_LARGE.toRaw(0);
     configPage9.idleAdvClMaxAdvance = IGNITION_ADVANCE_LARGE.toRaw(20);
-    configPage9.idleAdvClRpmBand = RPM_MEDIUM.toRaw(200);
-    configPage9.idleAdvClRpmDotBand = RPM_MEDIUM.toRaw(500);
+    configPage9.idleAdvClKp = 40U; //2.0 degrees per 100 RPM of error
+    configPage9.idleAdvClKd = 60U; //3.0 degrees per 1000 RPM/s
+    configPage15.idleAdvClCenter = IGNITION_ADVANCE_LARGE.toRaw(10);
+    configPage15.idleAdvClDeadband = 15U;
+    configPage15.idleAdvClRpmFilter = 50U;
+    configPage15.idleAdvClTrimRate = 0U;
+    configPage15.idleAdvClTrimRange = 5U;
+    configPage15.idleAdvClTrimRequiresIacLimit = 1U;
     currentStatus.CLIdleTarget = RPM_MEDIUM.toRaw(1000);
     currentStatus.setRpm(1000U);
-    currentStatus.rpmDOT = 0;
     initialiseCorrections();
 }
 
-static void test_idleAdvanceClosedLoop_fuzzy_pd_target(void) {
+//All expectations below are in tenths of a degree, with a center of 10.0 degrees,
+//Kp of 2.0 deg/100RPM, Kd of 3.0 deg per 1000 RPM/s and a 15 RPM deadband.
+static void test_idleAdvanceClosedLoop_pd_target(void) {
     setup_correctionIdleAdvance_closed_loop();
 
-    TEST_ASSERT_EQUAL(10, computeIdleAdvanceClosedLoopTarget(10));
-    currentStatus.setRpm(800U);
-    TEST_ASSERT_EQUAL(20, computeIdleAdvanceClosedLoopTarget(10));
-    currentStatus.setRpm(1200U);
-    TEST_ASSERT_EQUAL(0, computeIdleAdvanceClosedLoopTarget(10));
+    //On target with no trend: the loop commands the center exactly.
+    TEST_ASSERT_EQUAL(100, computeIdleAdvanceClosedLoopTarget(100, 0L));
 
+    //100 RPM low, less the 15 RPM deadband, at 2.0 deg per 100 RPM.
+    currentStatus.setRpm(900U);
+    TEST_ASSERT_EQUAL(117, computeIdleAdvanceClosedLoopTarget(100, 0L));
+    currentStatus.setRpm(1100U);
+    TEST_ASSERT_EQUAL(83, computeIdleAdvanceClosedLoopTarget(100, 0L));
+
+    //The gain is fixed, so it does not change with the center. Scaling the
+    //authority relative to the center instead would halve this response.
+    TEST_ASSERT_EQUAL(133, computeIdleAdvanceClosedLoopTarget(150, 0L));
+
+    //Rising RPM removes advance, falling RPM adds it.
     currentStatus.setRpm(1000U);
-    currentStatus.rpmDOT = -500;
-    TEST_ASSERT_EQUAL(20, computeIdleAdvanceClosedLoopTarget(10));
-    currentStatus.setRpm(800U);
-    currentStatus.rpmDOT = 500;
-    TEST_ASSERT_EQUAL(10, computeIdleAdvanceClosedLoopTarget(10));
+    TEST_ASSERT_EQUAL(85, computeIdleAdvanceClosedLoopTarget(100, 500L));
+    TEST_ASSERT_EQUAL(115, computeIdleAdvanceClosedLoopTarget(100, -500L));
+
+    //The output stays inside the configured authority.
+    currentStatus.setRpm(400U);
+    TEST_ASSERT_EQUAL(200, computeIdleAdvanceClosedLoopTarget(100, 0L));
+    currentStatus.setRpm(1600U);
+    TEST_ASSERT_EQUAL(0, computeIdleAdvanceClosedLoopTarget(100, 0L));
 }
 
-static void test_correctionIdleAdvance_closed_loop_slew_and_single_update(void) {
+static void test_idleAdvanceClosedLoop_deadband_has_no_step(void) {
     setup_correctionIdleAdvance_closed_loop();
-    currentStatus.setRpm(800U);
+
+    //Inside the deadband the proportional term is inactive...
+    currentStatus.setRpm(990U);
+    TEST_ASSERT_EQUAL(100, computeIdleAdvanceClosedLoopTarget(100, 0L));
+    //...and it resumes from zero at the edge rather than jumping.
+    currentStatus.setRpm(985U);
+    TEST_ASSERT_EQUAL(100, computeIdleAdvanceClosedLoopTarget(100, 0L));
+    currentStatus.setRpm(980U);
+    TEST_ASSERT_EQUAL(101, computeIdleAdvanceClosedLoopTarget(100, 0L));
+}
+
+static void test_correctionIdleAdvance_closed_loop_responds_without_output_slew(void) {
+    setup_correctionIdleAdvance_closed_loop();
     BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
 
-    TEST_ASSERT_EQUAL(13, correctionIdleAdvance(10));
-    TEST_ASSERT_EQUAL(13, correctionIdleAdvance(10)); //Same scheduler tick.
+    //Engaging on target holds the advance the ignition table was already asking
+    //for, so entering the loop is not a torque step.
+    TEST_ASSERT_EQUAL(10, correctionIdleAdvance(10));
+
+    //A 200 RPM drop must produce the full response on the very next tick.
+    //Rate limiting the output would put the ignition, which is the fast
+    //actuator, into the same frequency band as the air path.
+    //Proportional: (200-15) * 2.0/100 = 3.7 degrees.
+    //Derivative:   the 50% filter moves 1000 -> 900 RPM over the 100ms tick,
+    //              so -1000 RPM/s, and falling RPM adds 3.0 degrees.
     ++runSecsX10;
-    TEST_ASSERT_EQUAL(16, correctionIdleAdvance(10));
+    currentStatus.setRpm(800U);
+    TEST_ASSERT_EQUAL(17, correctionIdleAdvance(10));
+    TEST_ASSERT_EQUAL(17, correctionIdleAdvance(10)); //Same scheduler tick.
 }
 
-static void test_correctionIdleAdvance_closed_loop_learns_center(void) {
+static void test_correctionIdleAdvance_closed_loop_trim_freezes_in_deadband(void) {
     setup_correctionIdleAdvance_closed_loop();
-    currentStatus.setRpm(900U); //Persistent, non-saturated positive error.
+    configPage15.idleAdvClTrimRate = 10U;            //10s per degree at 100 RPM of error
+    configPage15.idleAdvClTrimRequiresIacLimit = 0U;
     BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
 
-    for(uint8_t tick = 0U; tick < 40U; ++tick) {
+    (void)correctionIdleAdvance(10); //Engage on target.
+
+    //Hold a 100 RPM error for half of a trim step.
+    currentStatus.setRpm(900U);
+    for(uint8_t tick = 0U; tick < 5U; ++tick) {
+        ++runSecsX10;
+        (void)correctionIdleAdvance(10);
+    }
+    TEST_ASSERT_EQUAL(0, idleAdvanceClTrim);
+
+    //Inside the deadband the accumulator must be frozen, not zeroed. Zeroing it
+    //is what makes the trim drift to the deadband edge, lose its history and
+    //drift back again.
+    currentStatus.setRpm(995U);
+    for(uint8_t tick = 0U; tick < 3U; ++tick) {
+        ++runSecsX10;
+        (void)correctionIdleAdvance(10);
+    }
+    TEST_ASSERT_EQUAL(0, idleAdvanceClTrim);
+
+    //So the remaining half of the step still completes in five more ticks.
+    currentStatus.setRpm(900U);
+    for(uint8_t tick = 0U; tick < 5U; ++tick) {
+        ++runSecsX10;
+        (void)correctionIdleAdvance(10);
+    }
+    TEST_ASSERT_EQUAL(1, idleAdvanceClTrim);
+}
+
+static void test_correctionIdleAdvance_closed_loop_trim_yields_to_iac(void) {
+    setup_correctionIdleAdvance_closed_loop();
+    configPage15.idleAdvClTrimRate = 1U;             //Fast enough to move every tick
+    configPage15.idleAdvClTrimRequiresIacLimit = 1U;
+    configPage6.iacAlgorithm = IAC_ALGORITHM_PWM_CL; //The air path owns the steady state offset
+    initialiseCorrections();
+    BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
+
+    currentStatus.setRpm(900U); //Arms idle advance and holds a persistent error.
+    for(uint8_t tick = 0U; tick < 10U; ++tick) {
         (void)correctionIdleAdvance(10);
         ++runSecsX10;
     }
-    TEST_ASSERT_EQUAL(11, idleAdvanceClCenter);
+
+    //The IAC closed loop has authority left, so the ignition loop must not run a
+    //second integrator against the same measurement.
+    TEST_ASSERT_EQUAL(0, idleAdvanceClTrim);
+}
+
+static void test_correctionIdleAdvance_closed_loop_trim_is_bounded(void) {
+    setup_correctionIdleAdvance_closed_loop();
+    configPage15.idleAdvClTrimRate = 1U;
+    configPage15.idleAdvClTrimRange = 2U; //degrees
+    configPage15.idleAdvClTrimRequiresIacLimit = 0U;
+    BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
+
+    (void)correctionIdleAdvance(10);
+    currentStatus.setRpm(940U); //60 RPM low: outside the deadband, well short of saturating.
+    for(uint16_t tick = 0U; tick < 200U; ++tick) {
+        ++runSecsX10;
+        (void)correctionIdleAdvance(10);
+    }
+
+    //A persistent error must not be able to drag the center arbitrarily far
+    //from its configured value.
+    TEST_ASSERT_EQUAL(20, idleAdvanceClTrim);
 }
 
 static void test_correctionIdleAdvance(void) {
@@ -546,9 +648,12 @@ static void test_correctionIdleAdvance(void) {
     RUN_TEST_P(test_correctionIdleAdvance_low_target_does_not_underflow);
     RUN_TEST_P(test_correctionIdleAdvance_delta_does_not_wrap_above_2550rpm);
     RUN_TEST_P(test_correctionIdleAdvance_added_mode_clamps_overflow);
-    RUN_TEST_P(test_idleAdvanceClosedLoop_fuzzy_pd_target);
-    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_slew_and_single_update);
-    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_learns_center);
+    RUN_TEST_P(test_idleAdvanceClosedLoop_pd_target);
+    RUN_TEST_P(test_idleAdvanceClosedLoop_deadband_has_no_step);
+    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_responds_without_output_slew);
+    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_trim_freezes_in_deadband);
+    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_trim_yields_to_iac);
+    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_trim_is_bounded);
 }
 
 extern int8_t correctionSoftRevLimit(int8_t advance);
