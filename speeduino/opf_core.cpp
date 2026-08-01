@@ -36,7 +36,16 @@ static uint8_t baroRetryCountdown = 0U;
 static constexpr uint8_t BARO_RETRY_INTERVAL_SECONDS = 5U;
 static constexpr float BARO_MIN_HPA = 260.0f;
 static constexpr float BARO_MAX_HPA = 1260.0f;
-static constexpr uint8_t LPS25HB_RESET_TIMEOUT_MS = 10U;
+static constexpr uint8_t LPS25HB_RESET_TIMEOUT_MS = 20U;
+// The first conversion after leaving power-down is not available for ~143 ms at
+// 7 Hz. Only the initialisation path may block for it.
+static constexpr uint16_t LPS25HB_DATA_READY_TIMEOUT_MS = 250U;
+static constexpr uint8_t LPS25HB_DATA_READY_MASK = (uint8_t)(LPS25HB_PDA_MASK | LPS25HB_TDA_MASK);
+
+static inline void setBaroStage(uint8_t stage)
+{
+  currentStatus.baroStage = stage;
+}
 
 static bool waitForLPS25HBBitClear(LPS25HBSensor &sensor, uint8_t reg, uint8_t mask)
 {
@@ -55,31 +64,45 @@ static bool waitForLPS25HBBitClear(LPS25HBSensor &sensor, uint8_t reg, uint8_t m
 static bool resetI2CBaroSensor(LPS25HBSensor &sensor)
 {
   uint8_t deviceId = 0U;
-  if ((sensor.ReadID(&deviceId) != LPS25HB_STATUS_OK) || (deviceId != LPS25HB_WHO_AM_I_VAL))
+  if (sensor.ReadID(&deviceId) != LPS25HB_STATUS_OK)
   {
+    currentStatus.baroWhoAmI = 0U;
+    setBaroStage(BARO_STAGE_ID_READ_FAILED);
+    return false;
+  }
+  currentStatus.baroWhoAmI = deviceId;
+  if (deviceId != LPS25HB_WHO_AM_I_VAL)
+  {
+    setBaroStage(BARO_STAGE_ID_MISMATCH);
     return false;
   }
 
   // The sensor may stay powered through an MCU-only reset. Restore its power-on
   // configuration so AUTO_ZERO and a previously programmed reference cannot
   // turn an absolute pressure measurement into a differential one.
-  if ((sensor.WriteReg(LPS25HB_CTRL_REG2, LPS25HB_SW_RESET_MASK) != LPS25HB_STATUS_OK) ||
-      !waitForLPS25HBBitClear(sensor, LPS25HB_CTRL_REG2, LPS25HB_SW_RESET_MASK))
+  // SWRESET is only self-clearing when it is set together with BOOT (LPS25HB
+  // datasheet, CTRL_REG2). Writing it on its own leaves the bit set forever and
+  // makes every initialisation attempt time out.
+  static constexpr uint8_t resetMask = (uint8_t)(LPS25HB_SW_RESET_MASK | LPS25HB_BOOT_MASK);
+  if (sensor.WriteReg(LPS25HB_CTRL_REG2, resetMask) != LPS25HB_STATUS_OK)
   {
+    setBaroStage(BARO_STAGE_RESET_WRITE_FAILED);
     return false;
   }
-
-  // Reload the factory calibration after the software reset. BOOT takes about
-  // 2.2 ms according to the LPS25HB datasheet and self-clears when complete.
-  if ((sensor.WriteReg(LPS25HB_CTRL_REG2, LPS25HB_BOOT_MASK) != LPS25HB_STATUS_OK) ||
-      !waitForLPS25HBBitClear(sensor, LPS25HB_CTRL_REG2, LPS25HB_BOOT_MASK))
+  if (!waitForLPS25HBBitClear(sensor, LPS25HB_CTRL_REG2, resetMask))
   {
+    setBaroStage(BARO_STAGE_RESET_TIMEOUT);
     return false;
   }
 
   deviceId = 0U;
-  return (sensor.ReadID(&deviceId) == LPS25HB_STATUS_OK) &&
-         (deviceId == LPS25HB_WHO_AM_I_VAL);
+  if ((sensor.ReadID(&deviceId) != LPS25HB_STATUS_OK) || (deviceId != LPS25HB_WHO_AM_I_VAL))
+  {
+    currentStatus.baroWhoAmI = deviceId;
+    setBaroStage(BARO_STAGE_ID_LOST_AFTER_RESET);
+    return false;
+  }
+  return true;
 }
 
 static bool configureI2CBaroForAbsolutePressure(LPS25HBSensor &sensor)
@@ -94,18 +117,27 @@ static bool configureI2CBaroForAbsolutePressure(LPS25HBSensor &sensor)
 
   for (uint8_t reg : offsetRegisters)
   {
-    if (sensor.WriteReg(reg, 0U) != LPS25HB_STATUS_OK) { return false; }
+    if (sensor.WriteReg(reg, 0U) != LPS25HB_STATUS_OK)
+    {
+      setBaroStage(BARO_STAGE_OFFSET_WRITE_FAILED);
+      return false;
+    }
   }
 
   // begin() configures averaging and BDU, but the bundled ST driver also
   // enables DIFF_EN. Caponord needs absolute pressure and no pressure interrupt.
-  if (sensor.begin() != LPS25HB_STATUS_OK) { return false; }
+  if (sensor.begin() != LPS25HB_STATUS_OK)
+  {
+    setBaroStage(BARO_STAGE_BEGIN_FAILED);
+    return false;
+  }
 
   uint8_t ctrlReg1 = 0U;
   uint8_t ctrlReg2 = 0U;
   if ((sensor.ReadReg(LPS25HB_CTRL_REG1, &ctrlReg1) != LPS25HB_STATUS_OK) ||
       (sensor.ReadReg(LPS25HB_CTRL_REG2, &ctrlReg2) != LPS25HB_STATUS_OK))
   {
+    setBaroStage(BARO_STAGE_CTRL_READ_FAILED);
     return false;
   }
 
@@ -114,6 +146,7 @@ static bool configureI2CBaroForAbsolutePressure(LPS25HBSensor &sensor)
   if ((sensor.WriteReg(LPS25HB_CTRL_REG1, ctrlReg1) != LPS25HB_STATUS_OK) ||
       (sensor.WriteReg(LPS25HB_CTRL_REG2, ctrlReg2) != LPS25HB_STATUS_OK))
   {
+    setBaroStage(BARO_STAGE_CTRL_WRITE_FAILED);
     return false;
   }
 
@@ -123,28 +156,67 @@ static bool configureI2CBaroForAbsolutePressure(LPS25HBSensor &sensor)
   for (uint8_t reg : offsetRegisters)
   {
     uint8_t value = 0U;
-    if ((sensor.ReadReg(reg, &value) != LPS25HB_STATUS_OK) || (value != 0U)) { return false; }
+    if ((sensor.ReadReg(reg, &value) != LPS25HB_STATUS_OK) || (value != 0U))
+    {
+      setBaroStage(BARO_STAGE_OFFSET_VERIFY_FAILED);
+      return false;
+    }
   }
 
   ctrlReg1 = 0U;
   ctrlReg2 = 0U;
-  return (sensor.ReadReg(LPS25HB_CTRL_REG1, &ctrlReg1) == LPS25HB_STATUS_OK) &&
-         (sensor.ReadReg(LPS25HB_CTRL_REG2, &ctrlReg2) == LPS25HB_STATUS_OK) &&
-         ((ctrlReg1 & (LPS25HB_DIFF_EN_MASK | LPS25HB_RESET_AZ_MASK)) == 0U) &&
-         ((ctrlReg2 & LPS25HB_AUTO_ZERO_MASK) == 0U);
+  if ((sensor.ReadReg(LPS25HB_CTRL_REG1, &ctrlReg1) != LPS25HB_STATUS_OK) ||
+      (sensor.ReadReg(LPS25HB_CTRL_REG2, &ctrlReg2) != LPS25HB_STATUS_OK) ||
+      ((ctrlReg1 & (LPS25HB_DIFF_EN_MASK | LPS25HB_RESET_AZ_MASK)) != 0U) ||
+      ((ctrlReg2 & LPS25HB_AUTO_ZERO_MASK) != 0U))
+  {
+    setBaroStage(BARO_STAGE_CTRL_VERIFY_FAILED);
+    return false;
+  }
+  return true;
 }
 
-static bool initialiseI2CBaroSensor(LPS25HBSensor &sensor)
+// Blocking wait, only used while (re)initialising the sensor.
+static bool waitForI2CBaroData(LPS25HBSensor &sensor)
 {
-  if (resetI2CBaroSensor(sensor) &&
-      configureI2CBaroForAbsolutePressure(sensor) &&
-      (sensor.SetODR(7.0f) == LPS25HB_STATUS_OK) &&
-      (sensor.Enable() == LPS25HB_STATUS_OK))
+  for (uint16_t elapsedMs = 0U; elapsedMs < LPS25HB_DATA_READY_TIMEOUT_MS; elapsedMs++)
   {
-    LPS_Sensor = &sensor;
-    return true;
+    uint8_t status = 0U;
+    if ((sensor.ReadReg(LPS25HB_STATUS_REG, &status) == LPS25HB_STATUS_OK) &&
+        ((status & LPS25HB_DATA_READY_MASK) == LPS25HB_DATA_READY_MASK))
+    {
+      return true;
+    }
+    delay(1U);
   }
   return false;
+}
+
+static bool initialiseI2CBaroSensor(LPS25HBSensor &sensor, uint8_t address7Bit)
+{
+  if (!resetI2CBaroSensor(sensor)) { return false; }
+  if (!configureI2CBaroForAbsolutePressure(sensor)) { return false; }
+  if (sensor.SetODR(7.0f) != LPS25HB_STATUS_OK)
+  {
+    setBaroStage(BARO_STAGE_ODR_FAILED);
+    return false;
+  }
+  if (sensor.Enable() != LPS25HB_STATUS_OK)
+  {
+    setBaroStage(BARO_STAGE_ENABLE_FAILED);
+    return false;
+  }
+  // Without this the caller's first read lands before the first conversion has
+  // completed, returns an all-zero PRESS_OUT and is scored as a sensor failure.
+  if (!waitForI2CBaroData(sensor))
+  {
+    setBaroStage(BARO_STAGE_NO_DATA_READY);
+    return false;
+  }
+
+  LPS_Sensor = &sensor;
+  currentStatus.baroAddress = address7Bit;
+  return true;
 }
 
 static bool initialiseI2CBaro()
@@ -152,9 +224,26 @@ static bool initialiseI2CBaro()
   // Never retain a stale sensor pointer across a failed reinitialisation.
   LPS_Sensor = nullptr;
   baroFailCount = 0U;
-  baroSensorOk = initialiseI2CBaroSensor(LPS_SensorLow) ||
-                 initialiseI2CBaroSensor(LPS_SensorHigh);
+  currentStatus.baroAddress = 0U;
+  baroSensorOk =
+      initialiseI2CBaroSensor(LPS_SensorLow, static_cast<uint8_t>(LPS25HB_ADDRESS_LOW >> 1)) ||
+      initialiseI2CBaroSensor(LPS_SensorHigh, static_cast<uint8_t>(LPS25HB_ADDRESS_HIGH >> 1));
   return baroSensorOk;
+}
+
+// Adopt the normal Speeduino fallback from the very first failed I2C read. It
+// updates BARO only while the engine is stopped; retries of the digital sensor
+// remain active and take precedence again as soon as it recovers.
+static bool recordI2CBaroFailure()
+{
+  baroFailCount++;
+  if (baroFailCount >= BARO_MAX_FAILURES)
+  {
+    baroSensorOk = false;
+    baroRetryCountdown = 0U;
+  }
+  updateBaroFromMAPIfEngineStopped();
+  return false;
 }
 
 static bool updateI2CBaro()
@@ -177,38 +266,56 @@ static bool updateI2CBaro()
     }
   }
 
+  // Single non-blocking check: runLoop polls at 1Hz against a 7Hz ODR, so a
+  // sensor that is converting always has a sample waiting.
+  uint8_t statusReg = 0U;
+  if ((LPS_Sensor->ReadReg(LPS25HB_STATUS_REG, &statusReg) != LPS25HB_STATUS_OK) ||
+      ((statusReg & LPS25HB_DATA_READY_MASK) != LPS25HB_DATA_READY_MASK))
+  {
+    setBaroStage(BARO_STAGE_NO_DATA_READY);
+    return recordI2CBaroFailure();
+  }
+
   float pressure = 0.0f;
   float temperature = 0.0f;
-  if ((LPS_Sensor->GetPressure(&pressure) == LPS25HB_STATUS_OK) &&
-      (LPS_Sensor->GetTemperature(&temperature) == LPS25HB_STATUS_OK) &&
-      (pressure >= BARO_MIN_HPA) && (pressure <= BARO_MAX_HPA))
-  {
-    baroFailCount = 0U;
-    baroRetryCountdown = 0U;
-    const uint8_t pressureKpa = static_cast<uint8_t>(pressure / 10.0f);
-    currentStatus.fuelTemp = static_cast<int8_t>(temperature);
+  const bool pressureRead = (LPS_Sensor->GetPressure(&pressure) == LPS25HB_STATUS_OK);
+  // TEMP_OUT is always drained, even when the pressure transfer failed: BDU is
+  // set, so the output registers stay frozen until both samples are consumed.
+  const bool temperatureRead = (LPS_Sensor->GetTemperature(&temperature) == LPS25HB_STATUS_OK);
 
-    // Caponord has no analog barometer. Publish the already converted I2C
-    // pressure directly to the canonical runtime/TS value. Keep baroADC as a
-    // diagnostic mirror for compatibility only; it must never pass through
-    // the generic ADC calibration path (which historically changed ~100 kPa
-    // into values around 76 kPa).
-    currentStatus.baro = pressureKpa;
-    currentStatus.baroADC = pressureKpa;
-    return true;
+  const float reportedHpa = (pressureRead && (pressure > 0.0f)) ? min(pressure, 65535.0f) : 0.0f;
+  currentStatus.baroPressureHpa = static_cast<uint16_t>(reportedHpa);
+
+  if (!pressureRead)
+  {
+    setBaroStage(BARO_STAGE_PRESSURE_READ_FAILED);
+    return recordI2CBaroFailure();
+  }
+  if (!temperatureRead)
+  {
+    setBaroStage(BARO_STAGE_TEMPERATURE_READ_FAILED);
+    return recordI2CBaroFailure();
+  }
+  if ((pressure < BARO_MIN_HPA) || (pressure > BARO_MAX_HPA))
+  {
+    setBaroStage(BARO_STAGE_PRESSURE_OUT_OF_RANGE);
+    return recordI2CBaroFailure();
   }
 
-  baroFailCount++;
-  if (baroFailCount >= BARO_MAX_FAILURES)
-  {
-    baroSensorOk = false;
-    baroRetryCountdown = 0U;
-  }
-  // Adopt the normal Speeduino fallback from the very first failed I2C read.
-  // It updates BARO only while the engine is stopped; retries of the digital
-  // sensor remain active and take precedence again as soon as it recovers.
-  updateBaroFromMAPIfEngineStopped();
-  return false;
+  baroFailCount = 0U;
+  baroRetryCountdown = 0U;
+  setBaroStage(BARO_STAGE_RUNNING);
+  const uint8_t pressureKpa = static_cast<uint8_t>(pressure / 10.0f);
+  currentStatus.fuelTemp = static_cast<int8_t>(temperature);
+
+  // Caponord has no analog barometer. Publish the already converted I2C
+  // pressure directly to the canonical runtime/TS value. Keep baroADC as a
+  // diagnostic mirror for compatibility only; it must never pass through
+  // the generic ADC calibration path (which historically changed ~100 kPa
+  // into values around 76 kPa).
+  currentStatus.baro = pressureKpa;
+  currentStatus.baroADC = pressureKpa;
+  return true;
 }
 #endif
 

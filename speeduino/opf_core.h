@@ -32,6 +32,34 @@ void runLoop();
 #ifdef CAPONORD_BOARD
 static constexpr uint8_t CAPONORD_PIN_MAPPING = 60U;
 
+/**
+ * @brief Stage reached by the LPS25HB I2C barometer, published to TS as capoBaroStage.
+ *
+ * Anything other than BARO_STAGE_RUNNING identifies the exact gate that rejected
+ * the sensor, so a failure can be diagnosed from the TS gauge without a serial log.
+ */
+enum : uint8_t {
+  BARO_STAGE_UNINITIALISED           = 0U,  ///< updateI2CBaro() has never completed a cycle
+  BARO_STAGE_RUNNING                 = 1U,  ///< Last cycle published a valid pressure
+  BARO_STAGE_ID_READ_FAILED          = 2U,  ///< No I2C response: wiring, address or bus fault
+  BARO_STAGE_ID_MISMATCH             = 3U,  ///< Device answered but WHO_AM_I is not 0xBD
+  BARO_STAGE_RESET_WRITE_FAILED      = 4U,  ///< CTRL_REG2 reset write was not acknowledged
+  BARO_STAGE_RESET_TIMEOUT           = 5U,  ///< SWRESET|BOOT never self-cleared
+  BARO_STAGE_ID_LOST_AFTER_RESET     = 6U,  ///< Device stopped answering after the reset
+  BARO_STAGE_OFFSET_WRITE_FAILED     = 7U,  ///< REF_P/RPDS could not be zeroed
+  BARO_STAGE_BEGIN_FAILED            = 8U,  ///< ST driver begin() failed
+  BARO_STAGE_CTRL_READ_FAILED        = 9U,  ///< CTRL_REG1/2 read-modify-write read failed
+  BARO_STAGE_CTRL_WRITE_FAILED       = 10U, ///< CTRL_REG1/2 write failed
+  BARO_STAGE_OFFSET_VERIFY_FAILED    = 11U, ///< REF_P/RPDS did not read back as zero
+  BARO_STAGE_CTRL_VERIFY_FAILED      = 12U, ///< DIFF_EN/RESET_AZ/AUTO_ZERO still set
+  BARO_STAGE_ODR_FAILED              = 13U, ///< SetODR() failed
+  BARO_STAGE_ENABLE_FAILED           = 14U, ///< Enable() failed
+  BARO_STAGE_NO_DATA_READY           = 15U, ///< STATUS_REG never reported P_DA|T_DA
+  BARO_STAGE_PRESSURE_READ_FAILED    = 16U, ///< PRESS_OUT transfer failed
+  BARO_STAGE_TEMPERATURE_READ_FAILED = 17U, ///< TEMP_OUT transfer failed
+  BARO_STAGE_PRESSURE_OUT_OF_RANGE   = 18U, ///< Sample outside the physically plausible band
+};
+
 void caponordResetPins();
 void caponordSetPins();
 
