@@ -82,8 +82,8 @@ constexpr uint8_t PROTECT_CUT_FUEL    = 2U;
 constexpr uint8_t PROTECT_CUT_BOTH    = 3U;
 constexpr uint8_t PROTECT_IO_ERROR    = 7U;
 
-constexpr uint8_t AE_MODE_TPS         = 0U;
-constexpr uint8_t AE_MODE_MAP         = 1U;
+constexpr uint8_t AE_MODE_BLENDED      = 0U;
+constexpr uint8_t AE_MODE_WALL_WETTING = 1U;
 
 constexpr uint8_t AE_MODE_MULTIPLIER  = 0U;
 constexpr uint8_t AE_MODE_ADDER       = 1U;
@@ -173,7 +173,7 @@ struct config2 : public config_page_t {
   byte aseTaperTime;
   byte aeColdPct;  //AE cold clt modifier %
   byte aeColdTaperMin; //AE cold modifier, taper start temp (full modifier, was ASE in early versions)
-  byte aeMode : 2;      /**< Acceleration Enrichment mode. 0 = TPS, 1 = MAP. Values 2 and 3 reserved for potential future use (ie blended TPS / MAP) */
+  byte aeMode : 2;      /**< Acceleration Enrichment mode. 0 = TPS-MAP Blended, 1 = Wall Wetting. Values 2 and 3 reserved for potential future use (ie blended TPS / MAP) */
   byte unused2_3_3 : 1; //Previously used for battery correction type (open vs whole PW)
   byte SoftLimitMode : 1;
   byte useTachoSweep : 1;
@@ -327,12 +327,15 @@ struct config2 : public config_page_t {
   byte vssAuxCh : 4;
 
   byte decelAmount;
+  byte aeBlendPct; /**< Blend percentage between TPS and MAP AE. 0 = pure MAP, 100 = pure TPS */
+  byte wallWettingFuel; /**< Wall wetting fuel enrichment amount. Used only when aeMode == AE_MODE_WALL_WETTING */
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 
 constexpr uint8_t IDLEADVANCE_MODE_OFF      = 0U;
 constexpr uint8_t IDLEADVANCE_MODE_ADDED    = 1U;
 constexpr uint8_t IDLEADVANCE_MODE_SWITCHED = 2U;
+constexpr uint8_t IDLEADVANCE_MODE_CLOSED_LOOP = 3U;
 
 constexpr uint8_t IDLEADVANCE_ALGO_TPS      = 0U;
 constexpr uint8_t IDLEADVANCE_ALGO_CTPS     = 1U;
@@ -584,15 +587,15 @@ struct config9 : public config_page_t {
   byte caninputEndianess:1;
   //byte unused:2
   //...
-  byte unused10_68;
+  byte idleAdvClMinAdvance; //Closed-loop idle ignition minimum advance, offset by 40 degrees
   byte enable_candata_out : 1;
   byte canoutput_sel[8];
   uint16_t canoutput_param_group[8];
   uint8_t canoutput_param_start_byte[8];
   byte canoutput_param_num_bytes[8];
 
-  byte unused10_110;
-  byte unused10_111;
+  byte idleAdvClMaxAdvance; //Closed-loop idle ignition maximum advance, offset by 40 degrees
+  byte idleAdvClRpmBand;    //RPM error that requests full closed-loop authority, RPM/10
   byte egoMAPMax; //needs to be multiplied by 2 to get the proper value
   byte egoMAPMin; //needs to be multiplied by 2 to get the proper value
   byte speeduino_tsCanId:4;         //speeduino TS canid (0-14)
@@ -624,7 +627,7 @@ struct config9 : public config_page_t {
   byte coolantProtRPM[6];
   byte coolantProtTemp[6];
 
-  byte unused10_179;
+  byte idleAdvClRpmDotBand; //RPM/s rate that requests full closed-loop damping, RPM/s/10
   byte dfcoTaperTime;
   byte dfcoTaperFuel;
   byte dfcoTaperAdvance;

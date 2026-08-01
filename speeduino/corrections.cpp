@@ -54,6 +54,19 @@ static uint8_t knockLastRecoveryStep;
 //static int16_t knockWindowMax;//The current maximum crank angle for a knock pulse to be valid
 static uint8_t dfcoTaper;
 
+// Idle ignition control state. These are module scoped so initialiseCorrections()
+// can reset them and unit tests do not inherit state from a previous test.
+static bool idleAdvanceArmed;
+static bool idleAdvanceDelayStarted;
+static uint32_t idleAdvanceDelayStart;
+static bool idleAdvanceClCenterInitialized;
+TESTABLE_STATIC int16_t idleAdvanceClCenter;
+static int32_t idleAdvanceClIntegral;
+static bool idleAdvanceClOutputInitialized;
+static int8_t idleAdvanceClOutput;
+static bool idleAdvanceClLastUpdateValid;
+static uint32_t idleAdvanceClLastUpdate;
+
 TESTABLE_CONSTEXPR table2D_u8_u8_4 taeTable(&configPage4.taeBins, &configPage4.taeValues);
 TESTABLE_CONSTEXPR table2D_u8_u8_4 maeTable(&configPage4.maeBins, &configPage4.maeRates);
 TESTABLE_CONSTEXPR table2D_u8_u8_10 WUETable(&configPage4.wueBins, &configPage2.wueValues);
@@ -93,6 +106,7 @@ void initialiseCorrections(void)
   egoPID.SetMode(MANUAL);
   egoPID.SetMode(AUTOMATIC);
 
+  currentStatus.wallFuel = 0;
   currentStatus.flexIgnCorrection = 0;
   //Default value of no adjustment must be set to avoid randomness on first correction cycle after startup
   currentStatus.egoCorrection = NO_FUEL_CORRECTION; 
@@ -107,6 +121,16 @@ void initialiseCorrections(void)
   currentStatus.knockCount = 1;
   knockLastRecoveryStep = 0;
   knockStartTime = 0;
+  idleAdvanceArmed = false;
+  idleAdvanceDelayStarted = false;
+  idleAdvanceDelayStart = 0U;
+  idleAdvanceClCenterInitialized = false;
+  idleAdvanceClCenter = 0;
+  idleAdvanceClIntegral = 0L;
+  idleAdvanceClOutputInitialized = false;
+  idleAdvanceClOutput = 0;
+  idleAdvanceClLastUpdateValid = false;
+  idleAdvanceClLastUpdate = 0U;
   if(currentStatus.initialisationComplete == false)
   {
     currentStatus.battery10 = 125; //Set battery voltage to sensible value for dwell correction for "flying start" (else ignition gets spurious pulses after boot)
@@ -332,74 +356,6 @@ static inline void updateAeTimeout(void) {
   currentStatus.AEStartTime = micros();
 }
 
-using aeTimeoutExpiredCallback_t = void (*)(void);
-using shouldResetCurrentAeCallback_t = bool (*)(void);
-using shouldStartAeCallback_t = bool (*)(void);
-using computAeCallback_t = uint16_t (*)(void);
-
-// Implements the skeleton of the AE algorithm. Callers fill in specific steps via callbacks
-// (Template Method design pattern in C!)
-static inline uint16_t correctionAccel( const aeTimeoutExpiredCallback_t onTimeoutExpired, 
-                                        const shouldResetCurrentAeCallback_t shouldResetCurrentAe, 
-                                        const shouldStartAeCallback_t shouldStartAe, 
-                                        const computAeCallback_t computeAe) {
-  uint16_t accelCorrection = NO_FUEL_CORRECTION;
-
-  //First, check whether the accel. enrichment is already running
-  if (isAccelEnrichmentOn()) {
-    //If it is currently running, check whether it should still be running or whether it's reached it's end time
-    if (aeTimeoutExpired()) {
-      accelEnrichmentOff();
-      // Timed out, reset
-      onTimeoutExpired();
-    //Need to check whether the accel amount has increased from when AE was turned on
-    //If the accel amount HAS increased, we clear the current enrich phase and a new one will be started below
-     } else if(shouldResetCurrentAe()) {
-        accelEnrichmentOff();
-    } else {
-      //Enrichment still needs to keep running. 
-      //Simply return the current amount
-      accelCorrection = currentStatus.AEamount;
-    }
-  }
-
-  //Need to check this again as it may have been changed in the above section (Both ACC and DCC are off if this has changed)
-  if ((!isAccelEnrichmentOn()) && (shouldStartAe())) {
-    updateAeTimeout();
-    accelCorrection = computeAe();
-  } 
-
-  return accelCorrection;
-}
-
-static inline void mapOnTimeoutExpired(void) { 
-  currentStatus.mapDOT = 0; 
-}
-
-static inline bool mapShouldResetAe(void) {
-  return (uint16_t)abs(currentStatus.mapDOT) > aeActivatedReading; 
-}
-
-static inline bool mapShouldStartAe(void) { 
-  return (uint16_t)abs(currentStatus.mapDOT) > configPage2.maeThresh; 
-};
-
-static inline uint16_t mapComputeAe(void) {
-  uint16_t aeEnrichment = 0U;
-
-  if (currentStatus.mapDOT < 0) {
-    aeEnrichment = calcDeccelEnrichment();
-  } else if (currentStatus.mapDOT > 0) {
-    aeEnrichment = calcAccelEnrichment(table2D_getValue(&maeTable, MAP_DOT.toRaw(currentStatus.mapDOT)));
-  } else {
-    // Steady state - nothing to do.
-  }
-  
-  aeActivatedReading = (uint16_t)abs(currentStatus.mapDOT);
-  
-  return aeEnrichment;
-}
-
 static inline int16_t computeMapDot(void) {
   int16_t mapDOT = 0U;
   const int16_t mapChange = getMAPDelta();
@@ -424,47 +380,6 @@ static inline int16_t computeMapDot(void) {
   return mapDOT;
 }
 
-static inline uint16_t correctionAccelModeMap(void) {
-  uint16_t aeCorrection = currentStatus.AEamount;
-
-  // No point in updating faster than the MAP sensor is read
-  if (BIT_CHECK(currentStatus.LOOP_TIMER, MAP_READ_TIMER_BIT)) {
-    currentStatus.mapDOT = computeMapDot();
-
-    aeCorrection = correctionAccel(mapOnTimeoutExpired, mapShouldResetAe, mapShouldStartAe, mapComputeAe);
-  }
-
-  return aeCorrection;
-}
-
-static inline void tpsOnTimeoutExpired(void) { 
-  currentStatus.tpsDOT = 0; 
-}
-
-static inline bool tpsShouldResetAe(void) { 
-  return (uint16_t)abs(currentStatus.tpsDOT) > aeActivatedReading; 
-}
-
-static inline bool tpsShouldStartAe(void) { 
-  return (uint16_t)abs(currentStatus.tpsDOT) > configPage2.taeThresh;
-}
-
-static inline uint16_t tpsComputeAe(void) {
-  uint16_t aeEnrichment = 0U;
-
-  //Check if the TPS rate of change is negative or positive. Negative means deceleration.
-  if (currentStatus.tpsDOT < 0) {
-    aeEnrichment = calcDeccelEnrichment();
-  } else if (currentStatus.tpsDOT > 0) {
-    aeEnrichment = calcAccelEnrichment(table2D_getValue(&taeTable, TPS_DOT.toRaw(currentStatus.tpsDOT))); 
-  } else {
-    // Steady state - nothing to do.
-  }
-  aeActivatedReading = (uint16_t)abs(currentStatus.tpsDOT);
-
-  return aeEnrichment;
-}
-
 static inline int16_t computeTPSDOT(void) {
   //Get the TPS rate change
   const int16_t tpsChange = (int16_t)currentStatus.TPS - (int16_t)currentStatus.TPSlast;
@@ -481,24 +396,148 @@ static inline int16_t computeTPSDOT(void) {
   return tpsDOT;
 }
 
-static inline uint16_t correctionAccelModeTps(void) {
-  uint16_t aeCorrection = currentStatus.AEamount;
+static inline bool blendShouldResetAe(void) {
+  return ((uint16_t)abs(currentStatus.tpsDOT) > aeActivatedReading)
+      || ((uint16_t)abs(currentStatus.mapDOT) > aeActivatedReading);
+}
 
-  // No point in updating faster than the TPS is read
-  if (BIT_CHECK(currentStatus.LOOP_TIMER, TPS_READ_TIMER_BIT)) {
-    currentStatus.tpsDOT = computeTPSDOT();
+static inline bool blendShouldStartAe(void) {
+  return ((uint16_t)abs(currentStatus.mapDOT) > configPage2.maeThresh)
+      || ((uint16_t)abs(currentStatus.tpsDOT) > configPage2.taeThresh);
+}
 
-    aeCorrection = correctionAccel(tpsOnTimeoutExpired, tpsShouldResetAe, tpsShouldStartAe, tpsComputeAe);
+static inline uint16_t blendComputeAe(void) {
+  uint16_t aeEnrichment = 0;
+
+  if ( (currentStatus.tpsDOT < 0) || (currentStatus.mapDOT < 0) ) {
+    aeEnrichment = calcDeccelEnrichment();
+  } else if ( (currentStatus.tpsDOT > 0) || (currentStatus.mapDOT > 0) ) {
+    uint16_t tpsAe = 0;
+    uint16_t mapAe = 0;
+
+    if (currentStatus.tpsDOT > 0) {
+      tpsAe = table2D_getValue(&taeTable, TPS_DOT.toRaw(currentStatus.tpsDOT));
+    }
+    if (currentStatus.mapDOT > 0) {
+      mapAe = table2D_getValue(&maeTable, MAP_DOT.toRaw(currentStatus.mapDOT));
+    }
+
+    uint8_t blendedAe = (((uint32_t)tpsAe * configPage2.aeBlendPct)
+                        + ((uint32_t)mapAe * (100U - configPage2.aeBlendPct)))
+                        / 100U;
+    aeEnrichment = calcAccelEnrichment(blendedAe);
   }
 
-  return aeCorrection;
+  aeActivatedReading = max((uint16_t)abs(currentStatus.tpsDOT), (uint16_t)abs(currentStatus.mapDOT));
+  return aeEnrichment;
+}
+
+
+static inline uint16_t correctionAccelBlended(void) {
+    uint16_t aeCorrection = NO_FUEL_CORRECTION;
+
+    if (isAccelEnrichmentOn()) {
+        if (aeTimeoutExpired()) {
+            accelEnrichmentOff();
+            currentStatus.mapDOT = 0;
+            currentStatus.tpsDOT = 0;
+        } else if (blendShouldResetAe()) {
+            accelEnrichmentOff();
+        } else {
+            aeCorrection = currentStatus.AEamount;
+        }
+    }
+
+    if ((!isAccelEnrichmentOn()) && (blendShouldStartAe())) {
+        updateAeTimeout();
+        aeCorrection = blendComputeAe();
+    }
+
+    return aeCorrection;
+}
+
+static inline uint16_t correctionAccelWallWetting(void)
+{
+  // Look up wall wetting coefficients from 3D tables (RPM x Load)
+  // addCoeff (X) = fraction of injected fuel that deposits on wall film
+  // removeCoeff (Y) = fraction of wall fuel that evaporates per update
+  // Both stored as 0-255 representing 0-100%
+  uint8_t addCoeff = get3DTableValue(&wallWettingAddTable, currentStatus.fuelLoad, currentStatus.RPM);
+  uint8_t removeCoeff = get3DTableValue(&wallWettingRemoveTable, currentStatus.fuelLoad, currentStatus.RPM);
+
+  uint16_t fuelDemand = currentStatus.fuelLoad;
+
+  // Reset flags initially
+  currentStatus.isAcceleratingTPS = false;
+  currentStatus.isDeceleratingTPS = false;
+
+  uint16_t correction = NO_FUEL_CORRECTION;
+
+  // X-Tau wall wetting model:
+  //   addedToWall      = fuelDemand * X/256
+  //   removedFromWall  = wallFuel * Y/256
+  //   netWallChange    = addedToWall - removedFromWall
+  //   fuelToEngine     = fuelDemand - netWallChange
+  //   To reach fuelDemand, we need extra fuel = netWallChange / (1 - X/256)
+  //   extraPct         = (fuelDemand*X - wallFuel*Y) * 100 / (fuelDemand*(256-X))
+
+  if (fuelDemand > 0)
+  {
+    // Numerator: fuelDemand*X/256 - wallFuel*Y/256 (scaled up by 256 for precision)
+    //           = fuelDemand*X - wallFuel*Y
+    int32_t netWallDiff = (int32_t)((uint32_t)fuelDemand * addCoeff)
+                        - (int32_t)((uint32_t)currentStatus.wallFuel * removeCoeff);
+
+    if (netWallDiff > 0)
+    {
+      // More fuel depositing on walls than coming off => need enrichment
+      uint32_t denominator = (uint32_t)fuelDemand * (256U - addCoeff);
+      if (denominator > 0)
+      {
+        uint8_t extraPct = (uint8_t)min(((uint32_t)netWallDiff * ONE_HUNDRED_PCT) / denominator, (uint32_t)UINT8_MAX);
+        uint8_t taperedExtra = applyAeRpmTaper(extraPct);
+        correction = BASELINE_FUEL_CORRECTION + applyAeCoolantTaper(taperedExtra);
+        currentStatus.isAcceleratingTPS = true;
+      }
+    }
+    else if (netWallDiff < 0)
+    {
+      // More fuel coming off walls than depositing => deceleration enrichment
+      correction = configPage2.decelAmount;
+      currentStatus.isDeceleratingTPS = true;
+    }
+    // netWallDiff == 0 => steady state, no correction
+  }
+
+  // Update wall fuel state at a controlled rate (30Hz)
+  if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_30HZ))
+  {
+    uint16_t addedToWall = ((uint32_t)fuelDemand * addCoeff) >> 8;
+    uint16_t removedFromWall = ((uint32_t)currentStatus.wallFuel * removeCoeff) >> 8;
+    if (currentStatus.wallFuel + addedToWall > removedFromWall)
+    {
+      currentStatus.wallFuel = currentStatus.wallFuel + addedToWall - removedFromWall;
+    }
+    else
+    {
+      currentStatus.wallFuel = 0;
+    }
+  }
+
+  return correction;
 }
 
 /** Acceleration enrichment correction calculation.
  * 
- * Calculates the % change of the throttle over time (%/second) and performs a lookup based on this
+ * Dispatches between blended AE and wall wetting AE based on @ref config2.aeMode.
+ * 
+ * Blended mode computes both MAP DOT and TPS DOT, then blends them by the configured blend percentage (@ref config2.aeBlendPct).
+ * 0% = pure MAP AE, 100% = pure TPS AE.
+ * Wall wetting mode uses the X-Tau fuel film model with two 3D tables (RPM x Load):
+ * - "added to wall" coefficient (X): fraction of injected fuel that deposits on intake walls
+ * - "removed from wall" coefficient (Y): fraction of wall fuel that evaporates per update
+ * A state variable tracks the current fuel mass on the walls, updated at 30Hz.
  * Coolant-based modifier is applied on the top of this.
- * When the enrichment is turned on, it runs at that amount for a fixed period of time (taeTime)
  * 
  * @return uint16_t The Acceleration enrichment modifier as a %. 100% = No modification.
  * 
@@ -507,13 +546,21 @@ static inline uint16_t correctionAccelModeTps(void) {
  */
 TESTABLE_INLINE_STATIC uint16_t correctionAccel(void)
 {
-  if(AE_MODE_MAP==configPage2.aeMode) {
-    return correctionAccelModeMap();
+  if (BIT_CHECK(currentStatus.LOOP_TIMER, MAP_READ_TIMER_BIT)) {
+    currentStatus.mapDOT = computeMapDot();
   }
-  if(AE_MODE_TPS==configPage2.aeMode) {
-    return correctionAccelModeTps();
+  if (BIT_CHECK(currentStatus.LOOP_TIMER, TPS_READ_TIMER_BIT)) {
+    currentStatus.tpsDOT = computeTPSDOT();
   }
-  return NO_FUEL_CORRECTION;
+    
+  switch (configPage2.aeMode) {
+    case AE_MODE_BLENDED:
+      return correctionAccelBlended();
+    case AE_MODE_WALL_WETTING:
+      return correctionAccelWallWetting();
+    default:
+        return NO_FUEL_CORRECTION;
+  }
 }
 
 // ============================= Flood Clear =============================
@@ -957,18 +1004,27 @@ TESTABLE_INLINE_STATIC int8_t correctionIATretard(int8_t advance)
 /** Ignition Idle advance correction.
  */
 static constexpr uint16_t IGN_IDLE_THRESHOLD = 200U; //RPM threshold (below CL idle target) for when ign based idle control will engage
+static constexpr int16_t IDLE_ADVANCE_RPM_OFFSET = 500;
+static constexpr int16_t IDLE_ADVANCE_RPM_ERROR_DEADBAND = 20;
+static constexpr int16_t IDLE_ADVANCE_RPM_DOT_DEADBAND = 50;
+static constexpr int16_t IDLE_ADVANCE_CL_SCORE_MAX = 100;
+static constexpr int16_t IDLE_ADVANCE_CL_SLEW_PER_TICK = 3; //Degrees per 100ms
+static constexpr int16_t IDLE_ADVANCE_CL_ADAPT_TICKS_PER_DEGREE = 20; //2 seconds at full configured error
 
 static inline uint8_t computeIdleAdvanceRpmDelta(void) {
-  static constexpr int16_t DELTA_HYSTERISIS = (int16_t)RPM_MEDIUM.toRaw(500);
-  int16_t idleRPMdelta = ((int16_t)currentStatus.CLIdleTarget - (int16_t)RPM_MEDIUM.toRaw(currentStatus.RPM) ) + DELTA_HYSTERISIS;
-  // Limit idle rpm delta between 0rpm - 1000rpm
-  static constexpr int16_t DELTA_RPM_MAX = (int16_t)RPM_MEDIUM.toRaw(1000);
-  return (uint8_t)constrain(idleRPMdelta, 0, DELTA_RPM_MAX);
+  const int32_t targetRpm = (int32_t)RPM_MEDIUM.toUser(currentStatus.CLIdleTarget);
+  const int32_t rpmError = targetRpm - (int32_t)currentStatus.RPM;
+  // The table uses an unsigned, +500 RPM representation of the signed
+  // target-current error. Calculate in real RPM first so values above the
+  // 2550 RPM limit of RPM_MEDIUM::toRaw() cannot wrap.
+  const int32_t shiftedRpmError = (rpmError / 10L) + (IDLE_ADVANCE_RPM_OFFSET / 10);
+  return (uint8_t)clamp(shiftedRpmError, (int32_t)0L, (int32_t)100L);
 }
 
 static inline int8_t applyIdleAdvanceAdjust(int8_t advance, int8_t adjustment) {
   if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_ADDED) { 
-    return (advance + adjustment); 
+    const int16_t adjustedAdvance = (int16_t)advance + (int16_t)adjustment;
+    return (int8_t)clamp(adjustedAdvance, (int16_t)INT8_MIN, (int16_t)INT8_MAX);
   } else if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_SWITCHED) { 
     return adjustment;
   } else {
@@ -978,14 +1034,28 @@ static inline int8_t applyIdleAdvanceAdjust(int8_t advance, int8_t adjustment) {
 }
 
 static inline bool isIdleAdvanceOn(void) {
-  return (configPage2.idleAdvEnabled != IDLEADVANCE_MODE_OFF) 
-      && (runSecsX10 >= TIME_TWENTY_MILLIS.toUser( configPage2.idleAdvDelay ))
-      && currentStatus.rotationStatus==EngineRotationStatus::Running
-      /* When Idle advance is the only idle speed control mechanism, activate as soon as not cranking. 
-      When some other mechanism is also present, wait until the engine is no more than 200 RPM below idle target speed on first time
-      */
-      && ((configPage6.iacAlgorithm == IAC_ALGORITHM_NONE) 
-        || (currentStatus.RPM > (RPM_MEDIUM.toUser( currentStatus.CLIdleTarget) - IGN_IDLE_THRESHOLD)));
+  if((configPage2.idleAdvEnabled == IDLEADVANCE_MODE_OFF)
+  || (currentStatus.rotationStatus != EngineRotationStatus::Running)) {
+    idleAdvanceArmed = false;
+    return false;
+  }
+
+  /* When idle advance is the only idle speed control mechanism, arm it as
+   * soon as cranking ends. With another IAC mechanism, wait until the engine
+   * first reaches no more than 200 RPM below target. Once armed it must stay
+   * armed until the engine stops; otherwise a large RPM dip disables the
+   * very correction that should recover it.
+   */
+  if(!idleAdvanceArmed) {
+    const uint16_t targetRpm = RPM_MEDIUM.toUser(currentStatus.CLIdleTarget);
+    const bool reachedStartThreshold = (targetRpm <= IGN_IDLE_THRESHOLD)
+        || (currentStatus.RPM > (targetRpm - IGN_IDLE_THRESHOLD));
+    idleAdvanceArmed = (configPage6.iacAlgorithm == IAC_ALGORITHM_NONE)
+        || reachedStartThreshold;
+  }
+
+  return idleAdvanceArmed
+      && (runSecsX10 >= TIME_TWENTY_MILLIS.toUser(configPage2.idleAdvDelay));
 }
 
 static inline bool isIdleAdvanceOperational(void) {
@@ -995,28 +1065,179 @@ static inline bool isIdleAdvanceOperational(void) {
         || ((configPage2.idleAdvAlgorithm == IDLEADVANCE_ALGO_CTPS) && (currentStatus.CTPSActive == true)));// closed throttle position sensor (CTPS) based idle state
 }
 
-TESTABLE_INLINE_STATIC int8_t correctionIdleAdvance(int8_t advance)
-{
-  //Adjust the advance based on idle target rpm.
-  if (isIdleAdvanceOn())
-  {
-    static uint8_t idleAdvDelayCount;
-    if(isIdleAdvanceOperational())
-    {
-      if( idleAdvDelayCount < configPage9.idleAdvStartDelay )
-      {
-        if( BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ) ) { ++idleAdvDelayCount; }
-      }
-      else
-      {
-        int16_t advanceIdleAdjust = IGNITION_ADVANCE_SMALL.toUser(table2D_getValue(&idleAdvanceTable, computeIdleAdvanceRpmDelta()));
-        advance = applyIdleAdvanceAdjust(advance, (int8_t)advanceIdleAdjust); 
-      }
-    }
-    else { idleAdvDelayCount = 0; }
+static inline void getIdleAdvanceClosedLoopRange(int16_t &minimumAdvance, int16_t &maximumAdvance) {
+  minimumAdvance = clamp(IGNITION_ADVANCE_LARGE.toUser(configPage9.idleAdvClMinAdvance),
+                         (int16_t)INT8_MIN, (int16_t)INT8_MAX);
+  maximumAdvance = clamp(IGNITION_ADVANCE_LARGE.toUser(configPage9.idleAdvClMaxAdvance),
+                         (int16_t)INT8_MIN, (int16_t)INT8_MAX);
+  if(minimumAdvance > maximumAdvance) {
+    const int16_t temporary = minimumAdvance;
+    minimumAdvance = maximumAdvance;
+    maximumAdvance = temporary;
+  }
+}
+
+static inline int16_t normalizeIdleAdvanceFuzzyInput(int32_t value, int16_t deadband, uint16_t fullScale) {
+  const int32_t magnitude = (value < 0L) ? -value : value;
+  if(magnitude <= deadband) { return 0; }
+
+  const int32_t usableScale = (fullScale > (uint16_t)deadband)
+      ? (int32_t)fullScale - deadband
+      : 1L;
+  const int32_t activeMagnitude = clamp(magnitude - deadband, 0L, usableScale);
+  const int16_t normalized = (int16_t)((activeMagnitude * IDLE_ADVANCE_CL_SCORE_MAX) / usableScale);
+  return (value < 0L) ? -normalized : normalized;
+}
+
+static inline int32_t getIdleAdvanceRpmError(void) {
+  return (int32_t)RPM_MEDIUM.toUser(currentStatus.CLIdleTarget) - (int32_t)currentStatus.RPM;
+}
+
+/** Compute the closed-loop fuzzy-PD target before output slew limiting. */
+TESTABLE_INLINE_STATIC int8_t computeIdleAdvanceClosedLoopTarget(int16_t centerAdvance) {
+  int16_t minimumAdvance;
+  int16_t maximumAdvance;
+  getIdleAdvanceClosedLoopRange(minimumAdvance, maximumAdvance);
+  centerAdvance = clamp(centerAdvance, minimumAdvance, maximumAdvance);
+
+  const uint16_t rpmBand = max((uint16_t)RPM_MEDIUM.toUser(configPage9.idleAdvClRpmBand), (uint16_t)1U);
+  const uint16_t rpmDotBand = max((uint16_t)RPM_MEDIUM.toUser(configPage9.idleAdvClRpmDotBand), (uint16_t)1U);
+  const int16_t errorScore = normalizeIdleAdvanceFuzzyInput(
+      getIdleAdvanceRpmError(), IDLE_ADVANCE_RPM_ERROR_DEADBAND, rpmBand);
+
+  int32_t rpmDot;
+  ATOMIC() { rpmDot = (int32_t)currentStatus.rpmDOT; }
+  const int16_t trendScore = normalizeIdleAdvanceFuzzyInput(
+      rpmDot, IDLE_ADVANCE_RPM_DOT_DEADBAND, rpmDotBand);
+
+  // Positive error (RPM low) adds advance. Positive rpmDOT (RPM rising)
+  // removes advance, providing damping before the target is crossed.
+  const int16_t controlScore = clamp((int16_t)(errorScore - trendScore),
+                                     (int16_t)-IDLE_ADVANCE_CL_SCORE_MAX,
+                                     (int16_t)IDLE_ADVANCE_CL_SCORE_MAX);
+  int32_t desiredAdvance = centerAdvance;
+  if(controlScore >= 0) {
+    desiredAdvance += ((int32_t)controlScore * (maximumAdvance - centerAdvance)) / IDLE_ADVANCE_CL_SCORE_MAX;
+  } else {
+    desiredAdvance += ((int32_t)controlScore * (centerAdvance - minimumAdvance)) / IDLE_ADVANCE_CL_SCORE_MAX;
+  }
+  return (int8_t)clamp(desiredAdvance, (int32_t)minimumAdvance, (int32_t)maximumAdvance);
+}
+
+static inline void resetIdleAdvanceClosedLoop(bool resetLearnedCenter) {
+  idleAdvanceClIntegral = 0L;
+  idleAdvanceClOutputInitialized = false;
+  idleAdvanceClLastUpdateValid = false;
+  if(resetLearnedCenter) { idleAdvanceClCenterInitialized = false; }
+}
+
+static inline void resetIdleAdvanceEngagement(bool resetLearnedCenter) {
+  idleAdvanceDelayStarted = false;
+  resetIdleAdvanceClosedLoop(resetLearnedCenter);
+}
+
+static inline bool hasIdleAdvanceStartDelayElapsed(void) {
+  if(configPage9.idleAdvStartDelay == 0U) { return true; }
+  if(!idleAdvanceDelayStarted) {
+    idleAdvanceDelayStart = runSecsX10;
+    idleAdvanceDelayStarted = true;
+    return false;
+  }
+  return hasIntervalElapsed(runSecsX10, idleAdvanceDelayStart, configPage9.idleAdvStartDelay);
+}
+
+static inline void adaptIdleAdvanceClosedLoopCenter(int32_t rpmError, int8_t desiredAdvance,
+                                                     int16_t minimumAdvance, int16_t maximumAdvance) {
+  const uint16_t rpmBand = max((uint16_t)RPM_MEDIUM.toUser(configPage9.idleAdvClRpmBand), (uint16_t)1U);
+  if((rpmError <= IDLE_ADVANCE_RPM_ERROR_DEADBAND)
+  && (rpmError >= -IDLE_ADVANCE_RPM_ERROR_DEADBAND)) {
+    idleAdvanceClIntegral = 0L;
+    return;
   }
 
-  return advance;
+  // Anti-windup: do not move the learned center farther toward a limit when
+  // the requested output already has no remaining authority in that direction.
+  if(((rpmError > 0L) && (desiredAdvance >= maximumAdvance))
+  || ((rpmError < 0L) && (desiredAdvance <= minimumAdvance))) {
+    idleAdvanceClIntegral = 0L;
+    return;
+  }
+
+  const int32_t limitedError = clamp(rpmError, -(int32_t)rpmBand, (int32_t)rpmBand);
+  idleAdvanceClIntegral += limitedError;
+  const int32_t stepThreshold = (int32_t)rpmBand * IDLE_ADVANCE_CL_ADAPT_TICKS_PER_DEGREE;
+  if(idleAdvanceClIntegral >= stepThreshold) {
+    ++idleAdvanceClCenter;
+    idleAdvanceClIntegral -= stepThreshold;
+  } else if(idleAdvanceClIntegral <= -stepThreshold) {
+    --idleAdvanceClCenter;
+    idleAdvanceClIntegral += stepThreshold;
+  }
+  idleAdvanceClCenter = clamp(idleAdvanceClCenter, minimumAdvance, maximumAdvance);
+}
+
+static inline int8_t updateIdleAdvanceClosedLoop(int8_t currentAdvance) {
+  int16_t minimumAdvance;
+  int16_t maximumAdvance;
+  getIdleAdvanceClosedLoopRange(minimumAdvance, maximumAdvance);
+
+  if(!idleAdvanceClCenterInitialized) {
+    idleAdvanceClCenter = (minimumAdvance + maximumAdvance) / 2;
+    idleAdvanceClCenterInitialized = true;
+  }
+  idleAdvanceClCenter = clamp(idleAdvanceClCenter, minimumAdvance, maximumAdvance);
+
+  if(!idleAdvanceClOutputInitialized) {
+    idleAdvanceClOutput = (int8_t)clamp((int16_t)currentAdvance, minimumAdvance, maximumAdvance);
+    idleAdvanceClOutputInitialized = true;
+  }
+
+  // runSecsX10 identifies the 10Hz tick. This prevents a second call to
+  // correctionsIgn() for a switched secondary spark table from updating the
+  // controller or its delay twice during the same main-loop iteration.
+  if(BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ)
+  && ((!idleAdvanceClLastUpdateValid) || (idleAdvanceClLastUpdate != runSecsX10))) {
+    const int8_t desiredAdvance = computeIdleAdvanceClosedLoopTarget(idleAdvanceClCenter);
+    adaptIdleAdvanceClosedLoopCenter(getIdleAdvanceRpmError(), desiredAdvance,
+                                     minimumAdvance, maximumAdvance);
+    const int16_t outputDelta = (int16_t)desiredAdvance - (int16_t)idleAdvanceClOutput;
+    const int16_t limitedDelta = clamp(outputDelta,
+                                       (int16_t)-IDLE_ADVANCE_CL_SLEW_PER_TICK,
+                                       (int16_t)IDLE_ADVANCE_CL_SLEW_PER_TICK);
+    idleAdvanceClOutput = (int8_t)((int16_t)idleAdvanceClOutput + limitedDelta);
+    idleAdvanceClLastUpdate = runSecsX10;
+    idleAdvanceClLastUpdateValid = true;
+  }
+
+  return idleAdvanceClOutput;
+}
+
+TESTABLE_INLINE_STATIC int8_t correctionIdleAdvance(int8_t advance)
+{
+  if(!isIdleAdvanceOn()) {
+    const bool resetLearnedCenter = (configPage2.idleAdvEnabled == IDLEADVANCE_MODE_OFF)
+        || (currentStatus.rotationStatus != EngineRotationStatus::Running);
+    resetIdleAdvanceEngagement(resetLearnedCenter);
+    return advance;
+  }
+
+  if(!isIdleAdvanceOperational()) {
+    // Preserve the learned center during a short throttle opening or gear
+    // change, but require the configured start delay again on re-entry.
+    resetIdleAdvanceEngagement(false);
+    return advance;
+  }
+
+  if(!hasIdleAdvanceStartDelayElapsed()) { return advance; }
+
+  if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_CLOSED_LOOP) {
+    return updateIdleAdvanceClosedLoop(advance);
+  }
+
+  resetIdleAdvanceClosedLoop(true);
+  const int16_t advanceIdleAdjust = IGNITION_ADVANCE_SMALL.toUser(
+      table2D_getValue(&idleAdvanceTable, computeIdleAdvanceRpmDelta()));
+  return applyIdleAdvanceAdjust(advance, (int8_t)advanceIdleAdjust);
 }
 
 /** Ignition soft revlimit correction.

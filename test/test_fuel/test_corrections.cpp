@@ -957,6 +957,8 @@ static void test_corrections_dfco()
 static void reset_AE(void) {
   currentStatus.isAcceleratingTPS = false;
   currentStatus.isDeceleratingTPS = false;
+  currentStatus.tpsDOT = 0;
+  currentStatus.mapDOT = 0;
 }
 
 static void setup_AE(void) {
@@ -986,7 +988,7 @@ static void setup_TAE()
 
   currentStatus.LOOP_TIMER = 0;
   BIT_SET(currentStatus.LOOP_TIMER, TPS_READ_TIMER_BIT);
-  configPage2.aeMode = AE_MODE_TPS; //Set AE to TPS
+  configPage2.aeBlendPct = 100; //Pure TPS blend
 
   TEST_DATA_P uint8_t bins[] = { 0, 8, 22, 97 };
   TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
@@ -997,6 +999,9 @@ static void setup_TAE()
 }
 
 extern uint16_t correctionAccel(void);
+
+// Mirrors the file-local constant in corrections.cpp
+static constexpr uint16_t NO_FUEL_CORRECTION = ONE_HUNDRED_PCT;
 
 static void disable_AE_taper(void) {
   //Disable the taper
@@ -1202,7 +1207,7 @@ static void setup_MAE(void)
 {
   setup_AE();
 
-  configPage2.aeMode = AE_MODE_MAP; //Set AE to TPS
+  configPage2.aeBlendPct = 0; //Pure MAP blend
   currentStatus.LOOP_TIMER = 0;
   BIT_SET(currentStatus.LOOP_TIMER, MAP_READ_TIMER_BIT);
 
@@ -1676,7 +1681,7 @@ static void test_corrections_correctionsFuel_clip_limit(void) {
   configPage2.aseTaperTime = 0U;
   configPage2.taeThresh = UINT8_MAX;
   configPage2.taeMinChange = UINT8_MAX;
-  configPage2.aeMode = AE_MODE_TPS; //Set AE to TPS
+  configPage2.aeBlendPct = 100;
   currentStatus.coolant = 212;
   currentStatus.runSecs = 255; 
   currentStatus.battery10 = 100;  
@@ -1714,6 +1719,248 @@ static void test_corrections_correctionsFuel_clip_limit(void) {
   TEST_ASSERT_EQUAL(1500U, correctionsFuel());
 }
 
+static void setup_BLENDED_AE(void)
+{
+  setup_AE();
+
+  // Enable both TPS and MAP read timers
+  currentStatus.LOOP_TIMER = 0;
+  BIT_SET(currentStatus.LOOP_TIMER, TPS_READ_TIMER_BIT);
+  BIT_SET(currentStatus.LOOP_TIMER, MAP_READ_TIMER_BIT);
+
+  // Set up TAE table
+  {
+    TEST_DATA_P uint8_t bins[] = { 0, 8, 22, 97 };
+    TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
+    populate_2dtable_P(&taeTable, values, bins);
+  }
+
+  // Set up MAE table
+  {
+    TEST_DATA_P uint8_t bins[] = { 0, 15, 19, 50 };
+    TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
+    populate_2dtable_P(&maeTable, values, bins);
+  }
+
+  configPage2.taeThresh = 0;
+  configPage2.taeMinChange = 0;
+  configPage2.maeThresh = 0;
+  configPage2.maeMinChange = 0;
+
+  // Disable RPM taper (RPM below taper start)
+  currentStatus.setRpm(2000U);
+  configPage2.aeTaperMin = 50; //5000 RPM
+  configPage2.aeTaperMax = 60; //6000 RPM
+
+  // Coolant already above cold taper range (set in setup_AE)
+}
+
+static void test_corrections_BLENDED_AE_25pct(void)
+{
+  setup_BLENDED_AE();
+  configPage2.aeBlendPct = 25;
+
+  // TPS: small change → tpsDOT = 15, toRaw = 1, tpsAe = 74
+  currentStatus.TPSlast = 50;
+  currentStatus.TPS = 51;
+
+  // MAP: large change over moderate time → mapDOT = 1000, toRaw = 100, mapAe = 136
+  getMapLast().timeDeltaReadings = 10000UL;
+  getMapLast().lastMAPValue = 0;
+  currentStatus.MAP = 10;
+
+  uint16_t accelValue = correctionAccel();
+
+  // blendedAe = (74*25 + 136*75) / 100 = 120
+  // accel = BASELINE_FUEL_CORRECTION + blendedAe = 220
+  TEST_ASSERT_EQUAL(220, accelValue);
+  TEST_ASSERT_TRUE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_BLENDED_AE_50pct(void)
+{
+  setup_BLENDED_AE();
+  configPage2.aeBlendPct = 50;
+
+  currentStatus.TPSlast = 50;
+  currentStatus.TPS = 51;
+  getMapLast().timeDeltaReadings = 10000UL;
+  getMapLast().lastMAPValue = 0;
+  currentStatus.MAP = 10;
+
+  uint16_t accelValue = correctionAccel();
+
+  // blendedAe = (74*50 + 136*50) / 100 = 105
+  // accel = 100 + 105 = 205
+  TEST_ASSERT_EQUAL(205, accelValue);
+  TEST_ASSERT_TRUE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_BLENDED_AE_75pct(void)
+{
+  setup_BLENDED_AE();
+  configPage2.aeBlendPct = 75;
+
+  currentStatus.TPSlast = 50;
+  currentStatus.TPS = 51;
+  getMapLast().timeDeltaReadings = 10000UL;
+  getMapLast().lastMAPValue = 0;
+  currentStatus.MAP = 10;
+
+  uint16_t accelValue = correctionAccel();
+
+  // blendedAe = (74*75 + 136*25) / 100 = 89
+  // accel = 100 + 89 = 189
+  TEST_ASSERT_EQUAL(189, accelValue);
+  TEST_ASSERT_TRUE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_BLENDED_AE(void)
+{
+  RUN_TEST_P(test_corrections_BLENDED_AE_25pct);
+  RUN_TEST_P(test_corrections_BLENDED_AE_50pct);
+  RUN_TEST_P(test_corrections_BLENDED_AE_75pct);
+}
+
+// ============================= Wall wetting AE =============================
+
+static void setup_wall_wetting(void)
+{
+  initialiseCorrections();
+
+  configPage2.aeMode = AE_MODE_WALL_WETTING;
+
+  // Disable RPM taper: keep RPM below taperMin
+  currentStatus.setRpm(3000U);
+  configPage2.aeTaperMin = 50; //5000 RPM
+  configPage2.aeTaperMax = 60; //6000 RPM
+
+  // Disable coolant taper
+  configPage2.aeColdPct = 100; // = NO_FUEL_CORRECTION -> disabled
+  configPage2.aeColdTaperMax = 60;
+  configPage2.aeColdTaperMin = 0;
+  currentStatus.coolant = temperatureRemoveOffset(configPage2.aeColdTaperMax) + 1;
+
+  // Set up linear axes so RPM=3000 and fuelLoad=30 fall on a bin
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    wallWettingAddTable.axisX.axis[i] = i * 10 + 1;   // 1, 11, 21, 31, 41, 51, 61, 71 (x100 RPM)
+    wallWettingAddTable.axisY.axis[i] = i * 10 + 1;   // 1, 11, 21, 31, 41, 51, 61, 71 (Load)
+    wallWettingRemoveTable.axisX.axis[i] = i * 10 + 1;
+    wallWettingRemoveTable.axisY.axis[i] = i * 10 + 1;
+  }
+  invalidate_cache(&wallWettingAddTable.get_value_cache);
+  invalidate_cache(&wallWettingRemoveTable.get_value_cache);
+
+  currentStatus.fuelLoad = 30; // fuel demand
+
+  // TPS/MAP state to avoid computeTPSDOT/computeMapDot surprises
+  currentStatus.TPS = 0;
+  currentStatus.TPSlast = 0;
+  currentStatus.MAP = 50;
+  configPage2.taeMinChange = 0;
+  configPage2.maeThresh = 0;
+
+  // Deceleration enrichment value
+  configPage2.decelAmount = 50;
+
+  // Clear timer bits – wall wetting does not depend on MAP/TPS DOT
+  currentStatus.LOOP_TIMER = 0;
+}
+
+static void test_corrections_WW_steady_state(void)
+{
+  setup_wall_wetting();
+
+  // netWallDiff = fuelDemand*addCoeff - wallFuel*removeCoeff
+  // Set addCoeff=100, wallFuel=15, removeCoeff=200
+  // netWallDiff = 30*100 - 15*200 = 0 → steady state
+  fill_table_values(wallWettingAddTable, 100);
+  fill_table_values(wallWettingRemoveTable, 200);
+  currentStatus.wallFuel = 15;
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT_EQUAL(NO_FUEL_CORRECTION, correction);
+  TEST_ASSERT_FALSE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_WW_acceleration(void)
+{
+  setup_wall_wetting();
+
+  // netWallDiff > 0 → enrichment needed
+  // addCoeff=128 (50%), removeCoeff=0, wallFuel=0
+  fill_table_values(wallWettingAddTable, 128);
+  fill_table_values(wallWettingRemoveTable, 0);
+  currentStatus.wallFuel = 0;
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT(correction > NO_FUEL_CORRECTION);
+  TEST_ASSERT_TRUE(currentStatus.isAcceleratingTPS);
+}
+
+static void test_corrections_WW_deceleration(void)
+{
+  setup_wall_wetting();
+
+  // netWallDiff < 0 → deceleration
+  // addCoeff=0, removeCoeff=255, wallFuel=255
+  fill_table_values(wallWettingAddTable, 0);
+  fill_table_values(wallWettingRemoveTable, 255);
+  currentStatus.wallFuel = 255;
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT_EQUAL(configPage2.decelAmount, correction);
+  TEST_ASSERT_TRUE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_WW_zero_fuel_demand(void)
+{
+  setup_wall_wetting();
+
+  // With zero fuel demand no enrichment is possible
+  currentStatus.fuelLoad = 0;
+  fill_table_values(wallWettingAddTable, 128);
+  fill_table_values(wallWettingRemoveTable, 128);
+  currentStatus.wallFuel = 0;
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT_EQUAL(NO_FUEL_CORRECTION, correction);
+  TEST_ASSERT_FALSE(currentStatus.isAcceleratingTPS);
+  TEST_ASSERT_FALSE(currentStatus.isDeceleratingTPS);
+}
+
+static void test_corrections_WW_wall_fuel_update(void)
+{
+  setup_wall_wetting();
+
+  // Enable the 30 Hz timer so wallFuel state is updated
+  // (also activates computeTPSDOT, but TPS values are zero so it's harmless)
+  BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_30HZ);
+
+  // addCoeff=128 (50%), removeCoeff=0: all fuel goes to wall film
+  fill_table_values(wallWettingAddTable, 128);
+  fill_table_values(wallWettingRemoveTable, 0);
+  currentStatus.wallFuel = 0;
+
+  // fuelDemand=30, addCoeff=128 → addedToWall = (30*128) >> 8 = 15
+  (void)correctionAccel();
+  TEST_ASSERT_EQUAL(15, currentStatus.wallFuel);
+}
+
+static void test_corrections_WW(void)
+{
+  RUN_TEST_P(test_corrections_WW_steady_state);
+  RUN_TEST_P(test_corrections_WW_acceleration);
+  RUN_TEST_P(test_corrections_WW_deceleration);
+  RUN_TEST_P(test_corrections_WW_zero_fuel_demand);
+  RUN_TEST_P(test_corrections_WW_wall_fuel_update);
+}
+
 static void test_corrections_correctionsFuel(void) {
   RUN_TEST_P(test_corrections_correctionsFuel_ae_modes);
   RUN_TEST_P(test_corrections_correctionsFuel_clip_limit);
@@ -1726,6 +1973,8 @@ void testCorrections()
     test_corrections_dfco();
     test_corrections_TAE(); //TPS based accel enrichment corrections
     test_corrections_MAE(); //MAP based accel enrichment corrections
+    test_corrections_BLENDED_AE(); //Blended TPS/MAP accel enrichment corrections
+    test_corrections_WW(); //Wall wetting accel enrichment corrections
     test_corrections_cranking();
     test_corrections_ASE();
     test_corrections_floodclear();

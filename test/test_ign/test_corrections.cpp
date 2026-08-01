@@ -263,6 +263,8 @@ static void test_correctionIATretard(void) {
 }
 
 extern int8_t correctionIdleAdvance(int8_t advance);
+extern int8_t computeIdleAdvanceClosedLoopTarget(int16_t centerAdvance);
+extern int16_t idleAdvanceClCenter;
 
 static void setup_idleadv_tps(void) {
     configPage2.idleAdvAlgorithm = IDLEADVANCE_ALGO_TPS;
@@ -393,9 +395,138 @@ static void test_correctionIdleAdvance_delay(void) {
     configPage9.idleAdvStartDelay = 3;
     BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
     TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+    ++runSecsX10;
     TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+    ++runSecsX10;
     TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+    ++runSecsX10;
     TEST_ASSERT_EQUAL(23, correctionIdleAdvance(8));
+}
+
+static void test_correctionIdleAdvance_delay_updates_once_per_tick(void) {
+    setup_correctionIdleAdvance();
+    configPage9.idleAdvStartDelay = 2;
+    BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
+
+    TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+    ++runSecsX10;
+    TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+    // A second ignition correction in the same 10Hz tick must not shorten the delay.
+    TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+    ++runSecsX10;
+    TEST_ASSERT_EQUAL(23, correctionIdleAdvance(8));
+}
+
+static void test_correctionIdleAdvance_delay_resets_after_engine_stop(void) {
+    setup_correctionIdleAdvance();
+    configPage9.idleAdvStartDelay = 2;
+    BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
+
+    TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+    runSecsX10 += 2U;
+    TEST_ASSERT_EQUAL(23, correctionIdleAdvance(8));
+
+    currentStatus.rotationStatus = EngineRotationStatus::Stopped;
+    TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+    currentStatus.rotationStatus = EngineRotationStatus::Running;
+    runSecsX10 = TIME_TWENTY_MILLIS.toUser(configPage2.idleAdvDelay);
+    TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+    runSecsX10 += 2U;
+    TEST_ASSERT_EQUAL(23, correctionIdleAdvance(8));
+}
+
+static void test_correctionIdleAdvance_iac_start_threshold_is_latched(void) {
+    setup_correctionIdleAdvance();
+    configPage6.iacAlgorithm = IAC_ALGORITHM_PWM_CL;
+    initialiseCorrections(); //Clear the arm set by setup with IAC_ALGORITHM_NONE.
+
+    currentStatus.setRpm(700U); //More than 200 RPM below the 1000 RPM target.
+    TEST_ASSERT_EQUAL(8, correctionIdleAdvance(8));
+
+    currentStatus.setRpm(850U); //Cross the one-time arming threshold.
+    TEST_ASSERT_NOT_EQUAL(8, correctionIdleAdvance(8));
+
+    currentStatus.setRpm(700U); //A subsequent dip must not turn idle advance off.
+    TEST_ASSERT_EQUAL(-2, correctionIdleAdvance(8));
+}
+
+static void test_correctionIdleAdvance_low_target_does_not_underflow(void) {
+    setup_correctionIdleAdvance();
+    configPage6.iacAlgorithm = IAC_ALGORITHM_PWM_CL;
+    currentStatus.CLIdleTarget = 10U; //100 RPM, below the 200 RPM arming threshold.
+    currentStatus.setRpm(50U);
+    initialiseCorrections();
+
+    TEST_ASSERT_NOT_EQUAL(8, correctionIdleAdvance(8));
+}
+
+static void test_correctionIdleAdvance_delta_does_not_wrap_above_2550rpm(void) {
+    setup_correctionIdleAdvance();
+    configPage2.idleAdvRPM = 40U;
+    currentStatus.setRpm(3000U);
+
+    // RPM is far above target, so the lookup must clamp to the lowest delta bin.
+    TEST_ASSERT_EQUAL(23, correctionIdleAdvance(8));
+}
+
+static void test_correctionIdleAdvance_added_mode_clamps_overflow(void) {
+    setup_correctionIdleAdvance();
+    currentStatus.setRpm(1500U); //Select the +15 degree end of the test table.
+
+    TEST_ASSERT_EQUAL(INT8_MAX, correctionIdleAdvance(120));
+}
+
+static void setup_correctionIdleAdvance_closed_loop(void) {
+    setup_correctionIdleAdvance();
+    configPage2.idleAdvEnabled = IDLEADVANCE_MODE_CLOSED_LOOP;
+    configPage9.idleAdvClMinAdvance = IGNITION_ADVANCE_LARGE.toRaw(0);
+    configPage9.idleAdvClMaxAdvance = IGNITION_ADVANCE_LARGE.toRaw(20);
+    configPage9.idleAdvClRpmBand = RPM_MEDIUM.toRaw(200);
+    configPage9.idleAdvClRpmDotBand = RPM_MEDIUM.toRaw(500);
+    currentStatus.CLIdleTarget = RPM_MEDIUM.toRaw(1000);
+    currentStatus.setRpm(1000U);
+    currentStatus.rpmDOT = 0;
+    initialiseCorrections();
+}
+
+static void test_idleAdvanceClosedLoop_fuzzy_pd_target(void) {
+    setup_correctionIdleAdvance_closed_loop();
+
+    TEST_ASSERT_EQUAL(10, computeIdleAdvanceClosedLoopTarget(10));
+    currentStatus.setRpm(800U);
+    TEST_ASSERT_EQUAL(20, computeIdleAdvanceClosedLoopTarget(10));
+    currentStatus.setRpm(1200U);
+    TEST_ASSERT_EQUAL(0, computeIdleAdvanceClosedLoopTarget(10));
+
+    currentStatus.setRpm(1000U);
+    currentStatus.rpmDOT = -500;
+    TEST_ASSERT_EQUAL(20, computeIdleAdvanceClosedLoopTarget(10));
+    currentStatus.setRpm(800U);
+    currentStatus.rpmDOT = 500;
+    TEST_ASSERT_EQUAL(10, computeIdleAdvanceClosedLoopTarget(10));
+}
+
+static void test_correctionIdleAdvance_closed_loop_slew_and_single_update(void) {
+    setup_correctionIdleAdvance_closed_loop();
+    currentStatus.setRpm(800U);
+    BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
+
+    TEST_ASSERT_EQUAL(13, correctionIdleAdvance(10));
+    TEST_ASSERT_EQUAL(13, correctionIdleAdvance(10)); //Same scheduler tick.
+    ++runSecsX10;
+    TEST_ASSERT_EQUAL(16, correctionIdleAdvance(10));
+}
+
+static void test_correctionIdleAdvance_closed_loop_learns_center(void) {
+    setup_correctionIdleAdvance_closed_loop();
+    currentStatus.setRpm(900U); //Persistent, non-saturated positive error.
+    BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
+
+    for(uint8_t tick = 0U; tick < 40U; ++tick) {
+        (void)correctionIdleAdvance(10);
+        ++runSecsX10;
+    }
+    TEST_ASSERT_EQUAL(11, idleAdvanceClCenter);
 }
 
 static void test_correctionIdleAdvance(void) {
@@ -409,6 +540,15 @@ static void test_correctionIdleAdvance(void) {
     RUN_TEST_P(test_correctionIdleAdvance_noadvance_ctpsinactive);
     RUN_TEST_P(test_correctionIdleAdvance_noadvance_rundelay);
     RUN_TEST_P(test_correctionIdleAdvance_delay);
+    RUN_TEST_P(test_correctionIdleAdvance_delay_updates_once_per_tick);
+    RUN_TEST_P(test_correctionIdleAdvance_delay_resets_after_engine_stop);
+    RUN_TEST_P(test_correctionIdleAdvance_iac_start_threshold_is_latched);
+    RUN_TEST_P(test_correctionIdleAdvance_low_target_does_not_underflow);
+    RUN_TEST_P(test_correctionIdleAdvance_delta_does_not_wrap_above_2550rpm);
+    RUN_TEST_P(test_correctionIdleAdvance_added_mode_clamps_overflow);
+    RUN_TEST_P(test_idleAdvanceClosedLoop_fuzzy_pd_target);
+    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_slew_and_single_update);
+    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_learns_center);
 }
 
 extern int8_t correctionSoftRevLimit(int8_t advance);

@@ -8,6 +8,7 @@
 #include "comms_CAN.h"
 #include "emp_pump.h"
 #include "init.h"
+#include "sensors.h"
 #include "timers.h"
 
 #ifdef CAPONORD_BOARD
@@ -31,6 +32,8 @@ static LPS25HBSensor *LPS_Sensor = nullptr;
 static bool baroSensorOk = false;
 static uint8_t baroFailCount = 0U;
 static constexpr uint8_t BARO_MAX_FAILURES = 5U;
+static uint8_t baroRetryCountdown = 0U;
+static constexpr uint8_t BARO_RETRY_INTERVAL_SECONDS = 5U;
 static constexpr float BARO_MIN_HPA = 260.0f;
 static constexpr float BARO_MAX_HPA = 1260.0f;
 static constexpr uint8_t LPS25HB_RESET_TIMEOUT_MS = 10U;
@@ -144,9 +147,35 @@ static bool initialiseI2CBaroSensor(LPS25HBSensor &sensor)
   return false;
 }
 
+static bool initialiseI2CBaro()
+{
+  // Never retain a stale sensor pointer across a failed reinitialisation.
+  LPS_Sensor = nullptr;
+  baroFailCount = 0U;
+  baroSensorOk = initialiseI2CBaroSensor(LPS_SensorLow) ||
+                 initialiseI2CBaroSensor(LPS_SensorHigh);
+  return baroSensorOk;
+}
+
 static bool updateI2CBaro()
 {
-  if (!baroSensorOk || (LPS_Sensor == nullptr)) { return false; }
+  if (!baroSensorOk || (LPS_Sensor == nullptr))
+  {
+    // runLoop calls this once per second. Keep retrying after a startup or
+    // runtime failure, but rate-limit the full reset/configure sequence so a
+    // disconnected device cannot stall the main loop continuously.
+    if (++baroRetryCountdown < BARO_RETRY_INTERVAL_SECONDS)
+    {
+      updateBaroFromMAPIfEngineStopped();
+      return false;
+    }
+    baroRetryCountdown = 0U;
+    if (!initialiseI2CBaro())
+    {
+      updateBaroFromMAPIfEngineStopped();
+      return false;
+    }
+  }
 
   float pressure = 0.0f;
   float temperature = 0.0f;
@@ -155,6 +184,7 @@ static bool updateI2CBaro()
       (pressure >= BARO_MIN_HPA) && (pressure <= BARO_MAX_HPA))
   {
     baroFailCount = 0U;
+    baroRetryCountdown = 0U;
     const uint8_t pressureKpa = static_cast<uint8_t>(pressure / 10.0f);
     currentStatus.fuelTemp = static_cast<int8_t>(temperature);
 
@@ -169,7 +199,15 @@ static bool updateI2CBaro()
   }
 
   baroFailCount++;
-  if (baroFailCount >= BARO_MAX_FAILURES) { baroSensorOk = false; }
+  if (baroFailCount >= BARO_MAX_FAILURES)
+  {
+    baroSensorOk = false;
+    baroRetryCountdown = 0U;
+  }
+  // Adopt the normal Speeduino fallback from the very first failed I2C read.
+  // It updates BARO only while the engine is stopped; retries of the digital
+  // sensor remain active and take precedence again as soon as it recovers.
+  updateBaroFromMAPIfEngineStopped();
   return false;
 }
 #endif
@@ -610,11 +648,14 @@ void setupBoard()
 
 #ifdef USE_I2C_BARO
   LPS_dev.begin();
-  baroSensorOk = initialiseI2CBaroSensor(LPS_SensorLow) ||
-                 initialiseI2CBaroSensor(LPS_SensorHigh);
+  (void)initialiseI2CBaro();
   if (baroSensorOk)
   {
     (void)updateI2CBaro();
+  }
+  else
+  {
+    updateBaroFromMAPIfEngineStopped();
   }
   //A failed sensor is reported via LED_ALERT in runLoop, which keeps the
   //indication persistent instead of being overwritten at the first 10Hz tick

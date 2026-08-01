@@ -4,9 +4,12 @@
 #include "fake_storage.h"
 #include "table2d.h"
 #include "sensors.h"
+#include "globals.h"
+#include "units.h"
 
 extern void updateTableU16toU8(table2D_u16_u8_32 &targetTable, uint16_t u16EEpromBinAddress);
 extern void upgradeV25toV26(void);
+extern void upgradeV27toV28(void);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -93,10 +96,29 @@ static void test_upgradeV25toV26_negative(void)
     TEST_ASSERT_EQUAL(0, oneByteEeprom.writeCount);
 }
 
+static void test_upgradeV27toV28_initialises_idle_advance_closed_loop(void)
+{
+    configPage2.idleAdvEnabled = IDLEADVANCE_MODE_CLOSED_LOOP; //Previously INVALID.
+    configPage9.idleAdvClMinAdvance = 0U;
+    configPage9.idleAdvClMaxAdvance = 0U;
+    configPage9.idleAdvClRpmBand = 0U;
+    configPage9.idleAdvClRpmDotBand = 0U;
+    setStorageAPI(setupEepromReadApi(27U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV27toV28();
+
+    TEST_ASSERT_EQUAL(IDLEADVANCE_MODE_OFF, configPage2.idleAdvEnabled);
+    TEST_ASSERT_EQUAL(IGNITION_ADVANCE_LARGE.toRaw(0), configPage9.idleAdvClMinAdvance);
+    TEST_ASSERT_EQUAL(IGNITION_ADVANCE_LARGE.toRaw(20), configPage9.idleAdvClMaxAdvance);
+    TEST_ASSERT_EQUAL(RPM_MEDIUM.toRaw(200), configPage9.idleAdvClRpmBand);
+    TEST_ASSERT_EQUAL(RPM_MEDIUM.toRaw(500), configPage9.idleAdvClRpmDotBand);
+}
+
 void test_update(void) {
     SET_UNITY_FILENAME() { 
         RUN_TEST(test_updateTableU16toU8); 
         RUN_TEST(test_upgradeV25toV26_positive);  
         RUN_TEST(test_upgradeV25toV26_negative); 
+        RUN_TEST(test_upgradeV27toV28_initialises_idle_advance_closed_loop);
     }
 }
