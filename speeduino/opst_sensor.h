@@ -6,18 +6,6 @@
 #include <Arduino.h>
 #include <stdint.h>
 
-static constexpr uint8_t OPST_DIAGNOSTIC_OK = 64U;
-static constexpr uint8_t OPST_DIAGNOSTIC_PRESSURE_FAULT = 96U;
-static constexpr uint8_t OPST_DIAGNOSTIC_TEMPERATURE_FAULT = 128U;
-static constexpr uint8_t OPST_DIAGNOSTIC_HARDWARE_FAULT = 160U;
-
-static constexpr uint8_t OPST_FLAG_FRESH = 0U;
-static constexpr uint8_t OPST_FLAG_DIAGNOSTIC_OK = 1U;
-static constexpr uint8_t OPST_FLAG_PRESSURE_FAULT = 2U;
-static constexpr uint8_t OPST_FLAG_TEMPERATURE_FAULT = 3U;
-static constexpr uint8_t OPST_FLAG_HARDWARE_FAULT = 4U;
-static constexpr uint8_t OPST_FLAG_HAS_FRAME = 5U;
-
 #define PIN_OPST PF3
 
 #if defined(CORE_AVR)
@@ -31,9 +19,7 @@ void readOPSt();
 struct oilSensorOPStSnapshot {
   int16_t temperature;
   uint16_t absolutePressureKpa;
-  uint32_t ageUs;
-  uint8_t status;
-  uint8_t flags;
+  bool valid;
 };
 
 oilSensorOPStSnapshot getOPStSnapshot();

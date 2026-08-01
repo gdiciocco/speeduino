@@ -3,7 +3,6 @@
 #include "opst_sensor.h"
 #include "opst_sensor_math.h"
 #include "atomic.h"
-#include "bit_manip.h"
 
 static constexpr unsigned long OPST_STATUS_PERIOD_MIN_US = 500UL;
 static constexpr unsigned long OPST_STATUS_PERIOD_MAX_US = 1500UL;
@@ -132,38 +131,19 @@ oilSensorOPStSnapshot getOPStSnapshot()
   oilSensorOPStSnapshot snapshot = {};
   uint32_t lastFrameTime = 0U;
   uint8_t hasFrame = 0U;
+  uint8_t diagnostic = 0U;
 
   ATOMIC()
   {
     snapshot.temperature = oilSensorOPStData.temperature;
     snapshot.absolutePressureKpa = oilSensorOPStData.absolutePressureKpa;
-    snapshot.status = oilSensorOPStData.status;
+    diagnostic = oilSensorOPStData.status;
     lastFrameTime = oilSensorOPStData.lastFrameTime;
     hasFrame = oilSensorOPStData.hasFrame;
   }
 
-  snapshot.ageUs = (hasFrame != 0U) ? (micros() - lastFrameTime) : UINT32_MAX;
-  if (hasFrame != 0U) { BIT_SET(snapshot.flags, OPST_FLAG_HAS_FRAME); }
-  if ((hasFrame != 0U) && (snapshot.ageUs <= OPST_DATA_FRESH_MAX_US))
-  {
-    BIT_SET(snapshot.flags, OPST_FLAG_FRESH);
-  }
-  if (isOPStDiagnosticNear(snapshot.status, OPST_DIAGNOSTIC_OK))
-  {
-    BIT_SET(snapshot.flags, OPST_FLAG_DIAGNOSTIC_OK);
-  }
-  else if (isOPStDiagnosticNear(snapshot.status, OPST_DIAGNOSTIC_PRESSURE_FAULT))
-  {
-    BIT_SET(snapshot.flags, OPST_FLAG_PRESSURE_FAULT);
-  }
-  else if (isOPStDiagnosticNear(snapshot.status, OPST_DIAGNOSTIC_TEMPERATURE_FAULT))
-  {
-    BIT_SET(snapshot.flags, OPST_FLAG_TEMPERATURE_FAULT);
-  }
-  else if (isOPStDiagnosticNear(snapshot.status, OPST_DIAGNOSTIC_HARDWARE_FAULT))
-  {
-    BIT_SET(snapshot.flags, OPST_FLAG_HARDWARE_FAULT);
-  }
+  const uint32_t ageUs = (hasFrame != 0U) ? (micros() - lastFrameTime) : UINT32_MAX;
+  snapshot.valid = isOPStReadingValid(hasFrame, ageUs, OPST_DATA_FRESH_MAX_US, diagnostic);
 
   return snapshot;
 }

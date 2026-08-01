@@ -230,15 +230,9 @@ struct statuses {
   bool idleUpOutputActive; /**< Whether the idle up output is currently active */
   byte gear;         /**< Current gear (Calculated from vss) */
   byte fuelPressure; /**< Fuel pressure in PSI */
-  uint16_t fuelPressureRaw;       /**< Raw 10-bit fuel-pressure ADC reading */
-  byte fuelPressurePinState;      /**< Caponord PC4/A4 GPIO state before the runtime analog-input guard */
-  byte fuelPressureGuardCount;    /**< Number of times the Caponord PC4/A4 runtime guard repaired the pin mode */
   byte oilPressure;  /**< Oil pressure in PSI */
   int16_t oilTemperature;          /**< Oil temperature in degrees Celsius */
   uint16_t oilPressureAbsoluteKpa; /**< OPS-T absolute oil pressure in kPa */
-  uint16_t opstAgeMs;              /**< Age of the last complete OPS-T frame in milliseconds */
-  byte opstStatus;                 /**< Raw, oscillator-compensated OPS-T diagnostic value */
-  byte opstFlags;                  /**< OPS-T frame freshness and diagnostic flags */
 
   /** @brief Engine protection status fields. */
   struct engine_protect_flags_t

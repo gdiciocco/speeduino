@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 static constexpr uint16_t OPST_PRESSURE_KPA_PER_PSI_X1000 = 6895U;
+static constexpr uint8_t OPST_DIAGNOSTIC_OK = 64U;
 static constexpr uint8_t OPST_DIAGNOSTIC_TOLERANCE = 8U;
 
 static inline int16_t roundOPStSigned(float value)
@@ -52,6 +53,13 @@ static inline bool isOPStDiagnosticNear(uint8_t diagnostic, uint8_t expected)
 {
   const uint8_t difference = (diagnostic > expected) ? (diagnostic - expected) : (expected - diagnostic);
   return difference <= OPST_DIAGNOSTIC_TOLERANCE;
+}
+
+static inline bool isOPStReadingValid(uint8_t hasFrame, uint32_t ageUs, uint32_t maxAgeUs, uint8_t diagnostic)
+{
+  return (hasFrame != 0U) &&
+         (ageUs <= maxAgeUs) &&
+         isOPStDiagnosticNear(diagnostic, OPST_DIAGNOSTIC_OK);
 }
 
 static inline uint8_t convertOPStGaugePressureToPsi(uint16_t absolutePressureKpa, uint16_t barometricPressureKpa)

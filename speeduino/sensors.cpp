@@ -1002,55 +1002,17 @@ static inline void readGear(void)
   currentStatus.gear = getGear();
 }
 
-#if defined(CAPONORD_BOARD) && defined(CORE_STM32)
-static inline uint8_t getCaponordFuelPressurePinState(void)
-{
-  constexpr uint8_t PIN_SHIFT = 4U; //PC4, A4 on black_f407zg
-  const uint8_t mode = (uint8_t)((GPIOC->MODER >> (PIN_SHIFT * 2U)) & 0x3U);
-  const uint8_t pull = (uint8_t)((GPIOC->PUPDR >> (PIN_SHIFT * 2U)) & 0x3U);
-  const uint8_t output = (uint8_t)((GPIOC->ODR >> PIN_SHIFT) & 0x1U);
-  const uint8_t input = (uint8_t)((GPIOC->IDR >> PIN_SHIFT) & 0x1U);
-  return mode | (uint8_t)(pull << 2U) | (uint8_t)(output << 4U) | (uint8_t)(input << 5U);
-}
-
-static inline void guardCaponordFuelPressurePin(void)
-{
-  const uint8_t pinState = getCaponordFuelPressurePinState();
-  currentStatus.fuelPressurePinState = pinState;
-
-  // Correct PC4 is MODER=11 (analog), PUPDR=00 (no pull). Preserve PC4 as
-  // an analog input even if a late peripheral/tune initialisation changes it.
-  if((pinState & 0x0FU) != 0x03U)
-  {
-    configureAnalogInputPin(pinFuelPressure);
-    if(currentStatus.fuelPressureGuardCount < UINT8_MAX)
-    {
-      currentStatus.fuelPressureGuardCount++;
-    }
-  }
-}
-#endif
-
 static inline byte getFuelPressure(void)
 {
   int16_t tempFuelPressure = 0;
 
   if(configPage10.fuelPressureEnable > 0U)
   {
-#if defined(CAPONORD_BOARD) && defined(CORE_STM32)
-    guardCaponordFuelPressurePin();
-#endif
-    currentStatus.fuelPressureRaw = readAnalogSensor(pinFuelPressure);
-    tempFuelPressure = fastMap10Bit(currentStatus.fuelPressureRaw, configPage10.fuelPressureMin, configPage10.fuelPressureMax);
+    tempFuelPressure = fastMap10Bit(readAnalogSensor(pinFuelPressure), configPage10.fuelPressureMin, configPage10.fuelPressureMax);
     tempFuelPressure = LOW_PASS_FILTER(tempFuelPressure, ADCFILTER_PSI_DEFAULT, currentStatus.fuelPressure); //Apply smoothing factor
     //Sanity checks
     tempFuelPressure = clamp(tempFuelPressure, (int16_t)0, (int16_t)configPage10.fuelPressureMax);
   }
-  else
-  {
-    currentStatus.fuelPressureRaw = 0U;
-  }
-
   return (byte)tempFuelPressure;
 }
 
@@ -1082,24 +1044,20 @@ static inline void updateOilPressure(void)
 {
 #ifdef OIL_SENSOR_OPST
   const oilSensorOPStSnapshot opst = getOPStSnapshot();
-  currentStatus.oilTemperature = opst.temperature;
-  currentStatus.oilPressureAbsoluteKpa = opst.absolutePressureKpa;
-  currentStatus.opstAgeMs = (opst.ageUs == UINT32_MAX)
-    ? UINT16_MAX
-    : static_cast<uint16_t>(min(opst.ageUs / 1000UL, static_cast<uint32_t>(UINT16_MAX)));
-  currentStatus.opstStatus = opst.status;
-  currentStatus.opstFlags = opst.flags;
-
-  if (BIT_CHECK(opst.flags, OPST_FLAG_FRESH))
+  if (opst.valid)
   {
     const uint16_t barometricPressureKpa =
       ((currentStatus.baro >= 50U) && (currentStatus.baro <= 120U)) ? currentStatus.baro : 101U;
+    currentStatus.oilTemperature = opst.temperature;
+    currentStatus.oilPressureAbsoluteKpa = opst.absolutePressureKpa;
     currentStatus.oilPressure =
       convertOPStGaugePressureToPsi(opst.absolutePressureKpa, barometricPressureKpa);
   }
   else
   {
-    currentStatus.oilPressure = 0U;
+    currentStatus.oilTemperature = 1;
+    currentStatus.oilPressureAbsoluteKpa = 1U;
+    currentStatus.oilPressure = 1U;
   }
 #else
   currentStatus.oilPressure = getOilPressure();

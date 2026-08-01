@@ -384,9 +384,7 @@ void DashMessage(uint16_t DashMessageID)
       temp_CLT = (currentStatus.coolant + 273U) * 10U; //Convert to Kelvin and adjust to 0.1
       temp_IAT = (currentStatus.IAT + 273U) * 10U; //Convert to Kelvin and adjust to 0.1
       temp_fuelTemp = (currentStatus.fuelTemp + 273U) * 10U; //Convert to Kelvin and adjust to 0.1
-      temp_oilTemp = BIT_CHECK(currentStatus.opstFlags, 0U)
-        ? static_cast<uint16_t>((static_cast<int32_t>(currentStatus.oilTemperature) + 273L) * 10L)
-        : 0U;
+      temp_oilTemp = static_cast<uint16_t>((static_cast<int32_t>(currentStatus.oilTemperature) + 273L) * 10L);
       outMsg.len = 8;
       outMsg.buf[0] = highByte(temp_CLT);
       outMsg.buf[1] = lowByte(temp_CLT);
@@ -720,9 +718,7 @@ void obd_response(uint8_t PIDmode, uint8_t requestedPIDlow, uint8_t requestedPID
       break;
 
       case 92:        //PID-0x5C Engine oil temperature , range is -40 to 210 deg C , formula == A-40
-        obdcalcA = BIT_CHECK(currentStatus.opstFlags, 0U)
-          ? temperatureAddOffset(currentStatus.oilTemperature)
-          : 0U;
+        obdcalcA = temperatureAddOffset(currentStatus.oilTemperature);
         outMsg.buf[0] =  0x03;                // sending 3 byte
         outMsg.buf[1] =  0x41;                // Same as query, except that 40h is added to the mode value. So:41h = show current data ,42h = freeze frame ,etc. 
         outMsg.buf[2] =  0x5C;                // pid code
