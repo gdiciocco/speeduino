@@ -18,6 +18,14 @@ static constexpr uint8_t UQ24X8_Shift = 8U;
 static  UQ24X8_t microsPerDegree;
 static constexpr uint8_t microsPerDegree_Shift = UQ24X8_Shift;
 
+/** @brief uS per tenth of a degree at current RPM in UQ24.8 fixed point
+ *
+ * The ignition path works in tenths of a crank degree (see @ref ANGLE_TENTHS_PER_DEGREE),
+ * so it needs its own conversion factor rather than dividing the per-degree one at
+ * every call site.
+ */
+static UQ24X8_t microsPerTenthDegree;
+
 typedef uint16_t UQ1X15_t;
 static constexpr uint8_t UQ1X15_Shift = 15U;
 
@@ -28,10 +36,21 @@ static constexpr uint8_t UQ1X15_Shift = 15U;
 static UQ1X15_t degreesPerMicro;
 static constexpr uint8_t degreesPerMicro_Shift = UQ1X15_Shift;
 
+/** @brief Tenths of a degree per uS in UQ1.15 fixed point.
+ *
+ * Ranges from 80 at MIN_RPM to 35393 at MAX_RPM, so it still fits UQ1.15.
+ */
+static UQ1X15_t tenthsPerMicro;
+
 void setAngleConverterRevolutionTime(uint32_t revolutionTime) noexcept {
   microsPerDegree = div360(lshift<microsPerDegree_Shift>(revolutionTime));
+  // 3600 = 360 degrees * ANGLE_TENTHS_PER_DEGREE. Computed directly rather than as
+  // microsPerDegree/10 so no precision is lost in the intermediate result.
+  microsPerTenthDegree = UDIV_ROUND_CLOSEST(lshift<microsPerDegree_Shift>(revolutionTime), UINT32_C(3600), uint32_t);
   constexpr uint32_t UQ1X15_360 = UINT32_C(360) << degreesPerMicro_Shift;
   degreesPerMicro = (uint16_t)fast_div_closest(UQ1X15_360, revolutionTime);
+  constexpr uint32_t UQ1X15_3600 = UINT32_C(3600) << degreesPerMicro_Shift;
+  tenthsPerMicro = (uint16_t)fast_div_closest(UQ1X15_3600, revolutionTime);
 }
 
 BEGIN_LTO_ALWAYS_INLINE(uint32_t) angleToTimeMicroSecPerDegree(uint16_t angle) noexcept {
@@ -46,9 +65,28 @@ BEGIN_LTO_ALWAYS_INLINE(COMPARE_TYPE) angleToTimerTicks(uint16_t angle) noexcept
 }
 END_LTO_INLINE()
 
+BEGIN_LTO_ALWAYS_INLINE(uint32_t) angleTenthsToTimeMicroSec(uint16_t angleTenths) noexcept {
+    // Worst case is 7200 tenths (720 degrees) at MIN_RPM: 7200 * 104065 = 749M, so no overflow.
+    UQ24X8_t micros = (uint32_t)angleTenths * (uint32_t)microsPerTenthDegree;
+    return rshift_round<microsPerDegree_Shift>(micros);
+}
+END_LTO_INLINE()
+
+BEGIN_LTO_ALWAYS_INLINE(COMPARE_TYPE) angleTenthsToTimerTicks(uint16_t angleTenths) noexcept {
+    uint32_t micros = angleTenthsToTimeMicroSec(angleTenths);
+    return uS_TO_TIMER_COMPARE(micros);
+}
+END_LTO_INLINE()
+
 BEGIN_LTO_ALWAYS_INLINE(uint16_t) timeToAngleDegPerMicroSec(uint32_t time) noexcept {
     uint32_t degFixed = time * (uint32_t)degreesPerMicro;
     return rshift_round<degreesPerMicro_Shift>(degFixed);
+}
+END_LTO_INLINE()
+
+BEGIN_LTO_ALWAYS_INLINE(uint16_t) timeToAngleTenthsPerMicroSec(uint32_t time) noexcept {
+    uint32_t tenthsFixed = time * (uint32_t)tenthsPerMicro;
+    return rshift_round<degreesPerMicro_Shift>(tenthsFixed);
 }
 END_LTO_INLINE()
 

@@ -97,10 +97,11 @@ static inline uint8_t getVE1(void)
  * 
  * @return byte The current target advance value in degrees
  */
-static inline int8_t getAdvance1(void)
+static inline int16_t getAdvance1(void)
 {
   currentStatus.ignLoad = getLoad(configPage2.ignAlgorithm, currentStatus);
-  return correctionsIgn(IGNITION_ADVANCE_LARGE.toUser(get3DTableValue(&ignitionTable, currentStatus.ignLoad, currentStatus.RPM))); //As above, but for ignition advance
+  //The table itself is in whole degrees; the correction chain works in tenths.
+  return correctionsIgn(degreesToTenths(IGNITION_ADVANCE_LARGE.toUser(get3DTableValue(&ignitionTable, currentStatus.ignLoad, currentStatus.RPM)))); //As above, but for ignition advance
 }
 
 static inline bool haveSwitchedToBatteryPower(uint8_t originalBatteryVoltage, const statuses &current)

@@ -25,6 +25,7 @@ There are 2 top level functions that call more detailed corrections for Fuel and
 
 #include "globals.h"
 #include "corrections.h"
+#include "crankMaths.h"
 #include "elapsed_time.h"
 #include "timers.h"
 #include "maths.h"
@@ -69,7 +70,7 @@ TESTABLE_STATIC int16_t idleAdvanceClTrim;        //Learned offset from the conf
 static int32_t idleAdvanceClTrimAccumulator;
 static int32_t idleAdvanceClRpmFiltered;          //Low pass filtered RPM, hundredths of an RPM
 static bool idleAdvanceClFilterPrimed;
-static int8_t idleAdvanceClOutput;
+static int16_t idleAdvanceClOutput;                //Controller output, tenths of a degree
 static bool idleAdvanceClLastUpdateValid;
 static uint32_t idleAdvanceClLastUpdate;
 
@@ -928,48 +929,49 @@ uint16_t correctionsFuel(void)
 /** Correct ignition timing to configured fixed value.
  * Must be called near end to override all other corrections.
  */
-int8_t correctionFixedTiming(int8_t advance)
+int16_t correctionFixedTiming(int16_t advanceTenths)
 {
-  return (configPage2.fixAngEnable == 1U) ? configPage4.FixAng : advance; //Check whether the user has set a fixed timing angle
+  return (configPage2.fixAngEnable == 1U) ? degreesToTenths(configPage4.FixAng) : advanceTenths; //Check whether the user has set a fixed timing angle
 }
 
 /** Ignition correction for coolant temperature (CLT).
  */
-TESTABLE_INLINE_STATIC int8_t correctionCLTadvance(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionCLTadvance(int16_t advanceTenths)
 {
-  static int8_t cachedValue = 0U;  // Setting this to non-zero will use additional RAM for static initialisation
+  static int16_t cachedValueTenths = 0;  // Setting this to non-zero will use additional RAM for static initialisation
   // Performance: only update as fast as the sensor is read
-  if( BIT_CHECK(currentStatus.LOOP_TIMER, CLT_READ_TIMER_BIT) ) { 
-    cachedValue = IGNITION_ADVANCE_SMALL.toUser(table2D_getValue(&CLTAdvanceTable, temperatureAddOffset(currentStatus.coolant)));
+  if( BIT_CHECK(currentStatus.LOOP_TIMER, CLT_READ_TIMER_BIT) ) {
+    cachedValueTenths = degreesToTenths(IGNITION_ADVANCE_SMALL.toUser(table2D_getValue(&CLTAdvanceTable, temperatureAddOffset(currentStatus.coolant))));
   }
-  return advance + cachedValue;
+  return advanceTenths + cachedValueTenths;
 }
 
 /** Correct ignition timing to configured fixed value to use during craning.
  * Must be called near end to override all other corrections.
  */
-int8_t correctionCrankingFixedTiming(int8_t advance)
+int16_t correctionCrankingFixedTiming(int16_t advanceTenths)
 {
   if ( currentStatus.rotationStatus==EngineRotationStatus::Cranking )
-  { 
-    if ( configPage2.crkngAddCLTAdv == 0U ) { 
-      advance = configPage4.CrankAng; //Use the fixed cranking ignition angle
-    } else { 
-      advance = correctionCLTadvance(configPage4.CrankAng); //Use the CLT compensated cranking ignition angle
+  {
+    if ( configPage2.crkngAddCLTAdv == 0U ) {
+      advanceTenths = degreesToTenths(configPage4.CrankAng); //Use the fixed cranking ignition angle
+    } else {
+      advanceTenths = correctionCLTadvance(degreesToTenths(configPage4.CrankAng)); //Use the CLT compensated cranking ignition angle
     }
   }
-  return advance;
+  return advanceTenths;
 }
 
-TESTABLE_INLINE_STATIC int8_t correctionFlexTiming(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionFlexTiming(int16_t advanceTenths)
 {
   if( configPage2.flexEnabled == 1U ) //Check for flex being enabled
   {
     //This gets cast to a signed 8 bit value to allows for negative advance (ie retard) values here.
+    //The status field stays in whole degrees for TunerStudio; only the advance chain is in tenths.
     currentStatus.flexIgnCorrection = IGNITION_ADVANCE_LARGE.toUser(table2D_getValue(&flexAdvTable, currentStatus.ethanolPct));
-    advance = advance + currentStatus.flexIgnCorrection;
+    advanceTenths = advanceTenths + degreesToTenths(currentStatus.flexIgnCorrection);
   }
-  return advance;
+  return advanceTenths;
 }
 
 static inline bool isWMIAdvanceEnabled(void) {
@@ -985,27 +987,27 @@ static inline bool isWMIAdvanceOperational(void) {
       && (temperatureAddOffset(currentStatus.IAT) >= configPage10.wmiIAT);
 }
 
-TESTABLE_INLINE_STATIC int8_t correctionWMITiming(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionWMITiming(int16_t advanceTenths)
 {
   // TODO: limit rate to MAP update
   if(isWMIAdvanceEnabled() && isWMIAdvanceOperational()) {
-    advance = advance + IGNITION_ADVANCE_LARGE.toUser(table2D_getValue(&wmiAdvTable, MAP.toRaw(currentStatus.MAP)));
+    advanceTenths = advanceTenths + degreesToTenths(IGNITION_ADVANCE_LARGE.toUser(table2D_getValue(&wmiAdvTable, MAP.toRaw(currentStatus.MAP))));
   }
 
-  return advance;
+  return advanceTenths;
 }
 
 /** 
  * Ignition correction for inlet air temperature (IAT).
  */
-TESTABLE_INLINE_STATIC int8_t correctionIATretard(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionIATretard(int16_t advanceTenths)
 {
   static uint8_t cachedValue = 0U; // Setting this to non-zero will use additional RAM for static initialisation
   // Performance: only update as fast as the sensor is read
-  if( BIT_CHECK(currentStatus.LOOP_TIMER, IAT_READ_TIMER_BIT)) { 
+  if( BIT_CHECK(currentStatus.LOOP_TIMER, IAT_READ_TIMER_BIT)) {
     cachedValue = (uint8_t)table2D_getValue(&IATRetardTable, (uint8_t)currentStatus.IAT); // TODO: check if this needs converted
   }
-  return (int16_t)advance - (int16_t)cachedValue;
+  return advanceTenths - degreesToTenths((int16_t)cachedValue);
 }
 
 
@@ -1032,15 +1034,15 @@ static inline uint8_t computeIdleAdvanceRpmDelta(void) {
   return (uint8_t)clamp(shiftedRpmError, (int32_t)0L, (int32_t)100L);
 }
 
-static inline int8_t applyIdleAdvanceAdjust(int8_t advance, int8_t adjustment) {
-  if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_ADDED) { 
-    const int16_t adjustedAdvance = (int16_t)advance + (int16_t)adjustment;
-    return (int8_t)clamp(adjustedAdvance, (int16_t)INT8_MIN, (int16_t)INT8_MAX);
-  } else if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_SWITCHED) { 
-    return adjustment;
+static inline int16_t applyIdleAdvanceAdjust(int16_t advanceTenths, int16_t adjustmentTenths) {
+  if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_ADDED) {
+    const int16_t adjustedAdvance = advanceTenths + adjustmentTenths;
+    return clamp(adjustedAdvance, ADVANCE_TENTHS_MIN, ADVANCE_TENTHS_MAX);
+  } else if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_SWITCHED) {
+    return adjustmentTenths;
   } else {
     // Unknown idle advance mode - do nothing
-    return advance;
+    return advanceTenths;
   }
 }
 
@@ -1230,17 +1232,19 @@ static inline bool hasIdleAdvanceStartDelayElapsed(void) {
   return hasIntervalElapsed(runSecsX10, idleAdvanceDelayStart, configPage9.idleAdvStartDelay);
 }
 
-static inline int8_t updateIdleAdvanceClosedLoop(int8_t currentAdvance) {
+static inline int16_t updateIdleAdvanceClosedLoop(int16_t currentAdvanceTenths) {
   int16_t minimumAdvance;
   int16_t maximumAdvance;
   getIdleAdvanceClosedLoopRange(minimumAdvance, maximumAdvance);
+  const int16_t minimumAdvanceTenths = degreesToTenths(minimumAdvance);
+  const int16_t maximumAdvanceTenths = degreesToTenths(maximumAdvance);
 
   if(!idleAdvanceClEngaged) {
     // Start from the advance the ignition table was already asking for so that
     // engaging the loop is not a torque step, then let the center slew from there.
-    const int16_t seedAdvance = clamp((int16_t)currentAdvance, minimumAdvance, maximumAdvance);
-    idleAdvanceClCenter = seedAdvance * IDLE_ADVANCE_CL_TENTHS;
-    idleAdvanceClOutput = (int8_t)seedAdvance;
+    const int16_t seedAdvanceTenths = clamp(currentAdvanceTenths, minimumAdvanceTenths, maximumAdvanceTenths);
+    idleAdvanceClCenter = seedAdvanceTenths;
+    idleAdvanceClOutput = seedAdvanceTenths;
     idleAdvanceClEngaged = true;
   }
 
@@ -1263,11 +1267,9 @@ static inline int8_t updateIdleAdvanceClosedLoop(int8_t currentAdvance) {
     const int16_t targetTenths = computeIdleAdvanceClosedLoopTarget(idleAdvanceClCenter, rpmDot);
     updateIdleAdvanceClosedLoopTrim(rpmError, targetTenths, minimumAdvance, maximumAdvance);
 
-    const int16_t roundedTenths = (targetTenths >= 0)
-        ? (int16_t)(targetTenths + (IDLE_ADVANCE_CL_TENTHS / 2))
-        : (int16_t)(targetTenths - (IDLE_ADVANCE_CL_TENTHS / 2));
-    idleAdvanceClOutput = (int8_t)clamp((int16_t)(roundedTenths / IDLE_ADVANCE_CL_TENTHS),
-                                        minimumAdvance, maximumAdvance);
+    //The controller output is now consumed in tenths, so there is no rounding to a
+    //whole degree here any more: this is where the loop used to lose its resolution.
+    idleAdvanceClOutput = clamp(targetTenths, minimumAdvanceTenths, maximumAdvanceTenths);
     idleAdvanceClLastUpdate = runSecsX10;
     idleAdvanceClLastUpdateValid = true;
   }
@@ -1275,7 +1277,7 @@ static inline int8_t updateIdleAdvanceClosedLoop(int8_t currentAdvance) {
   return idleAdvanceClOutput;
 }
 
-TESTABLE_INLINE_STATIC int8_t correctionIdleAdvance(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionIdleAdvance(int16_t advance)
 {
   if(!isIdleAdvanceOn()) {
     const bool resetLearnedTrim = (configPage2.idleAdvEnabled == IDLEADVANCE_MODE_OFF)
@@ -1300,19 +1302,19 @@ TESTABLE_INLINE_STATIC int8_t correctionIdleAdvance(int8_t advance)
   resetIdleAdvanceClosedLoop(true);
   const int16_t advanceIdleAdjust = IGNITION_ADVANCE_SMALL.toUser(
       table2D_getValue(&idleAdvanceTable, computeIdleAdvanceRpmDelta()));
-  return applyIdleAdvanceAdjust(advance, (int8_t)advanceIdleAdjust);
+  return applyIdleAdvanceAdjust(advance, degreesToTenths(advanceIdleAdjust));
 }
 
 /** Ignition soft revlimit correction.
  */
-static inline int8_t calculateSoftRevLimitAdvance(int8_t advance) {
-  if (configPage2.SoftLimitMode == SOFT_LIMIT_RELATIVE) { 
-    return advance - (int8_t)configPage4.SoftLimRetard; //delay timing by configured number of degrees in relative mode
-  } else if (configPage2.SoftLimitMode == SOFT_LIMIT_FIXED) { 
-    return (int8_t)configPage4.SoftLimRetard; //delay timing to configured number of degrees in fixed mode
+static inline int16_t calculateSoftRevLimitAdvance(int16_t advanceTenths) {
+  if (configPage2.SoftLimitMode == SOFT_LIMIT_RELATIVE) {
+    return advanceTenths - degreesToTenths(configPage4.SoftLimRetard); //delay timing by configured number of degrees in relative mode
+  } else if (configPage2.SoftLimitMode == SOFT_LIMIT_FIXED) {
+    return degreesToTenths(configPage4.SoftLimRetard); //delay timing to configured number of degrees in fixed mode
   } else {
     // Unknown limit mode - do nothing, keep MISRA checker happy
-    return advance;
+    return advanceTenths;
   }
 }
 
@@ -1345,7 +1347,7 @@ TESTABLE_INLINE_STATIC int8_t correctionSoftRevLimit(int8_t advance)
 
 /** Ignition Nitrous oxide correction.
  */
-TESTABLE_INLINE_STATIC int8_t correctionNitrous(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionNitrous(int16_t advanceTenths)
 {
   //Check if nitrous is currently active
   if(configPage10.n2o_enable != NITROUS_OFF)
@@ -1353,19 +1355,19 @@ TESTABLE_INLINE_STATIC int8_t correctionNitrous(int8_t advance)
     //Check which stage is running (if any)
     if( (currentStatus.nitrous_status == NITROUS_STAGE1) || (currentStatus.nitrous_status == NITROUS_BOTH) )
     {
-      advance = advance - (int8_t)configPage10.n2o_stage1_retard;
+      advanceTenths = advanceTenths - degreesToTenths((int16_t)configPage10.n2o_stage1_retard);
     }
     if( (currentStatus.nitrous_status == NITROUS_STAGE2) || (currentStatus.nitrous_status == NITROUS_BOTH) )
     {
-      advance = advance - (int8_t)configPage10.n2o_stage2_retard;
+      advanceTenths = advanceTenths - degreesToTenths((int16_t)configPage10.n2o_stage2_retard);
     }
   }
 
-  return advance;
+  return advanceTenths;
 }
 /** Ignition soft launch correction.
  */
-TESTABLE_INLINE_STATIC int8_t correctionSoftLaunch(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionSoftLaunch(int16_t advance)
 {
   //SoftCut rev limit for 2-step launch control.
   if(  configPage6.launchEnabled 
@@ -1378,7 +1380,7 @@ TESTABLE_INLINE_STATIC int8_t correctionSoftLaunch(int8_t advance)
   {
     currentStatus.launchingSoft = true;
     currentStatus.softLaunchActive = true;
-    advance = configPage6.lnchRetard;
+    advance = degreesToTenths(configPage6.lnchRetard);
   }
   else
   {
@@ -1390,7 +1392,7 @@ TESTABLE_INLINE_STATIC int8_t correctionSoftLaunch(int8_t advance)
 }
 /** Ignition correction for soft flat shift.
  */
-TESTABLE_INLINE_STATIC int8_t correctionSoftFlatShift(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionSoftFlatShift(int16_t advance)
 {
   if(configPage6.flatSEnable 
   && currentStatus.clutchTrigger 
@@ -1398,7 +1400,7 @@ TESTABLE_INLINE_STATIC int8_t correctionSoftFlatShift(int8_t advance)
   && (currentStatus.RPM > (currentStatus.clutchEngagedRPM - RPM_COARSE.toUser( configPage6.flatSSoftWin) ) ) )
   {
     currentStatus.flatShiftSoftCut = true;
-    advance = configPage6.flatSRetard;
+    advance = degreesToTenths(configPage6.flatSRetard);
   }
   else { currentStatus.flatShiftSoftCut = false; }
 
@@ -1441,7 +1443,7 @@ static inline uint8_t _calculateKnockRecovery(uint8_t curKnockRetard)
 
 /** Ignition knock (retard) correction.
  */
-static inline int8_t correctionKnockTiming(int8_t advance)
+static inline int16_t correctionKnockTiming(int16_t advanceTenths)
 {
   byte tmpKnockRetard = 0;
 
@@ -1526,26 +1528,27 @@ static inline int8_t correctionKnockTiming(int8_t advance)
 
   tmpKnockRetard = min(tmpKnockRetard, configPage10.knock_maxRetard); //Ensure the commanded retard is not higher than the maximum allowed.
   currentStatus.knockRetard = tmpKnockRetard;
-  return (int8_t)((int16_t)advance - (int16_t)tmpKnockRetard);
+  return advanceTenths - degreesToTenths((int16_t)tmpKnockRetard);
 }
 
 /** Ignition DFCO taper correction.
  */
-TESTABLE_INLINE_STATIC int8_t correctionDFCOignition(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionDFCOignition(int16_t advanceTenths)
 {
   if ( (configPage9.dfcoTaperEnable == 1U) && (currentStatus.isDFCOActive) )
   {
     if ( dfcoTaper != 0U )
     {
-      advance = advance - map(dfcoTaper, configPage9.dfcoTaperTime, 0, 0, configPage9.dfcoTaperAdvance);
+      //Mapping straight to tenths also gives the taper itself a finer step than a whole degree
+      advanceTenths = advanceTenths - map(dfcoTaper, configPage9.dfcoTaperTime, 0, 0, degreesToTenths(configPage9.dfcoTaperAdvance));
     }
-    else 
-    { 
-      advance = advance - (int8_t)configPage9.dfcoTaperAdvance; //Taper ended, use full value
+    else
+    {
+      advanceTenths = advanceTenths - degreesToTenths((int16_t)configPage9.dfcoTaperAdvance); //Taper ended, use full value
     }
   }
   else { dfcoTaper = configPage9.dfcoTaperTime; } //Keep updating the duration until DFCO is active
-  return advance;
+  return advanceTenths;
 }
 
 /** Ignition Dwell Correction.
@@ -1628,9 +1631,9 @@ uint16_t correctionsDwell(uint16_t dwell)
  * @param base_advance - Base ignition advance (deg. ?)
  * @return Advance considering all (~12) individual corrections
  */
-int8_t correctionsIgn(int8_t base_advance)
+int16_t correctionsIgn(int16_t base_advance)
 {
-  int8_t advance;
+  int16_t advance;
   advance = correctionFlexTiming(base_advance);
   advance = correctionWMITiming(advance);
   advance = correctionIATretard(advance);

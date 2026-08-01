@@ -417,7 +417,8 @@ BEGIN_LTO_ALWAYS_INLINE(void) __attribute__((flatten)) calculateIgnitionAngles(c
 {
   matchIgnitionSchedulersToSyncState(page2, page4, current);
 
-  uint16_t dwellAngle = timeToAngleDegPerMicroSec(current.dwell);
+  //Tenths, to match the ignition angle domain (@see ANGLE_TENTHS_PER_DEGREE)
+  uint16_t dwellAngle = timeToAngleTenthsPerMicroSec(current.dwell);
 
   if((current.maxIgnOutputs==4U) && (page4.sparkMode == IGN_MODE_ROTARY))
   {

@@ -96,9 +96,9 @@ struct statuses {
   volatile uint16_t actualDwell;    ///< actual dwell time if new ignition mode is used (in uS)
   byte dwellCorrection; /**< The amount of correction being applied to the dwell time (in unit ...). */
   byte battery10;     /**< The current BRV in volts (multiplied by 10. Eg 12.5V = 125) */
-  int8_t advance;     /**< The current advance value being used in the spark calculation. Can be the same as advance1 or advance2, or a calculated value of both */
-  int8_t advance1;    /**< The advance value from ignition table 1 */
-  int8_t advance2;    /**< The advance value from ignition table 2 */
+  int16_t advance;    /**< The current advance being used in the spark calculation, in **tenths of a degree** (@see ANGLE_TENTHS_PER_DEGREE). Can be the same as advance1 or advance2, or a calculated value of both */
+  int16_t advance1;   /**< The advance from ignition table 1, in **tenths of a degree** */
+  int16_t advance2;   /**< The advance from ignition table 2, in **tenths of a degree** */
   uint16_t corrections; /**< The total current corrections % amount */
   uint16_t AEamount;    /**< The amount of acceleration enrichment currently being applied. 100=No change. Varies above 255 */
   uint16_t wallFuel;     /**< Current amount of fuel on intake walls (wall wetting model state) */

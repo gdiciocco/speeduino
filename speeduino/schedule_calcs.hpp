@@ -108,35 +108,61 @@ static inline uint32_t calculateInjectorTimeout(const FuelSchedule &schedule, in
   return angleToTimeMicroSecPerDegree((uint16_t)delta);
 }
 
-static inline int16_t _calculateSparkAngle(const IgnitionSchedule &schedule, int8_t advance) {
-  int16_t angle = (int16_t)(schedule.channelDegrees==0U ? CRANK_ANGLE_MAX_IGN : schedule.channelDegrees) - advance;
-  if(angle > CRANK_ANGLE_MAX_IGN) {angle -= CRANK_ANGLE_MAX_IGN;}
+/* The ignition angle domain below works in TENTHS of a crank degree (@see ANGLE_TENTHS_PER_DEGREE).
+ * schedule.dischargeAngle and schedule.chargeAngle are therefore tenths, as is dwellAngle.
+ * schedule.channelDegrees stays in whole degrees (it is shared with the fuel schedules) and is
+ * converted at each use. The injection path is untouched and still works in whole degrees. */
+
+static FORCE_INLINE uint32_t _calculateAngularTimeTenths(const Schedule &schedule, uint16_t eventAngleTenths, uint16_t crankAngleTenths, uint16_t maxAngleTenths) {
+  int16_t delta = eventAngleTenths - crankAngleTenths;
+  if ( (isRunning(schedule)) || (schedule._status == OFF)) {
+    while(delta < 0) { delta += (int16_t)maxAngleTenths; }
+  }
+
+  return delta > 0 ? angleTenthsToTimeMicroSec((uint16_t)delta) : 0U;
+}
+
+static FORCE_INLINE uint32_t _calculateAngularTimeTenths(const Schedule &schedule, uint16_t angleOffsetTenths, uint16_t eventAngleTenths, uint16_t crankAngleTenths, uint16_t maxAngleTenths) {
+  if (angleOffsetTenths==0U) { // Optimize for zero channel angle - no need to adjust start & crank angles
+    return _calculateAngularTimeTenths(schedule, eventAngleTenths, crankAngleTenths, maxAngleTenths);
+  }
+  // See the whole-degree overload for why the angles are realigned around the channel's own TDC.
+  return _calculateAngularTimeTenths(schedule,
+            _adjustToTDC(eventAngleTenths, angleOffsetTenths, maxAngleTenths),
+            _adjustToTDC(crankAngleTenths, angleOffsetTenths, maxAngleTenths),
+            maxAngleTenths);
+}
+
+static inline int16_t _calculateSparkAngle(const IgnitionSchedule &schedule, int16_t advanceTenths) {
+  const int16_t maxTenths = crankAngleMaxIgnTenths();
+  int16_t angle = (schedule.channelDegrees==0U ? maxTenths : degreesToTenths((int16_t)schedule.channelDegrees)) - advanceTenths;
+  if(angle > maxTenths) {angle -= maxTenths;}
   return angle;
 }
 
-static inline int16_t _calculateCoilChargeAngle(uint16_t dwellAngle, int16_t dischargeAngle) {
-  if (dischargeAngle>(int16_t)dwellAngle) {
-    return dischargeAngle - (int16_t)dwellAngle;
+static inline int16_t _calculateCoilChargeAngle(uint16_t dwellAngleTenths, int16_t dischargeAngleTenths) {
+  if (dischargeAngleTenths>(int16_t)dwellAngleTenths) {
+    return dischargeAngleTenths - (int16_t)dwellAngleTenths;
   }
-  return dischargeAngle + CRANK_ANGLE_MAX_IGN - (int16_t)dwellAngle;
+  return dischargeAngleTenths + crankAngleMaxIgnTenths() - (int16_t)dwellAngleTenths;
 }
 
-static inline void calculateIgnitionAngles(IgnitionSchedule &schedule, uint16_t dwellAngle, int8_t advance)
+static inline void calculateIgnitionAngles(IgnitionSchedule &schedule, uint16_t dwellAngleTenths, int16_t advanceTenths)
 {
-  schedule.dischargeAngle = _calculateSparkAngle(schedule,  advance);
-  schedule.chargeAngle = _calculateCoilChargeAngle(dwellAngle, schedule.dischargeAngle);
+  schedule.dischargeAngle = _calculateSparkAngle(schedule,  advanceTenths);
+  schedule.chargeAngle = _calculateCoilChargeAngle(dwellAngleTenths, schedule.dischargeAngle);
 }
 
 
-static inline void calculateIgnitionTrailingRotary(IgnitionSchedule &leading, uint16_t dwellAngle, int16_t rotarySplitDegrees, IgnitionSchedule &trailing) 
+static inline void calculateIgnitionTrailingRotary(IgnitionSchedule &leading, uint16_t dwellAngleTenths, int16_t rotarySplitDegrees, IgnitionSchedule &trailing)
 {
-  trailing.dischargeAngle = (int16_t)ignitionLimits(leading.dischargeAngle + rotarySplitDegrees);
-  trailing.chargeAngle = (int16_t)ignitionLimits(trailing.dischargeAngle - (int16_t)dwellAngle); 
+  trailing.dischargeAngle = ignitionLimitsTenths(leading.dischargeAngle + degreesToTenths(rotarySplitDegrees));
+  trailing.chargeAngle = ignitionLimitsTenths(trailing.dischargeAngle - (int16_t)dwellAngleTenths);
 }
 
 static inline uint32_t _calculateIgnitionTimeout(const IgnitionSchedule &schedule, int16_t crankAngle)
 {
-  return _calculateAngularTime(schedule, schedule.channelDegrees, schedule.chargeAngle, crankAngle, CRANK_ANGLE_MAX_IGN);
+  return _calculateAngularTimeTenths(schedule, degreesToTenths((int16_t)schedule.channelDegrees), schedule.chargeAngle, degreesToTenths(crankAngle), crankAngleMaxIgnTenths());
 }
 
 /**
@@ -152,23 +178,24 @@ static inline uint32_t _calculateIgnitionTimeout(const IgnitionSchedule &schedul
 static inline void adjustCrankAngle(IgnitionSchedule &schedule, int16_t crankAngle) {
   constexpr uint8_t MIN_CYCLES_FOR_CORRECTION = 6U;
 
-  crankAngle = ignitionLimits(crankAngle);
+  // crankAngle arrives in whole degrees; the schedule angles are in tenths.
+  const int16_t crankAngleTenths = degreesToTenths(ignitionLimits(crankAngle));
   ATOMIC() { // Prevent race conditions with the timer interrupt.
     // We only want to adjust the crank angle if we are running and the coil is charging or we are waiting for the timer to fire.
     if( isRunning(schedule) ) {
-      if  (schedule.dischargeAngle>crankAngle) { 
+      if  (schedule.dischargeAngle>crankAngleTenths) {
         // Coil is charging so change the charge time so the spark fires at
         // the requested crank angle (this could reduce dwell time & potentially
         // result in a weaker spark).
-        SET_COMPARE(schedule._compare, schedule._counter + angleToTimerTicks( schedule.dischargeAngle-crankAngle )); 
-      } 
+        SET_COMPARE(schedule._compare, schedule._counter + angleTenthsToTimerTicks( schedule.dischargeAngle-crankAngleTenths ));
+      }
     }
     else if( (schedule._status==PENDING) ) {
-      if ((currentStatus.startRevolutions > MIN_CYCLES_FOR_CORRECTION) && (schedule.chargeAngle>crankAngle)) {
+      if ((currentStatus.startRevolutions > MIN_CYCLES_FOR_CORRECTION) && (schedule.chargeAngle>crankAngleTenths)) {
         // We are waiting for the timer to fire & start charging the coil.
-        // Keep dwell (I.e. duration) constant (for better spark) - instead adjust the waiting period so 
+        // Keep dwell (I.e. duration) constant (for better spark) - instead adjust the waiting period so
         // the spark fires at the requested crank angle.
-        SET_COMPARE(schedule._compare, schedule._counter + angleToTimerTicks( schedule.chargeAngle-crankAngle )); 
+        SET_COMPARE(schedule._compare, schedule._counter + angleTenthsToTimerTicks( schedule.chargeAngle-crankAngleTenths ));
       }
     } else {
       // Unknown state, so no adjustment possible

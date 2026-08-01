@@ -1,5 +1,6 @@
 #include "secondaryTables.h"
 #include "corrections.h"
+#include "crankMaths.h"
 #include "load_source.h"
 #include "maths.h"
 #include "unit_testing.h"
@@ -89,10 +90,11 @@ static inline int16_t lookupSpark2(const config10 &page10, const table3d16RpmLoa
   return IGNITION_ADVANCE_LARGE.toUser(get3DTableValue(&sparkLookupTable, getLoad(page10.spark2Algorithm, current), current.RPM));  
 }
 
-static inline int8_t constrainAdvance(int16_t advance)
+static inline int16_t constrainAdvance(int16_t advanceTenths)
 {
-  // Clamp to return type range.
-  return (int8_t)clamp(advance, (int16_t)INT8_MIN, (int16_t)INT8_MAX);
+  // Clamp to the advance range. Same physical limits as the old int8_t degree
+  // representation, expressed in tenths.
+  return clamp(advanceTenths, ADVANCE_TENTHS_MIN, ADVANCE_TENTHS_MAX);
 }
 
 static inline bool sparkModeCondSwitchRpmActive(const config10 &page10, const statuses &current) {
@@ -146,31 +148,32 @@ void calculateSecondarySpark(const config2 &page2, const config10 &page10, const
     {
       current.secondSparkTableActive = true;
       uint8_t spark2Percent = (uint8_t)clamp(lookupSpark2(page10, sparkLookupTable, current), (int16_t)0, (int16_t)UINT8_MAX);
-      //Spark 2 table is treated as a % value. Table 1 and 2 are multiplied together and divided by 100
-      int16_t combinedAdvance = div100((int16_t)(spark2Percent * current.advance1));
-      //make sure we don't overflow and accidentally set negative timing: current.advance can only hold a signed 8 bit value
-      current.advance = constrainAdvance(combinedAdvance);
+      //Spark 2 table is treated as a % value. Table 1 and 2 are multiplied together and divided by 100.
+      //advance1 is in tenths, so the product needs 32 bits: 255 * 1270 overflows int16_t.
+      int32_t combinedAdvance = div100((int32_t)spark2Percent * (int32_t)current.advance1);
+      //make sure we don't overflow and accidentally set negative timing
+      current.advance = constrainAdvance((int16_t)clamp(combinedAdvance, (int32_t)ADVANCE_TENTHS_MIN, (int32_t)ADVANCE_TENTHS_MAX));
 
-      // This is informational only, but the value needs corrected into the int8_t range
-      current.advance2 = constrainAdvance((int16_t)spark2Percent-(int16_t)INT8_MAX);
+      // This is informational only, but the value needs corrected into the advance range
+      current.advance2 = constrainAdvance(degreesToTenths((int16_t)spark2Percent-(int16_t)INT8_MAX));
     }
     else if(page10.spark2Mode == SPARK2_MODE_ADD)
     {    
       current.secondSparkTableActive = true;
-      current.advance2 = constrainAdvance(lookupSpark2(page10, sparkLookupTable, current));
-      //Spark tables are added together, but a check is made to make sure this won't overflow the 8-bit VE value
-      int16_t combinedAdvance = (int16_t)current.advance1 + (int16_t)current.advance2;
+      current.advance2 = constrainAdvance(degreesToTenths(lookupSpark2(page10, sparkLookupTable, current)));
+      //Spark tables are added together, but a check is made to make sure this won't overflow
+      int16_t combinedAdvance = current.advance1 + current.advance2;
       current.advance = constrainAdvance(combinedAdvance);
     }
     else if(sparkModeCondSwitchActive(page10, current) || sparkModeInputSwitchActive(page10))
     {
       current.secondSparkTableActive = true;
 #if defined(UNIT_TEST)
-      current.advance2 = constrainAdvance(lookupSpark2(page10, sparkLookupTable, current));
+      current.advance2 = constrainAdvance(degreesToTenths(lookupSpark2(page10, sparkLookupTable, current)));
 #else
       //Perform the corrections calculation on the secondary advance value, only if it uses a switched mode
-      current.advance2 = correctionsIgn(constrainAdvance(lookupSpark2(page10, sparkLookupTable, current)));
-#endif      
+      current.advance2 = correctionsIgn(constrainAdvance(degreesToTenths(lookupSpark2(page10, sparkLookupTable, current))));
+#endif
       current.advance = current.advance2;
     }
     else

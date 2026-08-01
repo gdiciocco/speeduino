@@ -9,9 +9,12 @@ void initialiseCorrections(void);
 uint16_t correctionsFuel(void);
 uint8_t calculateAfrTarget(table3d16RpmLoad &afrLookUpTable, const statuses &current, const config2 &page2, const config6 &page6);
 
-int8_t correctionsIgn(int8_t advance);
-int8_t correctionFixedTiming(int8_t advance);
-int8_t correctionCrankingFixedTiming(int8_t advance);
+/** @brief Ignition corrections. Advance is in tenths of a degree (@see ANGLE_TENTHS_PER_DEGREE) */
+int16_t correctionsIgn(int16_t advanceTenths);
+/** @brief Advance is in tenths of a degree (@see ANGLE_TENTHS_PER_DEGREE) */
+int16_t correctionFixedTiming(int16_t advanceTenths);
+/** @brief Advance is in tenths of a degree (@see ANGLE_TENTHS_PER_DEGREE) */
+int16_t correctionCrankingFixedTiming(int16_t advanceTenths);
 
 uint16_t correctionsDwell(uint16_t dwell);
 
