@@ -54,6 +54,19 @@ static uint8_t knockLastRecoveryStep;
 //static int16_t knockWindowMax;//The current maximum crank angle for a knock pulse to be valid
 static uint8_t dfcoTaper;
 
+// Idle ignition control state. These are module scoped so initialiseCorrections()
+// can reset them and unit tests do not inherit state from a previous test.
+static bool idleAdvanceArmed;
+static bool idleAdvanceDelayStarted;
+static uint32_t idleAdvanceDelayStart;
+static bool idleAdvanceClCenterInitialized;
+TESTABLE_STATIC int16_t idleAdvanceClCenter;
+static int32_t idleAdvanceClIntegral;
+static bool idleAdvanceClOutputInitialized;
+static int8_t idleAdvanceClOutput;
+static bool idleAdvanceClLastUpdateValid;
+static uint32_t idleAdvanceClLastUpdate;
+
 TESTABLE_CONSTEXPR table2D_u8_u8_4 taeTable(&configPage4.taeBins, &configPage4.taeValues);
 TESTABLE_CONSTEXPR table2D_u8_u8_4 maeTable(&configPage4.maeBins, &configPage4.maeRates);
 TESTABLE_CONSTEXPR table2D_u8_u8_10 WUETable(&configPage4.wueBins, &configPage2.wueValues);
@@ -108,6 +121,16 @@ void initialiseCorrections(void)
   currentStatus.knockCount = 1;
   knockLastRecoveryStep = 0;
   knockStartTime = 0;
+  idleAdvanceArmed = false;
+  idleAdvanceDelayStarted = false;
+  idleAdvanceDelayStart = 0U;
+  idleAdvanceClCenterInitialized = false;
+  idleAdvanceClCenter = 0;
+  idleAdvanceClIntegral = 0L;
+  idleAdvanceClOutputInitialized = false;
+  idleAdvanceClOutput = 0;
+  idleAdvanceClLastUpdateValid = false;
+  idleAdvanceClLastUpdate = 0U;
   if(currentStatus.initialisationComplete == false)
   {
     currentStatus.battery10 = 125; //Set battery voltage to sensible value for dwell correction for "flying start" (else ignition gets spurious pulses after boot)
@@ -981,18 +1004,27 @@ TESTABLE_INLINE_STATIC int8_t correctionIATretard(int8_t advance)
 /** Ignition Idle advance correction.
  */
 static constexpr uint16_t IGN_IDLE_THRESHOLD = 200U; //RPM threshold (below CL idle target) for when ign based idle control will engage
+static constexpr int16_t IDLE_ADVANCE_RPM_OFFSET = 500;
+static constexpr int16_t IDLE_ADVANCE_RPM_ERROR_DEADBAND = 20;
+static constexpr int16_t IDLE_ADVANCE_RPM_DOT_DEADBAND = 50;
+static constexpr int16_t IDLE_ADVANCE_CL_SCORE_MAX = 100;
+static constexpr int16_t IDLE_ADVANCE_CL_SLEW_PER_TICK = 3; //Degrees per 100ms
+static constexpr int16_t IDLE_ADVANCE_CL_ADAPT_TICKS_PER_DEGREE = 20; //2 seconds at full configured error
 
 static inline uint8_t computeIdleAdvanceRpmDelta(void) {
-  static constexpr int16_t DELTA_HYSTERISIS = (int16_t)RPM_MEDIUM.toRaw(500);
-  int16_t idleRPMdelta = ((int16_t)currentStatus.CLIdleTarget - (int16_t)RPM_MEDIUM.toRaw(currentStatus.RPM) ) + DELTA_HYSTERISIS;
-  // Limit idle rpm delta between 0rpm - 1000rpm
-  static constexpr int16_t DELTA_RPM_MAX = (int16_t)RPM_MEDIUM.toRaw(1000);
-  return (uint8_t)constrain(idleRPMdelta, 0, DELTA_RPM_MAX);
+  const int32_t targetRpm = (int32_t)RPM_MEDIUM.toUser(currentStatus.CLIdleTarget);
+  const int32_t rpmError = targetRpm - (int32_t)currentStatus.RPM;
+  // The table uses an unsigned, +500 RPM representation of the signed
+  // target-current error. Calculate in real RPM first so values above the
+  // 2550 RPM limit of RPM_MEDIUM::toRaw() cannot wrap.
+  const int32_t shiftedRpmError = (rpmError / 10L) + (IDLE_ADVANCE_RPM_OFFSET / 10);
+  return (uint8_t)clamp(shiftedRpmError, (int32_t)0L, (int32_t)100L);
 }
 
 static inline int8_t applyIdleAdvanceAdjust(int8_t advance, int8_t adjustment) {
   if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_ADDED) { 
-    return (advance + adjustment); 
+    const int16_t adjustedAdvance = (int16_t)advance + (int16_t)adjustment;
+    return (int8_t)clamp(adjustedAdvance, (int16_t)INT8_MIN, (int16_t)INT8_MAX);
   } else if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_SWITCHED) { 
     return adjustment;
   } else {
@@ -1002,14 +1034,28 @@ static inline int8_t applyIdleAdvanceAdjust(int8_t advance, int8_t adjustment) {
 }
 
 static inline bool isIdleAdvanceOn(void) {
-  return (configPage2.idleAdvEnabled != IDLEADVANCE_MODE_OFF) 
-      && (runSecsX10 >= TIME_TWENTY_MILLIS.toUser( configPage2.idleAdvDelay ))
-      && currentStatus.rotationStatus==EngineRotationStatus::Running
-      /* When Idle advance is the only idle speed control mechanism, activate as soon as not cranking. 
-      When some other mechanism is also present, wait until the engine is no more than 200 RPM below idle target speed on first time
-      */
-      && ((configPage6.iacAlgorithm == IAC_ALGORITHM_NONE) 
-        || (currentStatus.RPM > (RPM_MEDIUM.toUser( currentStatus.CLIdleTarget) - IGN_IDLE_THRESHOLD)));
+  if((configPage2.idleAdvEnabled == IDLEADVANCE_MODE_OFF)
+  || (currentStatus.rotationStatus != EngineRotationStatus::Running)) {
+    idleAdvanceArmed = false;
+    return false;
+  }
+
+  /* When idle advance is the only idle speed control mechanism, arm it as
+   * soon as cranking ends. With another IAC mechanism, wait until the engine
+   * first reaches no more than 200 RPM below target. Once armed it must stay
+   * armed until the engine stops; otherwise a large RPM dip disables the
+   * very correction that should recover it.
+   */
+  if(!idleAdvanceArmed) {
+    const uint16_t targetRpm = RPM_MEDIUM.toUser(currentStatus.CLIdleTarget);
+    const bool reachedStartThreshold = (targetRpm <= IGN_IDLE_THRESHOLD)
+        || (currentStatus.RPM > (targetRpm - IGN_IDLE_THRESHOLD));
+    idleAdvanceArmed = (configPage6.iacAlgorithm == IAC_ALGORITHM_NONE)
+        || reachedStartThreshold;
+  }
+
+  return idleAdvanceArmed
+      && (runSecsX10 >= TIME_TWENTY_MILLIS.toUser(configPage2.idleAdvDelay));
 }
 
 static inline bool isIdleAdvanceOperational(void) {
@@ -1019,28 +1065,179 @@ static inline bool isIdleAdvanceOperational(void) {
         || ((configPage2.idleAdvAlgorithm == IDLEADVANCE_ALGO_CTPS) && (currentStatus.CTPSActive == true)));// closed throttle position sensor (CTPS) based idle state
 }
 
-TESTABLE_INLINE_STATIC int8_t correctionIdleAdvance(int8_t advance)
-{
-  //Adjust the advance based on idle target rpm.
-  if (isIdleAdvanceOn())
-  {
-    static uint8_t idleAdvDelayCount;
-    if(isIdleAdvanceOperational())
-    {
-      if( idleAdvDelayCount < configPage9.idleAdvStartDelay )
-      {
-        if( BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ) ) { ++idleAdvDelayCount; }
-      }
-      else
-      {
-        int16_t advanceIdleAdjust = IGNITION_ADVANCE_SMALL.toUser(table2D_getValue(&idleAdvanceTable, computeIdleAdvanceRpmDelta()));
-        advance = applyIdleAdvanceAdjust(advance, (int8_t)advanceIdleAdjust); 
-      }
-    }
-    else { idleAdvDelayCount = 0; }
+static inline void getIdleAdvanceClosedLoopRange(int16_t &minimumAdvance, int16_t &maximumAdvance) {
+  minimumAdvance = clamp(IGNITION_ADVANCE_LARGE.toUser(configPage9.idleAdvClMinAdvance),
+                         (int16_t)INT8_MIN, (int16_t)INT8_MAX);
+  maximumAdvance = clamp(IGNITION_ADVANCE_LARGE.toUser(configPage9.idleAdvClMaxAdvance),
+                         (int16_t)INT8_MIN, (int16_t)INT8_MAX);
+  if(minimumAdvance > maximumAdvance) {
+    const int16_t temporary = minimumAdvance;
+    minimumAdvance = maximumAdvance;
+    maximumAdvance = temporary;
+  }
+}
+
+static inline int16_t normalizeIdleAdvanceFuzzyInput(int32_t value, int16_t deadband, uint16_t fullScale) {
+  const int32_t magnitude = (value < 0L) ? -value : value;
+  if(magnitude <= deadband) { return 0; }
+
+  const int32_t usableScale = (fullScale > (uint16_t)deadband)
+      ? (int32_t)fullScale - deadband
+      : 1L;
+  const int32_t activeMagnitude = clamp(magnitude - deadband, 0L, usableScale);
+  const int16_t normalized = (int16_t)((activeMagnitude * IDLE_ADVANCE_CL_SCORE_MAX) / usableScale);
+  return (value < 0L) ? -normalized : normalized;
+}
+
+static inline int32_t getIdleAdvanceRpmError(void) {
+  return (int32_t)RPM_MEDIUM.toUser(currentStatus.CLIdleTarget) - (int32_t)currentStatus.RPM;
+}
+
+/** Compute the closed-loop fuzzy-PD target before output slew limiting. */
+TESTABLE_INLINE_STATIC int8_t computeIdleAdvanceClosedLoopTarget(int16_t centerAdvance) {
+  int16_t minimumAdvance;
+  int16_t maximumAdvance;
+  getIdleAdvanceClosedLoopRange(minimumAdvance, maximumAdvance);
+  centerAdvance = clamp(centerAdvance, minimumAdvance, maximumAdvance);
+
+  const uint16_t rpmBand = max((uint16_t)RPM_MEDIUM.toUser(configPage9.idleAdvClRpmBand), (uint16_t)1U);
+  const uint16_t rpmDotBand = max((uint16_t)RPM_MEDIUM.toUser(configPage9.idleAdvClRpmDotBand), (uint16_t)1U);
+  const int16_t errorScore = normalizeIdleAdvanceFuzzyInput(
+      getIdleAdvanceRpmError(), IDLE_ADVANCE_RPM_ERROR_DEADBAND, rpmBand);
+
+  int32_t rpmDot;
+  ATOMIC() { rpmDot = (int32_t)currentStatus.rpmDOT; }
+  const int16_t trendScore = normalizeIdleAdvanceFuzzyInput(
+      rpmDot, IDLE_ADVANCE_RPM_DOT_DEADBAND, rpmDotBand);
+
+  // Positive error (RPM low) adds advance. Positive rpmDOT (RPM rising)
+  // removes advance, providing damping before the target is crossed.
+  const int16_t controlScore = clamp((int16_t)(errorScore - trendScore),
+                                     (int16_t)-IDLE_ADVANCE_CL_SCORE_MAX,
+                                     (int16_t)IDLE_ADVANCE_CL_SCORE_MAX);
+  int32_t desiredAdvance = centerAdvance;
+  if(controlScore >= 0) {
+    desiredAdvance += ((int32_t)controlScore * (maximumAdvance - centerAdvance)) / IDLE_ADVANCE_CL_SCORE_MAX;
+  } else {
+    desiredAdvance += ((int32_t)controlScore * (centerAdvance - minimumAdvance)) / IDLE_ADVANCE_CL_SCORE_MAX;
+  }
+  return (int8_t)clamp(desiredAdvance, (int32_t)minimumAdvance, (int32_t)maximumAdvance);
+}
+
+static inline void resetIdleAdvanceClosedLoop(bool resetLearnedCenter) {
+  idleAdvanceClIntegral = 0L;
+  idleAdvanceClOutputInitialized = false;
+  idleAdvanceClLastUpdateValid = false;
+  if(resetLearnedCenter) { idleAdvanceClCenterInitialized = false; }
+}
+
+static inline void resetIdleAdvanceEngagement(bool resetLearnedCenter) {
+  idleAdvanceDelayStarted = false;
+  resetIdleAdvanceClosedLoop(resetLearnedCenter);
+}
+
+static inline bool hasIdleAdvanceStartDelayElapsed(void) {
+  if(configPage9.idleAdvStartDelay == 0U) { return true; }
+  if(!idleAdvanceDelayStarted) {
+    idleAdvanceDelayStart = runSecsX10;
+    idleAdvanceDelayStarted = true;
+    return false;
+  }
+  return hasIntervalElapsed(runSecsX10, idleAdvanceDelayStart, configPage9.idleAdvStartDelay);
+}
+
+static inline void adaptIdleAdvanceClosedLoopCenter(int32_t rpmError, int8_t desiredAdvance,
+                                                     int16_t minimumAdvance, int16_t maximumAdvance) {
+  const uint16_t rpmBand = max((uint16_t)RPM_MEDIUM.toUser(configPage9.idleAdvClRpmBand), (uint16_t)1U);
+  if((rpmError <= IDLE_ADVANCE_RPM_ERROR_DEADBAND)
+  && (rpmError >= -IDLE_ADVANCE_RPM_ERROR_DEADBAND)) {
+    idleAdvanceClIntegral = 0L;
+    return;
   }
 
-  return advance;
+  // Anti-windup: do not move the learned center farther toward a limit when
+  // the requested output already has no remaining authority in that direction.
+  if(((rpmError > 0L) && (desiredAdvance >= maximumAdvance))
+  || ((rpmError < 0L) && (desiredAdvance <= minimumAdvance))) {
+    idleAdvanceClIntegral = 0L;
+    return;
+  }
+
+  const int32_t limitedError = clamp(rpmError, -(int32_t)rpmBand, (int32_t)rpmBand);
+  idleAdvanceClIntegral += limitedError;
+  const int32_t stepThreshold = (int32_t)rpmBand * IDLE_ADVANCE_CL_ADAPT_TICKS_PER_DEGREE;
+  if(idleAdvanceClIntegral >= stepThreshold) {
+    ++idleAdvanceClCenter;
+    idleAdvanceClIntegral -= stepThreshold;
+  } else if(idleAdvanceClIntegral <= -stepThreshold) {
+    --idleAdvanceClCenter;
+    idleAdvanceClIntegral += stepThreshold;
+  }
+  idleAdvanceClCenter = clamp(idleAdvanceClCenter, minimumAdvance, maximumAdvance);
+}
+
+static inline int8_t updateIdleAdvanceClosedLoop(int8_t currentAdvance) {
+  int16_t minimumAdvance;
+  int16_t maximumAdvance;
+  getIdleAdvanceClosedLoopRange(minimumAdvance, maximumAdvance);
+
+  if(!idleAdvanceClCenterInitialized) {
+    idleAdvanceClCenter = (minimumAdvance + maximumAdvance) / 2;
+    idleAdvanceClCenterInitialized = true;
+  }
+  idleAdvanceClCenter = clamp(idleAdvanceClCenter, minimumAdvance, maximumAdvance);
+
+  if(!idleAdvanceClOutputInitialized) {
+    idleAdvanceClOutput = (int8_t)clamp((int16_t)currentAdvance, minimumAdvance, maximumAdvance);
+    idleAdvanceClOutputInitialized = true;
+  }
+
+  // runSecsX10 identifies the 10Hz tick. This prevents a second call to
+  // correctionsIgn() for a switched secondary spark table from updating the
+  // controller or its delay twice during the same main-loop iteration.
+  if(BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ)
+  && ((!idleAdvanceClLastUpdateValid) || (idleAdvanceClLastUpdate != runSecsX10))) {
+    const int8_t desiredAdvance = computeIdleAdvanceClosedLoopTarget(idleAdvanceClCenter);
+    adaptIdleAdvanceClosedLoopCenter(getIdleAdvanceRpmError(), desiredAdvance,
+                                     minimumAdvance, maximumAdvance);
+    const int16_t outputDelta = (int16_t)desiredAdvance - (int16_t)idleAdvanceClOutput;
+    const int16_t limitedDelta = clamp(outputDelta,
+                                       (int16_t)-IDLE_ADVANCE_CL_SLEW_PER_TICK,
+                                       (int16_t)IDLE_ADVANCE_CL_SLEW_PER_TICK);
+    idleAdvanceClOutput = (int8_t)((int16_t)idleAdvanceClOutput + limitedDelta);
+    idleAdvanceClLastUpdate = runSecsX10;
+    idleAdvanceClLastUpdateValid = true;
+  }
+
+  return idleAdvanceClOutput;
+}
+
+TESTABLE_INLINE_STATIC int8_t correctionIdleAdvance(int8_t advance)
+{
+  if(!isIdleAdvanceOn()) {
+    const bool resetLearnedCenter = (configPage2.idleAdvEnabled == IDLEADVANCE_MODE_OFF)
+        || (currentStatus.rotationStatus != EngineRotationStatus::Running);
+    resetIdleAdvanceEngagement(resetLearnedCenter);
+    return advance;
+  }
+
+  if(!isIdleAdvanceOperational()) {
+    // Preserve the learned center during a short throttle opening or gear
+    // change, but require the configured start delay again on re-entry.
+    resetIdleAdvanceEngagement(false);
+    return advance;
+  }
+
+  if(!hasIdleAdvanceStartDelayElapsed()) { return advance; }
+
+  if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_CLOSED_LOOP) {
+    return updateIdleAdvanceClosedLoop(advance);
+  }
+
+  resetIdleAdvanceClosedLoop(true);
+  const int16_t advanceIdleAdjust = IGNITION_ADVANCE_SMALL.toUser(
+      table2D_getValue(&idleAdvanceTable, computeIdleAdvanceRpmDelta()));
+  return applyIdleAdvanceAdjust(advance, (int8_t)advanceIdleAdjust);
 }
 
 /** Ignition soft revlimit correction.

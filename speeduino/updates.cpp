@@ -99,9 +99,28 @@ TESTABLE_STATIC void upgradeV26toV27(void) {
     }
 }
 
+// V28 adds closed-loop idle ignition settings in bytes that were previously unused.
+TESTABLE_STATIC void upgradeV27toV28(void) {
+    if(loadEEPROMVersion() == 27U)
+    {
+        // Mode 3 was labelled INVALID before this version. Do not unexpectedly
+        // enable ignition control if an old tune happened to contain that value.
+        if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_CLOSED_LOOP) {
+            configPage2.idleAdvEnabled = IDLEADVANCE_MODE_OFF;
+        }
+        configPage9.idleAdvClMinAdvance = IGNITION_ADVANCE_LARGE.toRaw(0);
+        configPage9.idleAdvClMaxAdvance = IGNITION_ADVANCE_LARGE.toRaw(20);
+        configPage9.idleAdvClRpmBand = RPM_MEDIUM.toRaw(200);
+        configPage9.idleAdvClRpmDotBand = RPM_MEDIUM.toRaw(500);
+
+        saveAllPages();
+        saveEEPROMVersion(28);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    27
+  #define CURRENT_DATA_VERSION    28
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -880,6 +899,7 @@ void doUpdates(void)
   }
   upgradeV25toV26();
   upgradeV26toV27();
+  upgradeV27toV28();
   //Move this #endif to only do latest updates to safe ROM space on small devices.
   #endif
 
@@ -887,6 +907,11 @@ void doUpdates(void)
   if( (loadEEPROMVersion() == 0) || (loadEEPROMVersion() == 255) )
   {
     configPage9.true_address = 0x200;
+    configPage2.idleAdvEnabled = IDLEADVANCE_MODE_OFF;
+    configPage9.idleAdvClMinAdvance = IGNITION_ADVANCE_LARGE.toRaw(0);
+    configPage9.idleAdvClMaxAdvance = IGNITION_ADVANCE_LARGE.toRaw(20);
+    configPage9.idleAdvClRpmBand = RPM_MEDIUM.toRaw(200);
+    configPage9.idleAdvClRpmDotBand = RPM_MEDIUM.toRaw(500);
     
     //Programmable outputs added. Set all to disabled
     configPage13.outputPin[0] = 0;
