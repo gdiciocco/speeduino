@@ -1488,7 +1488,7 @@ static int16_t getCrankAngle_GM7X(void)
 
 static void triggerSetEndTeeth_GM7X(void)
 {
-  if(currentStatus.advance < degreesToTenths(18) ) 
+  if(currentStatus.advance < degreesToTenths(18) )
   { 
     ignitionEndTeeth[0] = 7;
     ignitionEndTeeth[1] = 2;
@@ -3282,7 +3282,7 @@ static uint16_t __attribute__((noinline)) calcEndTooth_Nissan360(const IgnitionS
   //This uses 4 prior teeth, just to ensure there is sufficient time to set the schedule etc
   static constexpr uint8_t offset_teeth = 4;
   if((dischargeAngleDegrees(schedule) - offset_teeth) > configPage4.triggerAngle) {
-     return ( (dischargeAngleDegrees(schedule) - configPage4.triggerAngle) / 2 ) - offset_teeth; 
+     return ( (dischargeAngleDegrees(schedule) - configPage4.triggerAngle) / 2 ) - offset_teeth;
   }
   else { 
     return ( (dischargeAngleDegrees(schedule) + 720 - configPage4.triggerAngle) / 2 ) - offset_teeth;
@@ -3538,7 +3538,7 @@ static void triggerSetEndTeeth_Subaru67(void)
 {
   if(configPage4.sparkMode == IGN_MODE_SEQUENTIAL)
   {
-    if(currentStatus.advance >= degreesToTenths(10) ) 
+    if(currentStatus.advance >= degreesToTenths(10) )
     { 
       ignitionEndTeeth[0] = 12;
       ignitionEndTeeth[1] = 3;
@@ -3555,7 +3555,7 @@ static void triggerSetEndTeeth_Subaru67(void)
   }
   else    
   {
-    if(currentStatus.advance >= degreesToTenths(10) ) 
+    if(currentStatus.advance >= degreesToTenths(10) )
     { 
       ignitionEndTeeth[0] = 6;
       ignitionEndTeeth[1] = 3;

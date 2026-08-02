@@ -808,8 +808,8 @@ uint8_t getLegacySecondarySerialLogEntry(uint16_t byteNum)
     case 112: statusValue = currentStatus.fuelTempCorrection; break; //Fuel temperature Correction (%)
     case 113: statusValue = currentStatus.VE1; break; //VE 1 (%)
     case 114: statusValue = currentStatus.VE2; break; //VE 2 (%)
-    case 115: statusValue = (byte)tenthsToDegrees(currentStatus.advance1); break; //advance 1 
-    case 116: statusValue = (byte)tenthsToDegrees(currentStatus.advance2); break; //advance 2 
+    case 115: statusValue = (byte)tenthsToDegrees(currentStatus.advance1); break; //advance 1
+    case 116: statusValue = (byte)tenthsToDegrees(currentStatus.advance2); break; //advance 2
     case 117: statusValue = currentStatus.nitrous_status; break;
     case 118: statusValue = buildSdCardStatus(currentStatus); break; //SD card status
     case 119: statusValue = lowByte(currentStatus.EMAP); break; //2 bytes for EMAP

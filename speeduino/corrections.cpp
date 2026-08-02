@@ -1318,7 +1318,7 @@ static inline int16_t calculateSoftRevLimitAdvance(int16_t advanceTenths) {
   }
 }
 
-TESTABLE_INLINE_STATIC int8_t correctionSoftRevLimit(int8_t advance)
+TESTABLE_INLINE_STATIC int16_t correctionSoftRevLimit(int16_t advanceTenths)
 {
   currentStatus.softLimitActive = false;
 
@@ -1329,7 +1329,7 @@ TESTABLE_INLINE_STATIC int8_t correctionSoftRevLimit(int8_t advance)
       currentStatus.softLimitActive = true;
       if( softLimitTime < configPage4.SoftLimMax )
       {
-        advance = calculateSoftRevLimitAdvance(advance);
+        advanceTenths = calculateSoftRevLimitAdvance(advanceTenths);
         if( BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ) ) { 
           ++softLimitTime; 
         }
@@ -1342,7 +1342,7 @@ TESTABLE_INLINE_STATIC int8_t correctionSoftRevLimit(int8_t advance)
     }
   }
 
-  return advance;
+  return advanceTenths;
 }
 
 /** Ignition Nitrous oxide correction.

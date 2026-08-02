@@ -19,11 +19,15 @@ static void __attribute__((noinline)) assert_2nd_spark_is_off(const statuses &cu
 } 
 
 // Expectations stay in whole degrees for readability; the advance chain is in tenths.
-static void __attribute__((noinline)) assert_2nd_spark_is_on(const statuses &current, int16_t expectedAdvance1, int16_t expectedAdvance2, int16_t expectedAdvance) {
+static void __attribute__((noinline)) assert_2nd_spark_is_on_tenths(const statuses &current, int16_t expectedAdvance1, int16_t expectedAdvance2, int16_t expectedAdvanceTenths) {
     TEST_ASSERT_TRUE(current.secondSparkTableActive);
     TEST_ASSERT_EQUAL(degreesToTenths(expectedAdvance1), current.advance1);
     TEST_ASSERT_EQUAL(degreesToTenths(expectedAdvance2), current.advance2);
-    TEST_ASSERT_EQUAL(degreesToTenths(expectedAdvance), current.advance);
+    TEST_ASSERT_EQUAL(expectedAdvanceTenths, current.advance);
+}
+
+static void __attribute__((noinline)) assert_2nd_spark_is_on(const statuses &current, int16_t expectedAdvance1, int16_t expectedAdvance2, int16_t expectedAdvance) {
+    assert_2nd_spark_is_on_tenths(current, expectedAdvance1, expectedAdvance2, degreesToTenths(expectedAdvance));
 } 
 
 static void __attribute__((noinline)) test_mode_off_no_secondary_spark(void) {
@@ -111,7 +115,8 @@ static void __attribute__((noinline)) test_sparkmode_multiply(uint8_t multiplier
     setup_test_mode_simple(page2, page10, current, lookupTable, SPARK2_MODE_MULTIPLY);
     fill_table_values(lookupTable, IGNITION_ADVANCE_LARGE.toRaw(multiplier));
     calculateSecondarySpark(page2, page10, lookupTable, current);
-    assert_2nd_spark_is_on(current, SIMPLE_ADVANCE1, multiplier-INT8_MAX, DIV_ROUND_CLOSEST((SIMPLE_ADVANCE1*multiplier), 100, int16_t));
+    const int32_t expectedAdvanceTenths = DIV_ROUND_CLOSEST((int32_t)degreesToTenths(SIMPLE_ADVANCE1) * multiplier, 100, int32_t);
+    assert_2nd_spark_is_on_tenths(current, SIMPLE_ADVANCE1, multiplier-INT8_MAX, (int16_t)expectedAdvanceTenths);
 }
 
 static void __attribute__((noinline)) test_sparkmode_multiply_0(void) {

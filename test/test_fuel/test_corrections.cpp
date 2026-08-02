@@ -7,6 +7,7 @@
 #include "sensors_map_structs.h"
 #include "units.h"
 #include "fuel_calcs.h"
+#include "crankMaths.h"
 
 extern byte correctionWUE(void);
 extern table2D_u8_u8_10 WUETable; ///< 10 bin Warm Up Enrichment map (2D)
@@ -851,7 +852,7 @@ static void test_correctionDFCOfuel_notaper()
 static inline void reset_dfco_taper(void) {
   currentStatus.isDFCOActive = false;
   TEST_ASSERT_EQUAL(100, correctionDFCOfuel());
-  TEST_ASSERT_EQUAL(20, correctionDFCOignition(20));
+  TEST_ASSERT_EQUAL(degreesToTenths(20), correctionDFCOignition(degreesToTenths(20)));
 }
 
 static inline void advance_dfco_taper(uint8_t count) {
@@ -896,7 +897,7 @@ static void test_correctionDFCOignition_DFCO_off()
   setup_DFCO_on_taper_off_no_delay();
 
   currentStatus.isDFCOActive = false;
-  TEST_ASSERT_EQUAL(45, correctionDFCOignition(45));
+  TEST_ASSERT_EQUAL(degreesToTenths(45), correctionDFCOignition(degreesToTenths(45)));
 }
 
 static void test_correctionDFCOignition_notaper()
@@ -905,7 +906,7 @@ static void test_correctionDFCOignition_notaper()
 
   configPage9.dfcoTaperEnable = 0; //Disable
   currentStatus.isDFCOActive =  true;
-  TEST_ASSERT_EQUAL(45, correctionDFCOignition(45));
+  TEST_ASSERT_EQUAL(degreesToTenths(45), correctionDFCOignition(degreesToTenths(45)));
 }
 
 static void test_correctionDFCOignition_taper()
@@ -918,23 +919,23 @@ static void test_correctionDFCOignition_taper()
 
   // 25% test
   advance_dfco_taper(configPage9.dfcoTaperTime/4);
-  TEST_ASSERT_EQUAL(15, correctionDFCOignition(20));
+  TEST_ASSERT_EQUAL(degreesToTenths(15), correctionDFCOignition(degreesToTenths(20)));
 
   // 50% test
   advance_dfco_taper(configPage9.dfcoTaperTime/4);
-  TEST_ASSERT_EQUAL(10, correctionDFCOignition(20));
+  TEST_ASSERT_EQUAL(degreesToTenths(10), correctionDFCOignition(degreesToTenths(20)));
 
   // 75% test
   advance_dfco_taper(configPage9.dfcoTaperTime/4);
-  TEST_ASSERT_EQUAL(5, correctionDFCOignition(20));
+  TEST_ASSERT_EQUAL(degreesToTenths(5), correctionDFCOignition(degreesToTenths(20)));
 
   // 100% & beyond test
   advance_dfco_taper(configPage9.dfcoTaperTime/4);
-  TEST_ASSERT_EQUAL(0, correctionDFCOignition(20));
+  TEST_ASSERT_EQUAL(degreesToTenths(0), correctionDFCOignition(degreesToTenths(20)));
   advance_dfco_taper(1);
-  TEST_ASSERT_EQUAL(0, correctionDFCOignition(20));
+  TEST_ASSERT_EQUAL(degreesToTenths(0), correctionDFCOignition(degreesToTenths(20)));
   advance_dfco_taper(1);
-  TEST_ASSERT_EQUAL(0, correctionDFCOignition(20));
+  TEST_ASSERT_EQUAL(degreesToTenths(0), correctionDFCOignition(degreesToTenths(20)));
 }
 
 static void test_corrections_dfco()
@@ -955,6 +956,7 @@ static void test_corrections_dfco()
 //Setup a basic TAE enrichment curve, threshold etc that are common to all tests. Specifica values maybe updated in each individual test
 
 static void reset_AE(void) {
+  configPage2.aeMode = AE_MODE_BLENDED;
   currentStatus.isAcceleratingTPS = false;
   currentStatus.isDeceleratingTPS = false;
   currentStatus.tpsDOT = 0;
