@@ -1,3 +1,4 @@
+#include "crankMaths.h"
 #include <unity.h>
 #include "../test_utils.h"
 #include "scheduler_ignition_controller.h"
@@ -26,7 +27,7 @@ struct ignition_test_context_t
         fakeDecoderStatus.syncStatus = SyncStatus::Full;
         current.maxIgnOutputs = 4U;
         current.dwell = 3000U; // 3ms dwell
-        current.advance = 15U;  // 15 degrees advance
+        current.advance = degreesToTenths(15);  // 15 degrees advance
         current.decoder = decoder_builder_t().setGetStatus(getFakeDecoderStatus).build();
         SetRevolutionTime(UDIV_ROUND_CLOSEST(60UL*1000000UL, 4000, uint32_t));
     }

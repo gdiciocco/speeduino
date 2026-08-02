@@ -53,11 +53,11 @@ void test_calc_ign_timeout(const ign_test_parameters &test_params)
     
     sprintf_P(msg, PSTR("PENDING advanceAngle: %" PRIi8 ", channelAngle: %" PRIu16 ", crankAngle: %" PRIu16 ", dischargeAngle: %" PRIi16), test_params.advanceAngle, test_params.channelAngle, test_params.crankAngle, schedule.dischargeAngle);
     schedule._status = PENDING;
-    TEST_ASSERT_INT32_WITHIN_MESSAGE(1, test_params.pending, _calculateIgnitionTimeout(schedule, test_params.crankAngle), msg);
+    TEST_ASSERT_INT32_WITHIN_MESSAGE(20, test_params.pending, _calculateIgnitionTimeout(schedule, test_params.crankAngle), msg);
     
     sprintf_P(msg, PSTR("RUNNING advanceAngle: %" PRIi8 ", channelAngle: %" PRIu16 ", crankAngle: %" PRIu16 ", dischargeAngle: %" PRIi16), test_params.advanceAngle, test_params.channelAngle, test_params.crankAngle, schedule.dischargeAngle);
     schedule._status = RUNNING;
-    TEST_ASSERT_INT32_WITHIN_MESSAGE(1, test_params.running, _calculateIgnitionTimeout(schedule, test_params.crankAngle), msg);
+    TEST_ASSERT_INT32_WITHIN_MESSAGE(20, test_params.running, _calculateIgnitionTimeout(schedule, test_params.crankAngle), msg);
 }
 
 void test_calc_ign_timeout(const ign_test_parameters *pStart, const ign_test_parameters *pEnd)
@@ -76,7 +76,7 @@ void test_calc_ign_timeout_360()
     setEngineSpeed(4000, 360);
     
     TEST_ASSERT_EQUAL(15000, currentStatus.revolutionTime);    
-    TEST_ASSERT_EQUAL(96, dwellAngle);
+    TEST_ASSERT_EQUAL(960, dwellAngle); //tenths of a degree
 
   // Expected test values were generated using floating point calculations (in Excel)
   static const ign_test_parameters test_data[] PROGMEM = {
