@@ -98,13 +98,14 @@ void updateKnockWindowSchedule(const statuses &current)
       // TunerStudio stores the window start angle as an 8-bit value. Cast
       // through int8_t so negative BTDC values keep their sign.
       int16_t windowStartAngle = (int8_t)table2D_getValue(&knockWindowStartTable, current.RPMdiv100);
-      int16_t delayAngle = (int16_t)current.advance + windowStartAngle;
+      // current.advance is in tenths of a degree, the table value is in whole degrees.
+      int16_t delayAngle = current.advance + degreesToTenths(windowStartAngle);
 
       // The window is intentionally post-spark. If the tune asks for a
       // pre-spark window (delayAngle <= 0), open right at spark end instead.
       if(delayAngle > 0)
       {
-        uint32_t delayTime = angleToTimeMicroSecPerDegree((uint16_t)delayAngle);
+        uint32_t delayTime = angleTenthsToTimeMicroSec((uint16_t)delayAngle);
         if(delayTime < MAX_TIMER_PERIOD) { delayCompare = knockWindowCompareFromUs(delayTime); }
         else { durationCompare = 0U; } // Window start is beyond timer reach; skip this window
       }

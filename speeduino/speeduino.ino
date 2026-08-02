@@ -100,8 +100,9 @@ static inline uint8_t getVE1(void)
 static inline int16_t getAdvance1(void)
 {
   currentStatus.ignLoad = getLoad(configPage2.ignAlgorithm, currentStatus);
-  //The table itself is in whole degrees; the correction chain works in tenths.
-  return correctionsIgn(degreesToTenths(IGNITION_ADVANCE_LARGE.toUser(get3DTableValue(&ignitionTable, currentStatus.ignLoad, currentStatus.RPM)))); //As above, but for ignition advance
+  //IGNITION_ADVANCE_TABLE already yields tenths of a degree, which is the unit the
+  //correction chain and the spark scheduling work in.
+  return correctionsIgn(IGNITION_ADVANCE_TABLE.toUser(get3DTableValue(&ignitionTable, currentStatus.ignLoad, currentStatus.RPM))); //As above, but for ignition advance
 }
 
 static inline bool haveSwitchedToBatteryPower(uint8_t originalBatteryVoltage, const statuses &current)

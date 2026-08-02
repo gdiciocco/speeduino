@@ -21,8 +21,14 @@ void setEngineSpeed(uint16_t rpm, int16_t max_crank)
   SetRevolutionTime(UDIV_ROUND_CLOSEST(60UL*1000000UL, rpm, uint32_t));
   CRANK_ANGLE_MAX_IGN = max_crank;
   CRANK_ANGLE_MAX_INJ = max_crank;
-  dwellAngle = timeToAngleDegPerMicroSec(DWELL_TIME_MS*1000UL);
+  //The ignition angle domain is in tenths of a degree (@see ANGLE_TENTHS_PER_DEGREE)
+  dwellAngle = timeToAngleTenthsPerMicroSec(DWELL_TIME_MS*1000UL);
 }
+
+//The test tables below are written in whole degrees for readability. The angles the
+//code now produces carry a fractional degree that the old 1-degree representation
+//had to throw away, so the angle assertions allow half a degree of difference.
+static constexpr int16_t ANGLE_TOLERANCE_TENTHS = 5;
 
 struct ign_test_parameters
 {
@@ -41,9 +47,9 @@ void test_calc_ign_timeout(const ign_test_parameters &test_params)
   IgnitionSchedule schedule(IGN4_COUNTER, IGN4_COMPARE);
 
     schedule.channelDegrees = test_params.channelAngle;
-    calculateIgnitionAngles(schedule, dwellAngle, test_params.advanceAngle);
-    TEST_ASSERT_EQUAL_MESSAGE(test_params.expectedStartAngle, schedule.chargeAngle, "startAngle");
-    TEST_ASSERT_EQUAL_MESSAGE(test_params.expectedEndAngle, schedule.dischargeAngle, "dischargeAngle");
+    calculateIgnitionAngles(schedule, dwellAngle, degreesToTenths(test_params.advanceAngle));
+    TEST_ASSERT_INT16_WITHIN_MESSAGE(ANGLE_TOLERANCE_TENTHS, degreesToTenths(test_params.expectedStartAngle), schedule.chargeAngle, "startAngle");
+    TEST_ASSERT_INT16_WITHIN_MESSAGE(ANGLE_TOLERANCE_TENTHS, degreesToTenths(test_params.expectedEndAngle), schedule.dischargeAngle, "dischargeAngle");
     
     sprintf_P(msg, PSTR("PENDING advanceAngle: %" PRIi8 ", channelAngle: %" PRIu16 ", crankAngle: %" PRIu16 ", dischargeAngle: %" PRIi16), test_params.advanceAngle, test_params.channelAngle, test_params.crankAngle, schedule.dischargeAngle);
     schedule._status = PENDING;
@@ -600,10 +606,11 @@ void test_rotary_channel_calcs(void)
     while (pStart!=pEnd)
     {
         memcpy_P(local, pStart, sizeof(local));
-        leading.dischargeAngle = local[0];
-        calculateIgnitionTrailingRotary(leading, local[1], local[2], trailing);
-        TEST_ASSERT_EQUAL_MESSAGE(local[3], trailing.dischargeAngle, "dischargeAngle");
-        TEST_ASSERT_EQUAL_MESSAGE(local[4], trailing.chargeAngle, "startAngle");
+        //Table is in whole degrees; dischargeAngle/chargeAngle and the dwell angle are in tenths.
+        leading.dischargeAngle = degreesToTenths((int16_t)local[0]);
+        calculateIgnitionTrailingRotary(leading, degreesToTenths((int16_t)local[1]), (int16_t)local[2], trailing);
+        TEST_ASSERT_EQUAL_MESSAGE(degreesToTenths((int16_t)local[3]), trailing.dischargeAngle, "dischargeAngle");
+        TEST_ASSERT_EQUAL_MESSAGE(degreesToTenths((int16_t)local[4]), trailing.chargeAngle, "startAngle");
         ++pStart;
     } 
 

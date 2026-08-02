@@ -151,9 +151,31 @@ TESTABLE_STATIC void upgradeV28toV29(void) {
     }
 }
 
+TESTABLE_STATIC void upgradeV29toV30(void) {
+    if(loadEEPROMVersion() == 29U)
+    {
+        // The main ignition table moved from whole degrees offset -40 to half degrees
+        // offset -20 (@see IGNITION_ADVANCE_TABLE). Rescale the stored tune so it keeps
+        // commanding the same advance: new = (old - 40) * 2 + 40.
+        //
+        // Values below -20 degrees advance cannot be represented any more and clamp to
+        // -20. Nothing real runs there, but a tune that had cells at the old -40 floor
+        // will come back at -20.
+        for(uint16_t i = 0U; i < (uint16_t)_countof(ignitionTable.values.values); ++i)
+        {
+            const int16_t advanceDegrees = (int16_t)ignitionTable.values.values[i] - 40;
+            ignitionTable.values.values[i] =
+                (table3d_value_t)clamp((int16_t)((advanceDegrees * 2) + 40), (int16_t)0, (int16_t)UINT8_MAX);
+        }
+
+        saveAllPages();
+        saveEEPROMVersion(30);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    29
+  #define CURRENT_DATA_VERSION    30
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -934,6 +956,7 @@ void doUpdates(void)
   upgradeV26toV27();
   upgradeV27toV28();
   upgradeV28toV29();
+  upgradeV29toV30();
   //Move this #endif to only do latest updates to safe ROM space on small devices.
   #endif
 

@@ -131,6 +131,19 @@ static constexpr conversionFactor<uint16_t, uint8_t> CRANKING_ENRICHMENT = { .sc
 /** @brief Ignition values from the main spark table are offset 40 degrees downwards to allow for negative spark timing */
 static constexpr conversionFactor<int16_t, uint8_t> IGNITION_ADVANCE_LARGE = { .scale=1U, .translate=-40 };
 
+/** @brief The main ignition table: half-degree steps, offset 20 degrees downwards.
+ *
+ * toUser() yields **tenths of a degree**, matching the ignition advance chain
+ * (@see ANGLE_TENTHS_PER_DEGREE). Range is -20.0 to +107.5 degrees at 0.5 degree
+ * resolution, versus -40 to +215 at 1 degree before. The narrower range costs
+ * nothing real - no engine runs beyond it - and buys twice the table resolution
+ * for free, since the cell is still a single byte.
+ *
+ * This is deliberately separate from IGNITION_ADVANCE_LARGE, which is shared with
+ * the flex, WMI and closed loop idle advance values: those keep whole degrees.
+ */
+static constexpr conversionFactor<int16_t, uint8_t> IGNITION_ADVANCE_TABLE = { .scale=5U, .translate=-200 };
+
 /** @brief Ignition advance adjustments can use a smaller offset */
 static constexpr conversionFactor<int8_t, uint8_t> IGNITION_ADVANCE_SMALL = { .scale=1U, .translate=-15 };
 

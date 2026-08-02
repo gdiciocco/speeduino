@@ -309,7 +309,7 @@ void DashMessage(uint16_t DashMessageID)
     break;
 
     case CAN_HALTECH_DATA3:
-      temp_Advance = currentStatus.advance * 10U; //Note: Signed value
+      temp_Advance = currentStatus.advance; //Note: Signed value. Already in tenths of a degree
       //Convert PW into duty cycle
       temp_DutyCycle = (fuelSchedule1.pw * 100UL * currentStatus.nSquirts) / currentStatus.revolutionTime; 
       if (configPage2.strokes == FOUR_STROKE) { temp_DutyCycle = temp_DutyCycle / 2U; }
@@ -532,7 +532,7 @@ void obd_response(uint8_t PIDmode, uint8_t requestedPIDlow, uint8_t requestedPID
 
       case 14:      //PID-0x0E , Ignition Timing advance, range is -64 to 63.5 BTDC , formula == A/2 - 64 
         int8_t temp_timingadvance;
-        temp_timingadvance = ((currentStatus.advance + 64) << 1);
+        temp_timingadvance = ((tenthsToDegrees(currentStatus.advance) + 64) << 1);
         //obdcalcA = ((timingadvance + 64) <<1) ; //((timingadvance + 64) *2)
         outMsg.buf[0] =  0x03;                     // sending 3 bytes
         outMsg.buf[1] =  0x41;                     // Same as query, except that 40h is added to the mode value. So:41h = show current data ,42h = freeze frame ,etc.

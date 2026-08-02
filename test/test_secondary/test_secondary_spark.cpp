@@ -1,6 +1,7 @@
 #include <unity.h>
 #include <avr/pgmspace.h>
 #include "secondaryTables.h"
+#include "crankMaths.h"
 #include "globals.h"
 #include "../test_utils.h"
 #include "storage.h"
@@ -10,18 +11,19 @@
 TEST_DATA_P table3d_axis_t tempXAxis[] = {500U/100U, 700U/100U, 900U/100U, 1200U/100U, 1600U/100U, 2000U/100U, 2500U/100U, 3100U/100U, 3500U/100U, 4100U/100U, 4700U/100U, 5300U/100U, 5900U/100U, 6500U/100U, 6750U/100U, 7000U/100U};
 TEST_DATA_P table3d_axis_t tempYAxis[] = {16U/2U, 26U/2U, 30U/2U, 36U/2U, 40U/2U, 46U/2U, 50U/2U, 56U/2U, 60U/2U, 66U/2U, 70U/2U, 76U/2U, 86U/2U, 90U/2U, 96U/2U, 100U/2U};
 
-static void __attribute__((noinline)) assert_2nd_spark_is_off(const statuses &current, int8_t expectedAdvance) {
+static void __attribute__((noinline)) assert_2nd_spark_is_off(const statuses &current, int16_t expectedAdvance) {
     TEST_ASSERT_FALSE(current.secondSparkTableActive);
-    TEST_ASSERT_EQUAL(expectedAdvance, current.advance1);
+    TEST_ASSERT_EQUAL(degreesToTenths(expectedAdvance), current.advance1);
     TEST_ASSERT_EQUAL(0, current.advance2);
     TEST_ASSERT_EQUAL(current.advance1, current.advance);
 } 
 
-static void __attribute__((noinline)) assert_2nd_spark_is_on(const statuses &current, int8_t expectedAdvance1, int8_t expectedAdvance2, int8_t expectedAdvance) {
+// Expectations stay in whole degrees for readability; the advance chain is in tenths.
+static void __attribute__((noinline)) assert_2nd_spark_is_on(const statuses &current, int16_t expectedAdvance1, int16_t expectedAdvance2, int16_t expectedAdvance) {
     TEST_ASSERT_TRUE(current.secondSparkTableActive);
-    TEST_ASSERT_EQUAL(expectedAdvance1, current.advance1);
-    TEST_ASSERT_EQUAL(expectedAdvance2, current.advance2);
-    TEST_ASSERT_EQUAL(expectedAdvance, current.advance);
+    TEST_ASSERT_EQUAL(degreesToTenths(expectedAdvance1), current.advance1);
+    TEST_ASSERT_EQUAL(degreesToTenths(expectedAdvance2), current.advance2);
+    TEST_ASSERT_EQUAL(degreesToTenths(expectedAdvance), current.advance);
 } 
 
 static void __attribute__((noinline)) test_mode_off_no_secondary_spark(void) {
@@ -32,7 +34,7 @@ static void __attribute__((noinline)) test_mode_off_no_secondary_spark(void) {
 
     page10.spark2Mode = SPARK2_MODE_OFF;
     page10.spark2Algorithm = LOAD_SOURCE_MAP;
-    current.advance1 = 50;
+    current.advance1 = degreesToTenths(50);
     current.advance = current.advance1;
 
     calculateSecondarySpark(page2, page10, lookupTable, current);
@@ -47,7 +49,7 @@ static constexpr int16_t CAP_LOAD_VALUE = IGNITION_ADVANCE_LARGE.toUser(CAP_LOAD
 static void __attribute__((noinline)) setup_test_mode_cap_INT8_MAX(config2 &, config10 &page10, statuses &current, table3d16RpmLoad &lookupTable, uint8_t mode) {
     page10.spark2Mode = mode;    
     page10.spark2Algorithm = LOAD_SOURCE_MAP;
-    current.advance1 = CAP_ADVANCE1;
+    current.advance1 = degreesToTenths(CAP_ADVANCE1);
     current.advance = current.advance1;
     current.MAP = tempYAxis[0];
     current.setRpm( tempXAxis[0]);
@@ -76,7 +78,7 @@ static constexpr int16_t SIMPLE_LOAD_VALUE = IGNITION_ADVANCE_LARGE.toUser(SIMPL
 static void __attribute__((noinline)) setup_test_mode_simple(config2 &, config10 &page10, statuses &current, table3d16RpmLoad &lookupTable, uint8_t mode) {
     page10.spark2Mode = mode;    
     page10.spark2Algorithm = LOAD_SOURCE_MAP;
-    current.advance1 = SIMPLE_ADVANCE1;
+    current.advance1 = degreesToTenths(SIMPLE_ADVANCE1);
     current.advance = current.advance1;
     current.MAP = tempYAxis[0];
     current.setRpm( tempXAxis[0]);

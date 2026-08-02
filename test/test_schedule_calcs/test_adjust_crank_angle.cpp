@@ -53,11 +53,11 @@ void test_adjust_crank_angle_pending_above_minrevolutions()
 
   constexpr uint16_t newCrankAngle = 180;
   constexpr uint16_t chargeAngle = 359;
-  subject.schedule.chargeAngle = chargeAngle;
+  subject.schedule.chargeAngle = degreesToTenths(chargeAngle);
 
   adjustCrankAngle(subject.schedule, newCrankAngle);
   TEST_ASSERT_EQUAL(101, subject.schedule._counter);
-  TEST_ASSERT_EQUAL(subject.schedule._counter+uS_TO_TIMER_COMPARE(angleToTimeMicroSecPerDegree(chargeAngle-newCrankAngle)), subject.schedule._compare);
+  TEST_ASSERT_EQUAL(subject.schedule._counter+angleTenthsToTimerTicks(degreesToTenths(chargeAngle-newCrankAngle)), subject.schedule._compare);
 }
 
 void test_adjust_crank_angle_pending_above_minrevolutions_negative_angle()
@@ -68,7 +68,7 @@ void test_adjust_crank_angle_pending_above_minrevolutions_negative_angle()
 
   constexpr uint16_t newCrankAngle = 180;
   constexpr uint16_t chargeAngle = 100;
-  subject.schedule.chargeAngle = chargeAngle;
+  subject.schedule.chargeAngle = degreesToTenths(chargeAngle);
 
   adjustCrankAngle(subject.schedule, newCrankAngle);
   TEST_ASSERT_EQUAL(101, subject.schedule._counter);
@@ -82,11 +82,11 @@ void test_adjust_crank_angle_running()
 
   constexpr uint16_t newCrankAngle = 180;
   constexpr uint16_t chargeAngle = 359;
-  subject.schedule.dischargeAngle = chargeAngle;
+  subject.schedule.dischargeAngle = degreesToTenths(chargeAngle);
 
   adjustCrankAngle(subject.schedule, newCrankAngle);
   TEST_ASSERT_EQUAL(101, subject.schedule._counter);
-  TEST_ASSERT_EQUAL(subject.schedule._counter+uS_TO_TIMER_COMPARE(angleToTimeMicroSecPerDegree(chargeAngle-newCrankAngle)), subject.schedule._compare);
+  TEST_ASSERT_EQUAL(subject.schedule._counter+angleTenthsToTimerTicks(degreesToTenths(chargeAngle-newCrankAngle)), subject.schedule._compare);
 }
 
 void test_adjust_crank_angle_running_negative_angle()
@@ -96,7 +96,7 @@ void test_adjust_crank_angle_running_negative_angle()
 
   constexpr uint16_t newCrankAngle = 180;
   constexpr uint16_t chargeAngle = 179;
-  subject.schedule.dischargeAngle = chargeAngle;
+  subject.schedule.dischargeAngle = degreesToTenths(chargeAngle);
 
   adjustCrankAngle(subject.schedule, newCrankAngle);
   TEST_ASSERT_EQUAL(101, subject.schedule._counter);

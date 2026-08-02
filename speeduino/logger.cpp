@@ -1,5 +1,6 @@
 #include "globals.h"
 #include "logger.h"
+#include "crankMaths.h"
 #include "decoders.h"
 #include "init.h"
 #include "maths.h"
@@ -348,7 +349,7 @@ byte getTSLogEntry(uint16_t byteNum)
     case 21: statusValue = currentStatus.afrTarget; break;
     case 22: statusValue = lowByte(currentStatus.tpsDOT); break; //TPS DOT
     case 23: statusValue = highByte(currentStatus.tpsDOT); break; //TPS DOT
-    case 24: statusValue = currentStatus.advance; break;
+    case 24: statusValue = (byte)tenthsToDegrees(currentStatus.advance); break;
     case 25: statusValue = currentStatus.TPS; break; // TPS (0% to 100%)
     
     case 26: 
@@ -464,8 +465,8 @@ byte getTSLogEntry(uint16_t byteNum)
     case 115: statusValue = currentStatus.outputsStatus; break;
     case 116: statusValue = temperatureAddOffset(currentStatus.fuelTemp); break; //Fuel temperature from flex sensor
     case 117: statusValue = currentStatus.fuelTempCorrection; break; //Fuel temperature Correction (%)
-    case 118: statusValue = currentStatus.advance1; break; //advance 1 (%)
-    case 119: statusValue = currentStatus.advance2; break; //advance 2 (%)
+    case 118: statusValue = (byte)tenthsToDegrees(currentStatus.advance1); break; //advance 1 (%)
+    case 119: statusValue = (byte)tenthsToDegrees(currentStatus.advance2); break; //advance 2 (%)
     case 120: statusValue = buildSdCardStatus(currentStatus); break; //SD card status
     case 121: statusValue = lowByte(currentStatus.EMAP); break; //2 bytes for EMAP
     case 122: statusValue = highByte(currentStatus.EMAP); break;
@@ -541,7 +542,7 @@ int16_t getReadableLogEntry(uint16_t logIndex)
     case 17: statusValue = currentStatus.VE2; break; //VE 2 (%)
     case 18: statusValue = currentStatus.afrTarget; break;
     case 19: statusValue = currentStatus.tpsDOT; break; //TPS DOT
-    case 20: statusValue = currentStatus.advance; break;
+    case 20: statusValue = (byte)tenthsToDegrees(currentStatus.advance); break;
     case 21: statusValue = currentStatus.TPS; break; // TPS (0% to 100%)
     
     case 22: 
@@ -620,8 +621,8 @@ int16_t getReadableLogEntry(uint16_t logIndex)
     case 81: statusValue = currentStatus.outputsStatus; break;
     case 82: statusValue = currentStatus.fuelTemp; break; //Fuel temperature from flex sensor
     case 83: statusValue = currentStatus.fuelTempCorrection; break; //Fuel temperature Correction (%)
-    case 84: statusValue = currentStatus.advance1; break; //advance 1 (%)
-    case 85: statusValue = currentStatus.advance2; break; //advance 2 (%)
+    case 84: statusValue = (byte)tenthsToDegrees(currentStatus.advance1); break; //advance 1 (%)
+    case 85: statusValue = (byte)tenthsToDegrees(currentStatus.advance2); break; //advance 2 (%)
     case 86: statusValue = buildSdCardStatus(currentStatus); break; //SD card status
     case 87: statusValue = currentStatus.EMAP; break;
     case 88: statusValue = currentStatus.fanDuty; break;
@@ -710,7 +711,7 @@ uint8_t getLegacySecondarySerialLogEntry(uint16_t byteNum)
     case 20: statusValue = lowByte(fuelSchedule1.pw); break; //Pulsewidth 1 multiplied by 10 in ms. Have to convert from uS to mS.
     case 21: statusValue = highByte(fuelSchedule1.pw); break; //Pulsewidth 1 multiplied by 10 in ms. Have to convert from uS to mS.
     case 22: statusValue = (uint8_t)(currentStatus.tpsDOT / 10); break; //TPS DOT
-    case 23: statusValue = currentStatus.advance; break;
+    case 23: statusValue = (byte)tenthsToDegrees(currentStatus.advance); break;
     case 24: statusValue = currentStatus.TPS; break; // TPS (0% to 100%)
     case 25: statusValue = lowByte(currentStatus.loopsPerSecond); break;
     case 26: statusValue = highByte(currentStatus.loopsPerSecond); break;
@@ -807,8 +808,8 @@ uint8_t getLegacySecondarySerialLogEntry(uint16_t byteNum)
     case 112: statusValue = currentStatus.fuelTempCorrection; break; //Fuel temperature Correction (%)
     case 113: statusValue = currentStatus.VE1; break; //VE 1 (%)
     case 114: statusValue = currentStatus.VE2; break; //VE 2 (%)
-    case 115: statusValue = currentStatus.advance1; break; //advance 1 
-    case 116: statusValue = currentStatus.advance2; break; //advance 2 
+    case 115: statusValue = (byte)tenthsToDegrees(currentStatus.advance1); break; //advance 1 
+    case 116: statusValue = (byte)tenthsToDegrees(currentStatus.advance2); break; //advance 2 
     case 117: statusValue = currentStatus.nitrous_status; break;
     case 118: statusValue = buildSdCardStatus(currentStatus); break; //SD card status
     case 119: statusValue = lowByte(currentStatus.EMAP); break; //2 bytes for EMAP

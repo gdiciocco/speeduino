@@ -787,7 +787,7 @@ void sendValuesLegacy(void)
   bytestosend -= primarySerial.write(currentStatus.RPM>>8);
   bytestosend -= primarySerial.write(currentStatus.RPM);
 
-  temp = currentStatus.advance * 10;
+  temp = currentStatus.advance; //Already in tenths of a degree, which is what this protocol field wants
   bytestosend -= primarySerial.write(temp>>8);
   bytestosend -= primarySerial.write(temp);
 
@@ -884,10 +884,10 @@ void sendValuesLegacy(void)
   bytestosend -= primarySerial.write(99); // fuelcor
   bytestosend -= primarySerial.write(99); // portStatus
 
-  temp = currentStatus.advance1 * 10;
+  temp = currentStatus.advance1; //Already in tenths of a degree
   bytestosend -= primarySerial.write(temp>>8);
   bytestosend -= primarySerial.write(temp);
-  temp = currentStatus.advance2 * 10;
+  temp = currentStatus.advance2; //Already in tenths of a degree
   bytestosend -= primarySerial.write(temp>>8);
   bytestosend -= primarySerial.write(temp);
 
