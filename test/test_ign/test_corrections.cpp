@@ -5,7 +5,7 @@
 #include "sensors.h"
 #include "units.h"
 
-extern int8_t correctionFixedTiming(int8_t advance);
+extern int16_t correctionFixedTiming(int16_t advanceTenths);
 
 static void test_correctionFixedTiming_inactive(void) {
     configPage2.fixAngEnable = 0;
@@ -28,7 +28,7 @@ static void test_correctionFixedTiming(void) {
     RUN_TEST_P(test_correctionFixedTiming_active);
 }
 
-extern int8_t correctionCLTadvance(int8_t advance);
+extern int16_t correctionCLTadvance(int16_t advanceTenths);
 extern table2D_u8_u8_6 CLTAdvanceTable; ///< 6 bin ignition adjustment based on coolant temperature  (2D)
 
 static void setup_clt_advance_table(void) {
@@ -95,7 +95,7 @@ static void test_correctionCrankingFixedTiming(void) {
     RUN_TEST_P(test_correctionCrankingFixedTiming_crank_coolant);
 }
 
-extern int8_t correctionFlexTiming(int8_t advance);
+extern int16_t correctionFlexTiming(int16_t advanceTenths);
 extern table2D_u8_u8_6 flexAdvTable;   ///< 6 bin flex fuel correction table for timing advance (2D)
 
 static void setup_flexAdv(void) {
@@ -132,7 +132,7 @@ static void test_correctionFlexTiming(void) {
     RUN_TEST_P(test_correctionFlexTiming_table_lookup);
 }
 
-extern int8_t correctionWMITiming(int8_t advance);
+extern int16_t correctionWMITiming(int16_t advanceTenths);
 extern table2D_u8_u8_6 wmiAdvTable; //6 bin wmi correction table for timing advance (2D)
 
 static void setup_WMIAdv(void) {
@@ -234,7 +234,7 @@ static void test_correctionWMITiming(void) {
     RUN_TEST_P(test_correctionWMITiming_iatlow_inactive);
 }
 
-extern int8_t correctionIATretard(int8_t advance);
+extern int16_t correctionIATretard(int16_t advanceTenths);
 extern table2D_u8_u8_6 IATRetardTable; ///< 6 bin ignition adjustment based on inlet air temperature  (2D)
 
 static void setup_IATRetard(void) {
@@ -262,7 +262,7 @@ static void test_correctionIATretard(void) {
     RUN_TEST_P(test_correctionIATretard_table_lookup);
 }
 
-extern int8_t correctionIdleAdvance(int8_t advance);
+extern int16_t correctionIdleAdvance(int16_t advanceTenths);
 extern int16_t computeIdleAdvanceClosedLoopTarget(int16_t centerTenths, int32_t rpmDot);
 extern int16_t idleAdvanceClCenter;
 extern int16_t idleAdvanceClTrim;
@@ -656,7 +656,7 @@ static void test_correctionIdleAdvance(void) {
     RUN_TEST_P(test_correctionIdleAdvance_closed_loop_trim_is_bounded);
 }
 
-extern int8_t correctionSoftRevLimit(int8_t advance);
+extern int16_t correctionSoftRevLimit(int16_t advanceTenths);
 
 static void setup_correctionSoftRevLimit(void) {
     initialiseCorrections();
@@ -736,7 +736,7 @@ static void test_correctionSoftRevLimit(void) {
     RUN_TEST_P(test_correctionSoftRevLimit_timeout);
 }
 
-extern int8_t correctionNitrous(int8_t advance);
+extern int16_t correctionNitrous(int16_t advanceTenths);
 
 static void test_correctionNitrous_disabled(void) {
     configPage10.n2o_enable = 0;
@@ -789,7 +789,7 @@ static void test_correctionNitrous(void) {
     RUN_TEST_P(test_correctionNitrous_stageboth);
 }
 
-extern int8_t correctionSoftLaunch(int8_t advance);
+extern int16_t correctionSoftLaunch(int16_t advanceTenths);
 
 static void setup_correctionSoftLaunch(void) {
     configPage6.launchEnabled = 1;
@@ -891,7 +891,7 @@ static void test_correctionSoftLaunch(void) {
     RUN_TEST_P(test_correctionSoftLaunch_off_vsslimit);
 }
 
-extern int8_t correctionSoftFlatShift(int8_t advance);
+extern int16_t correctionSoftFlatShift(int16_t advanceTenths);
 
 static void setup_correctionSoftFlatShift(void) {
     configPage6.flatSEnable = 1;
@@ -966,7 +966,7 @@ static void test_correctionSoftFlatShift(void) {
 }
 
 #if 0 // Wait until Noisymime is done with knock implementation
-extern int8_t correctionKnock(int8_t advance);
+extern int16_t correctionKnock(int16_t advanceTenths);
 
 static void setup_correctionKnock(void) {
     configPage10.knock_mode = KNOCK_MODE_DIGITAL;

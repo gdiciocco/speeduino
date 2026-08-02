@@ -829,7 +829,7 @@ static void setup_DFCO_on_taper_on_no_delay()
 }
 
 extern byte correctionDFCOfuel(void);
-extern int8_t correctionDFCOignition(int8_t advance);
+extern int16_t correctionDFCOignition(int16_t advanceTenths);
 
 static void test_correctionDFCOfuel_DFCO_off()
 {
