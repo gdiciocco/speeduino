@@ -240,7 +240,11 @@ extern "C" void SystemClock_Config(void)
 }
 #endif
 
-#if defined(SRAM_AS_EEPROM) // Use 4K battery backed SRAM, requires a 3V continuous source (like battery) connected to Vbat pin
+#if defined(W25Q16_PAGE_STORAGE)
+  #include "src/W25Q16PageStorage/W25Q16PageStorage.h"
+  SPIClass SPI_for_flash(PB15, PB14, PB13); //SPI2: MOSI, MISO, SCK
+  W25Q16PageStorage EEPROM((uint8_t)USE_SPI_EEPROM, SPI_for_flash); //CS: PB12
+#elif defined(SRAM_AS_EEPROM) // Use 4K battery backed SRAM, requires a 3V continuous source (like battery) connected to Vbat pin
   #include "src/BackupSram/BackupSramAsEEPROM.h"
   BackupSramAsEEPROM EEPROM;
 #elif defined(USE_SPI_EEPROM) // Use M25Qxx SPI flash on BlackF407VE
@@ -622,13 +626,6 @@ STM32RTC& rtc = STM32RTC::getInstance();
       hwCrcAvailable = (crc32_oneshot(crcCheckVector, sizeof(crcCheckVector)) == 0xCBF43926UL);
     }
 
-    #if defined(SRAM_AS_EEPROM)
-    //rtc.begin()/setClockSource above can force a backup domain reset, which clears the RTC backup
-    //registers holding the backup SRAM CRC seal (the SRAM itself is unaffected). Reseal now, which
-    //also covers any storage writes made by doUpdates()/reset handling before initBoard() ran.
-    EEPROM.sealCrc();
-    #endif
-
     /*
     ***********************************************************************************************************
     * Interrupt priorities (0 = highest. Core defaults: SysTick=0, EXTI/trigger=6, USB=1, UART=1, all timers=14)
@@ -727,7 +724,9 @@ void boardInitPins(uint8_t)
 
 static uint16_t getEepromWriteBlockSize(const statuses &current)
 {
-#if defined(USE_SPI_EEPROM)
+#if defined(W25Q16_PAGE_STORAGE)
+  uint16_t maxWrite = 128; //Writes only touch the 4KiB RAM mirror
+#elif defined(USE_SPI_EEPROM)
   //For use with common Winbond SPI EEPROMs Eg W25Q16JV
   uint16_t maxWrite = 20; //This needs tuning
 #else
@@ -752,6 +751,10 @@ storage_api_t getBoardStorageApi(void)
   //initBoard()/schedules/triggers run: ALL flash operations (erase included) happen inside here,
   //never once the ECU is operational. Runs once; later calls are a no-op.
   (void)backupSramBootSync();
+#elif defined(W25Q16_PAGE_STORAGE)
+  //Validate the W25Q16 before any tune byte is read. Internal-flash erase/program and
+  //any recovery/formatting of the W25Q16 are confined to this boot-time call.
+  (void)EEPROM.bootSync();
 #endif
   return getEEPROMStorageApi(getEepromWriteBlockSize);
 }

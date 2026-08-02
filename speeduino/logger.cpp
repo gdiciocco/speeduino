@@ -16,6 +16,8 @@
 #endif
 #if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
   #include "src/BackupSram/BackupSramAsEEPROM.h"
+#elif defined(W25Q16_PAGE_STORAGE) && defined(STM32F407xx)
+  #include "src/W25Q16PageStorage/W25Q16PageStorage.h"
 #endif
 
 static byte setStatusBit(byte status, uint8_t index, bool bit)
@@ -180,11 +182,11 @@ static byte buildEngineProtectStatus(const statuses &current)
 
 #if defined(CAPONORD_BOARD)
 /**
- * @brief Outcome of the boot-time backup SRAM integrity check as a status bitfield.
+ * @brief Outcome of the boot-time storage integrity check as a status bitfield.
  *
- * Bits 0/1 set mean the battery backed SRAM content was lost (VBAT battery flat/removed);
- * bit 2 flags a failed flash snapshot write; bit 3 is informational (snapshot refreshed).
- * Always 0 on builds that don't use SRAM_AS_EEPROM.
+ * Bit 0 means the primary store was restored, bit 1 means both copies were formatted,
+ * bit 2 flags a storage failure and bit 3 is informational (backup refreshed).
+ * Always 0 on builds without boot-time storage backup.
  */
 static byte buildStorageStatus(void)
 {
@@ -195,6 +197,19 @@ static byte buildStorageStatus(void)
     bootStatus == BackupSramBootStatus::Formatted,        //No valid copy anywhere, storage was blanked
     bootStatus == BackupSramBootStatus::FlashWriteFailed, //Snapshot erase/program did not verify
     bootStatus == BackupSramBootStatus::FlashUpdated,     //Snapshot refreshed from SRAM at boot
+  };
+  return setStatusBits(0U, bits);
+#elif defined(W25Q16_PAGE_STORAGE) && defined(STM32F407xx)
+  const W25Q16BootStatus bootStatus = EEPROM.status();
+  bool bits[] = {
+    bootStatus == W25Q16BootStatus::PrimaryRestored,
+    bootStatus == W25Q16BootStatus::Formatted,
+    (bootStatus == W25Q16BootStatus::PrimaryUnavailable)
+      || (bootStatus == W25Q16BootStatus::BackupWriteFailed)
+      || (bootStatus == W25Q16BootStatus::RestoreFailed)
+      || (bootStatus == W25Q16BootStatus::RuntimeFull)
+      || (bootStatus == W25Q16BootStatus::RuntimeWriteFailed),
+    bootStatus == W25Q16BootStatus::BackupUpdated,
   };
   return setStatusBits(0U, bits);
 #else
@@ -218,7 +233,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
     case 2: statusValue = 6U; break; //Custom block layout version
-    case 3: statusValue = buildStorageStatus(); break; //Backup SRAM integrity status (see buildStorageStatus)
+    case 3: statusValue = buildStorageStatus(); break; //Boot storage integrity status (see buildStorageStatus)
     case 4: statusValue = lowByte(currentStatus.RPM); break;
     case 5: statusValue = highByte(currentStatus.RPM); break;
     case 6: statusValue = lowByte(currentStatus.MAP); break;

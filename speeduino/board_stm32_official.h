@@ -167,6 +167,16 @@ extern STM32RTC& rtc;
           || (p == PD_1)
         ;
     }
+    #elif defined(CAPONORD_BOARD)
+    static inline bool pinIsReserved(uint8_t pin) {
+      return (pin == (uint8_t)PA11)
+          || (pin == (uint8_t)PA12)
+          || (pin == (uint8_t)PB12)
+          || (pin == (uint8_t)PB13)
+          || (pin == (uint8_t)PB14)
+          || (pin == (uint8_t)PB15)
+        ;
+    }
     #else
     static inline bool pinIsReserved(uint8_t pin) {
       return (pin == (uint8_t)PA11)
