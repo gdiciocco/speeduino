@@ -649,8 +649,8 @@ Il blocco realtime Caponord:
 |---|---:|
 | Offset iniziale | 176 |
 | Magic realtime | `0xCA50` |
-| Versione layout | 5 |
-| Dimensione totale `ochBlockSize` | 255 byte |
+| Versione layout | 8 |
+| Dimensione totale `ochBlockSize` | 320 byte (255-319 oltre i canali pompa: dash input a 255, 256-319 di riserva) |
 
 ### 12.1 Canali pompa e protocollo
 

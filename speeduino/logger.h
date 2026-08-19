@@ -14,9 +14,9 @@
 #if defined(CAPONORD_BOARD)
   /** Byte offset where the Caponord custom output block starts inside the live data packet */
   constexpr uint16_t CAPONORD_TS_OUTPUT_BASE = 176U;
-  constexpr uint8_t LOG_ENTRY_SIZE = 255; /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
+  constexpr uint16_t LOG_ENTRY_SIZE = 320; /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file. Bytes past the last defined channel are spare for future growth */
 #else
-  constexpr uint8_t LOG_ENTRY_SIZE = 138; /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
+  constexpr uint16_t LOG_ENTRY_SIZE = 138; /**< The size of the live data packet. This MUST match ochBlockSize setting in the ini file */
 #endif
 
 byte getTSLogEntry(uint16_t byteNum);
@@ -25,7 +25,7 @@ int16_t getReadableLogEntry(uint16_t logIndex);
   float getReadableFloatLogEntry(uint16_t logIndex);
 #endif
 uint8_t getLegacySecondarySerialLogEntry(uint16_t byteNum);
-bool is2ByteEntry(uint8_t key);
+bool is2ByteEntry(uint16_t key);
 
 void startToothLogger(void);
 void stopToothLogger(void);

@@ -70,8 +70,8 @@ inline bool serialRecieveInProgress(void) {
 }
 
 extern bool firstCommsRequest; /**< The number of times the A command has been issued. This is used to track whether a reset has recently been performed on the controller */
-extern byte logItemsTransmitted;
-extern byte inProgressLength;
+extern uint16_t logItemsTransmitted;
+extern uint16_t inProgressLength;
 
 void legacySerialCommand(void);//This is the heart of the Command Line Interpreter.  All that needed to be done was to make it human readable.
 void legacySerialHandler(byte cmd, Stream &targetPort, SerialStatus &targetStatusFlag);
@@ -81,7 +81,7 @@ void sendValuesLegacy(void);
 void sendPage(void);
 void sendPageASCII(void);
 void testComm(void);
-void sendToothLog_legacy(byte startOffset);
-void sendCompositeLog_legacy(byte startOffset);
+void sendToothLog_legacy(uint16_t startOffset);
+void sendCompositeLog_legacy(uint16_t startOffset);
 
 #endif // COMMS_LEGACY_H

@@ -219,9 +219,9 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 7U; break; //Custom block layout version
-    //Backup SRAM integrity status in bits 0-3 (see buildStorageStatus), dashboard inputs D5-D8 in bits 4-7
-    case 3: statusValue = buildStorageStatus() | static_cast<byte>(currentStatus.dashInputs << 4U); break;
+    case 2: statusValue = 8U; break; //Custom block layout version
+    //Backup SRAM integrity status in bits 0-3 (see buildStorageStatus). Bits 4-7 spare (dashboard inputs moved to their own byte in layout v8)
+    case 3: statusValue = buildStorageStatus(); break;
     case 4: statusValue = lowByte(currentStatus.RPM); break;
     case 5: statusValue = highByte(currentStatus.RPM); break;
     case 6: statusValue = lowByte(currentStatus.MAP); break;
@@ -297,6 +297,8 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     case 76: statusValue = caponordEmpPumpGetCoolingDemandRaw(); break;
     case 77: statusValue = lowByte(caponordEmpPumpGetSaturationSeconds()); break;
     case 78: statusValue = highByte(caponordEmpPumpGetSaturationSeconds()); break;
+    //Dashboard digital inputs D5-D8, see the DASH_INPUT_* masks in opf_core.h (bits 4-7 spare for future inputs)
+    case 79: statusValue = currentStatus.dashInputs; break;
     default: statusValue = 0; break;
   }
 
@@ -856,7 +858,7 @@ uint8_t getLegacySecondarySerialLogEntry(uint16_t byteNum)
  * @param key - Index in the log array to check
  * @return True if the index is a 2 byte log field. False if it is a single byte
  */
-bool is2ByteEntry(uint8_t key)
+bool is2ByteEntry(uint16_t key)
 {
   // This array indicates which index values from the log are 2 byte values
   // This array MUST remain in ascending order

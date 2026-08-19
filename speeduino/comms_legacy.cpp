@@ -34,8 +34,8 @@ static bool chunkPending = false; /**< Whether or not the current chunk write is
 static uint16_t chunkComplete = 0; /**< The number of bytes in a chunk write that have been written so far */
 static uint16_t chunkSize = 0; /**< The complete size of the requested chunk write */
 static int valueOffset; /**< The memory offset within a given page for a value to be read from or written to. Note that we cannot use 'offset' as a variable name, it is a reserved word for several teensy libraries */
-byte logItemsTransmitted;
-byte inProgressLength;
+uint16_t logItemsTransmitted;
+uint16_t inProgressLength;
 SerialStatus serialStatusFlag;
 SerialStatus serialSecondaryStatusFlag;
 
@@ -743,7 +743,7 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, Stream &target
   //
   targetStatusFlag = SERIAL_TRANSMIT_INPROGRESS_LEGACY;
 
-  for(byte x=0; x<packetLength; x++)
+  for(uint16_t x=0; x<packetLength; x++)
   {
     bool bufferFull = false;
 
@@ -1184,13 +1184,13 @@ void sendPageASCII(void)
  * if useChar is true, the values are sent as chars to be printed out by a terminal emulator
  * if useChar is false, the values are sent as a 2 byte integer which is readable by TunerStudios tooth logger
 */
-void sendToothLog_legacy(byte startOffset) /* Blocking */
+void sendToothLog_legacy(uint16_t startOffset) /* Blocking */
 {
   //We need TOOTH_LOG_SIZE number of records to send to TunerStudio. If there aren't that many in the buffer then we just return and wait for the next call
   if (currentStatus.isToothLog1Full) //Sanity check. Flagging system means this should always be true
   {
-      serialStatusFlag = SERIAL_TRANSMIT_TOOTH_INPROGRESS_LEGACY; 
-      for (uint8_t x = startOffset; x < _countof(toothHistory); ++x)
+      serialStatusFlag = SERIAL_TRANSMIT_TOOTH_INPROGRESS_LEGACY;
+      for (uint16_t x = startOffset; x < _countof(toothHistory); ++x)
       {
         primarySerial.write(toothHistory[x] >> 24);
         primarySerial.write(toothHistory[x] >> 16);
@@ -1212,13 +1212,13 @@ void sendToothLog_legacy(byte startOffset) /* Blocking */
   } 
 }
 
-void sendCompositeLog_legacy(byte startOffset) /* Non-blocking */
+void sendCompositeLog_legacy(uint16_t startOffset) /* Non-blocking */
 {
   if (currentStatus.isToothLog1Full) //Sanity check. Flagging system means this should always be true
   {
       serialStatusFlag = SERIAL_TRANSMIT_COMPOSITE_INPROGRESS_LEGACY;
 
-      for (uint8_t x = startOffset; x < _countof(toothHistory); ++x)
+      for (uint16_t x = startOffset; x < _countof(toothHistory); ++x)
       {
         //Check whether the tx buffer still has space
         if(primarySerial.availableForWrite() < 4) 
