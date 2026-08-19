@@ -466,10 +466,10 @@ void setupBoard()
   setStatusLedOff(LED_ALERT);
   setStatusLedOff(LED_COMS);
 
-  pinMode(PIN_DASH_D5, INPUT_PULLUP);
-  pinMode(PIN_DASH_D6, INPUT_PULLUP);
-  pinMode(PIN_DASH_D7, INPUT_PULLUP);
-  pinMode(PIN_DASH_D8, INPUT_PULLUP);
+  pinMode(PIN_DASH_D5, INPUT);
+  pinMode(PIN_DASH_D6, INPUT);
+  pinMode(PIN_DASH_D7, INPUT);
+  pinMode(PIN_DASH_D8, INPUT);
   readDashInputs();
 
 #ifdef OIL_SENSOR_OPST
