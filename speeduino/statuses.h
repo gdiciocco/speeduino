@@ -235,10 +235,6 @@ struct statuses {
   int16_t oilTemperature;          /**< Oil temperature in degrees Celsius */
   uint16_t oilPressureAbsoluteKpa; /**< OPS-T absolute oil pressure in kPa */
 #if defined(CAPONORD_BOARD)
-  byte baroStage;                  /**< I2C barometer diagnostic stage, see the BARO_STAGE_* enum in opf_core.h */
-  byte baroWhoAmI;                 /**< Last WHO_AM_I byte read from the LPS25HB (0 when the device did not answer) */
-  byte baroAddress;                /**< 7-bit I2C address the barometer was found on (0 when none) */
-  uint16_t baroPressureHpa;        /**< Last raw barometric sample in hPa, published even when it is rejected */
   byte dashInputs;                 /**< Dashboard digital inputs D5-D8, see the DASH_INPUT_* masks in opf_core.h (bit set = input active) */
 #endif
 

@@ -2610,9 +2610,7 @@ void setPinMapping(byte boardID)
       pinMode(pinIAT, INPUT_ANALOG);
       pinMode(pinCLT, INPUT_ANALOG);
       pinMode(pinBat, INPUT_ANALOG);
-#if !defined(CAPONORD_BOARD)
       pinMode(pinBaro, INPUT_ANALOG);
-#endif
     #else
       pinMode(pinMAP, INPUT);
       pinMode(pinO2, INPUT);
@@ -2621,9 +2619,7 @@ void setPinMapping(byte boardID)
       pinMode(pinIAT, INPUT);
       pinMode(pinCLT, INPUT);
       pinMode(pinBat, INPUT);
-#if !defined(CAPONORD_BOARD)
       pinMode(pinBaro, INPUT);
-#endif
     #endif
   #elif defined(CORE_TEENSY41)
     //Teensy 4.1 has a weak pull down resistor that needs to be disabled for all analog pins. 

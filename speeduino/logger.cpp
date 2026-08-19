@@ -498,11 +498,6 @@ byte getTSLogEntry(uint16_t byteNum)
     case 139: statusValue = temperatureAddOffset(currentStatus.oilTemperature); break;
     case 140: statusValue = lowByte(currentStatus.oilPressureAbsoluteKpa); break;
     case 141: statusValue = highByte(currentStatus.oilPressureAbsoluteKpa); break;
-    case 142: statusValue = currentStatus.baroStage; break;
-    case 143: statusValue = currentStatus.baroWhoAmI; break;
-    case 144: statusValue = lowByte(currentStatus.baroPressureHpa); break;
-    case 145: statusValue = highByte(currentStatus.baroPressureHpa); break;
-    case 146: statusValue = currentStatus.baroAddress; break;
 #endif
     default: statusValue = 0; // MISRA check
   }

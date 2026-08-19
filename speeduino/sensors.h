@@ -86,8 +86,6 @@ void readPolledSensors(byte loopTimer);
 
 /** @brief Initialize the MAP calculation & Baro values */
 void initialiseMAPBaro(void);
-/** @brief Update barometric pressure from MAP, but only while the engine is stopped. */
-void updateBaroFromMAPIfEngineStopped(void);
 void resetMAPcycleAndEvent(void);
 
 uint8_t getAnalogKnock(void);
