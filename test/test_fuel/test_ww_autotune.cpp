@@ -3,6 +3,7 @@
 #include "globals.h"
 #include "ww_autotune.h"
 #include "units.h"
+#include "storage.h"
 
 static void clear_ww_tables(void) {
   for (uint8_t i = 0; i < 64U; i++) {
@@ -160,6 +161,13 @@ static void test_ww_learner_lean_tip_in_adjusts_tables(void) {
   TEST_ASSERT_TRUE(wallWettingAddTable.values.values[cell] > xBefore);
   // Lean tail -> film evaporates slower than modelled -> Y down
   TEST_ASSERT_TRUE(wallWettingRemoveTable.values.values[cell] < yBefore);
+
+  // Diagnostics reflect the learned event
+  TEST_ASSERT_EQUAL_UINT16(1, wwAutotuneDiag().eventsCompleted);
+  TEST_ASSERT_EQUAL_UINT16(0, wwAutotuneDiag().eventsAborted);
+  TEST_ASSERT_EQUAL_UINT8(cell, wwAutotuneDiag().lastCellIndex);
+  TEST_ASSERT_EQUAL_UINT8(wallWettingAddTable.values.values[cell], wwAutotuneDiag().lastAddValue);
+  TEST_ASSERT_EQUAL_UINT8(wallWettingRemoveTable.values.values[cell], wwAutotuneDiag().lastRemoveValue);
 }
 
 static void test_ww_learner_disabled_by_zero_authority(void) {
@@ -172,6 +180,8 @@ static void test_ww_learner_disabled_by_zero_authority(void) {
   run_lean_tip_in();
 
   TEST_ASSERT_EQUAL_UINT16(0, wwAutotuneLearnedEventCount());
+  TEST_ASSERT_EQUAL_UINT16(WW_GATE_DISABLED, wwAutotuneDiag().gateBits & WW_GATE_DISABLED);
+  TEST_ASSERT_EQUAL_UINT8(WW_STATE_DISABLED, wwAutotuneDiag().state);
 }
 
 static void test_ww_learner_aborts_on_gate_failure(void) {
@@ -191,6 +201,55 @@ static void test_ww_learner_aborts_on_gate_failure(void) {
   currentStatus.isDFCOActive = false;
 
   TEST_ASSERT_EQUAL_UINT16(0, wwAutotuneLearnedEventCount());
+  TEST_ASSERT_EQUAL_UINT16(0, wwAutotuneDiag().eventsCompleted);
+  TEST_ASSERT_EQUAL_UINT16(1, wwAutotuneDiag().eventsAborted);
+  TEST_ASSERT_EQUAL_UINT8(WW_ABORT_GATE_DROPPED, wwAutotuneDiag().lastAbortReason);
+}
+
+/** Learned changes are persisted wwLearnSavePeriod minutes after learning,
+ * without waiting for the engine to stop. */
+static void test_ww_periodic_save_queues_eeprom_write(void) {
+  clear_ww_tables();
+  setup_ww_engine_params();
+  wwAutotuneInit();
+  setup_ww_learn_conditions();
+  configPage9.wwLearnSavePeriod = 1; // 1 minute = 1800 ticks at 30Hz
+
+  setEepromWritePending(false); // Clear the seed-triggered write from init
+  run_lean_tip_in();
+
+  // Learned but the save period has not elapsed yet
+  TEST_ASSERT_EQUAL_UINT16(1, wwAutotuneLearnedEventCount());
+  TEST_ASSERT_FALSE(isEepromWritePending());
+  TEST_ASSERT_TRUE(wwAutotuneDiag().secondsToNextSave > 0);
+
+  for (uint16_t i = 0; i < 1800U; i++) { wwAutotuneUpdate(); }
+
+  TEST_ASSERT_TRUE(isEepromWritePending());
+  TEST_ASSERT_EQUAL_UINT16(0, wwAutotuneDiag().secondsToNextSave);
+
+  configPage9.wwLearnSavePeriod = 0;
+}
+
+/** With the periodic save disabled (period 0) learning is only persisted at engine stop. */
+static void test_ww_save_at_engine_stop_only_when_period_zero(void) {
+  clear_ww_tables();
+  setup_ww_engine_params();
+  wwAutotuneInit();
+  setup_ww_learn_conditions();
+  configPage9.wwLearnSavePeriod = 0;
+
+  setEepromWritePending(false);
+  run_lean_tip_in();
+  TEST_ASSERT_EQUAL_UINT16(1, wwAutotuneLearnedEventCount());
+
+  for (uint16_t i = 0; i < 2000U; i++) { wwAutotuneUpdate(); }
+  TEST_ASSERT_FALSE(isEepromWritePending());
+
+  currentStatus.rotationStatus = EngineRotationStatus::Stopped;
+  wwAutotuneUpdate();
+  TEST_ASSERT_TRUE(isEepromWritePending());
+  currentStatus.rotationStatus = EngineRotationStatus::Running;
 }
 
 void testWwAutotune(void)
@@ -202,5 +261,7 @@ void testWwAutotune(void)
     RUN_TEST_P(test_ww_learner_lean_tip_in_adjusts_tables);
     RUN_TEST_P(test_ww_learner_disabled_by_zero_authority);
     RUN_TEST_P(test_ww_learner_aborts_on_gate_failure);
+    RUN_TEST_P(test_ww_periodic_save_queues_eeprom_write);
+    RUN_TEST_P(test_ww_save_at_engine_stop_only_when_period_zero);
   }
 }

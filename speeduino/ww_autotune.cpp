@@ -27,7 +27,9 @@
  *  - One cell (nearest to the tip-in operating point) is adjusted per event,
  *    by a bounded step, and the total movement per cell per drive cycle is
  *    clamped to configPage2.wallWettingFuel table counts (the authority knob).
- *  - Changes are only queued for EEPROM persistence once the engine stops.
+ *  - Changes are queued for EEPROM persistence when the engine stops and,
+ *    optionally, every configPage9.wwLearnSavePeriod minutes while running
+ *    so a power cut cannot discard a whole drive's worth of learning.
  */
 #include "globals.h"
 #include "ww_autotune.h"
@@ -118,7 +120,15 @@ static int8_t addTableDelta[WW_TABLE_CELLS];
 static int8_t removeTableDelta[WW_TABLE_CELLS];
 
 static bool tablesDirty = false;
-static uint16_t learnedEventCount = 0;
+
+/** 30Hz ticks since the tables last became dirty, for the periodic save */
+static uint32_t saveDelayTicks = 0;
+
+/** Live diagnostics, exposed to TunerStudio as output channels */
+static WwAutotuneDiagnostics diag;
+
+/** 30Hz ticks per minute, for the periodic save interval */
+static constexpr uint32_t WW_TICKS_PER_MINUTE = 30UL * 60UL;
 
 // ============================== Small helpers =============================
 
@@ -165,40 +175,52 @@ static uint8_t currentDelayTicks(void) {
 
 // ================================= Gates ==================================
 
-/** @brief All conditions that must hold for learning to be trustworthy */
-static bool learnGatesOk(void) {
-  if (configPage2.aeMode != AE_MODE_WALL_WETTING) { return false; }
-  if (configPage2.wallWettingFuel == 0U) { return false; } // Learning disabled
-  if (configPage6.egoType != EGO_TYPE_WIDE) { return false; }
-  if (currentStatus.rotationStatus != EngineRotationStatus::Running) { return false; }
+/** @brief All conditions that must hold for learning to be trustworthy,
+ * evaluated as a bitfield of failing gates (0 = learning allowed). Every gate
+ * is always evaluated so the diagnostics show the complete blocking picture. */
+static uint16_t computeGateBits(void) {
+  uint16_t bits = 0;
+
+  if ((configPage2.aeMode != AE_MODE_WALL_WETTING) || (configPage2.wallWettingFuel == 0U)) { bits |= WW_GATE_DISABLED; }
+  if (configPage6.egoType != EGO_TYPE_WIDE) { bits |= WW_GATE_NO_WIDEBAND; }
+  if (currentStatus.rotationStatus != EngineRotationStatus::Running) { bits |= WW_GATE_NOT_RUNNING; }
 
   const uint8_t minRunSecs = (configPage6.ego_sdelay > WW_LEARN_MIN_RUN_SECS) ? configPage6.ego_sdelay : WW_LEARN_MIN_RUN_SECS;
-  if (currentStatus.runSecs < minRunSecs) { return false; }
+  if (currentStatus.runSecs < minRunSecs) { bits |= WW_GATE_RUN_TIME; }
 
   // Fully warm only: both the closed loop coolant threshold and the AE cold
   // multiplier taper must be out of the picture, otherwise cold film dynamics
   // would be learned into tables that have no temperature axis.
-  if (currentStatus.coolant < temperatureRemoveOffset(configPage6.egoTemp)) { return false; }
-  if (currentStatus.coolant < temperatureRemoveOffset(configPage2.aeColdTaperMax)) { return false; }
+  if ((currentStatus.coolant < temperatureRemoveOffset(configPage6.egoTemp))
+    || (currentStatus.coolant < temperatureRemoveOffset(configPage2.aeColdTaperMax))) { bits |= WW_GATE_COLD; }
 
-  if (currentStatus.RPM < RPM_COARSE.toUser(configPage6.egoRPM)) { return false; }
+  if (currentStatus.RPM < RPM_COARSE.toUser(configPage6.egoRPM)) { bits |= WW_GATE_RPM_LOW; }
   // Learn only below the AE RPM taper, where the computed correction is
   // applied at full strength (above it the observed error no longer maps 1:1
   // onto the table coefficients).
   if ((configPage2.aeTaperMax > configPage2.aeTaperMin)
-    && (currentStatus.RPM >= RPM_COARSE.toUser(configPage2.aeTaperMin))) { return false; }
+    && (currentStatus.RPM >= RPM_COARSE.toUser(configPage2.aeTaperMin))) { bits |= WW_GATE_RPM_TAPER; }
 
   // No other fuel corrections in flux
-  if (currentStatus.isDFCOActive || currentStatus.aseIsActive || currentStatus.wueIsActive) { return false; }
-  if (currentStatus.launchingHard || currentStatus.launchingSoft) { return false; }
-  if (currentStatus.flatShiftingHard || currentStatus.flatShiftSoftCut) { return false; }
-  if (currentStatus.nitrousActive || currentStatus.stagingActive) { return false; }
-  if (absI16((int16_t)currentStatus.egoCorrection - 100) > WW_LEARN_EGO_BAND) { return false; }
+  if (currentStatus.isDFCOActive || currentStatus.aseIsActive || currentStatus.wueIsActive) { bits |= WW_GATE_FUEL_CUT; }
+  if (currentStatus.launchingHard || currentStatus.launchingSoft
+    || currentStatus.flatShiftingHard || currentStatus.flatShiftSoftCut
+    || currentStatus.nitrousActive || currentStatus.stagingActive) { bits |= WW_GATE_MOTORSPORT; }
+  if (absI16((int16_t)currentStatus.egoCorrection - 100) > WW_LEARN_EGO_BAND) { bits |= WW_GATE_EGO_TRIM; }
 
-  if (currentStatus.battery10 < WW_LEARN_MIN_BATTERY10) { return false; }
-  if ((currentStatus.O2 < WW_LEARN_O2_MIN) || (currentStatus.O2 > WW_LEARN_O2_MAX)) { return false; }
+  if (currentStatus.battery10 < WW_LEARN_MIN_BATTERY10) { bits |= WW_GATE_BATTERY; }
+  if ((currentStatus.O2 < WW_LEARN_O2_MIN) || (currentStatus.O2 > WW_LEARN_O2_MAX)) { bits |= WW_GATE_O2_RANGE; }
 
-  return true;
+  return bits;
+}
+
+/** @brief Mark the in-flight event as discarded, recording why (first reason wins) */
+static void abortEvent(uint8_t reason) {
+  if (!event.aborted) {
+    event.aborted = true;
+    diag.lastAbortReason = reason;
+    diag.eventsAborted++;
+  }
 }
 
 // ============================ Table adjustment ============================
@@ -261,7 +283,10 @@ static void finalizeEvent(void) {
 
   if (changed) {
     tablesDirty = true;
-    learnedEventCount++;
+    diag.eventsLearned++;
+    diag.lastCellIndex = event.cellIndex;
+    diag.lastAddValue = wallWettingAddTable.values.values[event.cellIndex];
+    diag.lastRemoveValue = wallWettingRemoveTable.values.values[event.cellIndex];
   }
 }
 
@@ -365,8 +390,10 @@ void wwAutotuneInit(void) {
   ringFilled = 0;
   cooldownTicks = 0;
   event.active = false;
-  learnedEventCount = 0;
   tablesDirty = false;
+  saveDelayTicks = 0;
+  diag = WwAutotuneDiagnostics();
+  diag.lastCellIndex = UINT8_MAX; // Nothing learned yet
   for (uint8_t i = 0U; i < WW_TABLE_CELLS; i++) {
     addTableDelta[i] = 0;
     removeTableDelta[i] = 0;
@@ -386,13 +413,19 @@ void wwAutotuneUpdate(void) {
       setEepromWritePending(true);
       tablesDirty = false;
     }
+    saveDelayTicks = 0;
     // Drop any in-flight event: its remaining samples are meaningless now
+    if (event.active) { abortEvent(WW_ABORT_ENGINE_STOPPED); }
     event.active = false;
     cooldownTicks = WW_LEARN_RING_SIZE;
+    diag.gateBits = computeGateBits();
+    diag.state = ((diag.gateBits & WW_GATE_DISABLED) != 0U) ? WW_STATE_DISABLED : WW_STATE_BLOCKED;
+    diag.secondsToNextSave = 0;
     return;
   }
 
-  const bool gatesOk = learnGatesOk();
+  diag.gateBits = computeGateBits();
+  const bool gatesOk = (diag.gateBits == 0U);
   const bool accelDemand = (currentStatus.tpsDOT > (int16_t)configPage2.taeThresh)
                         || (currentStatus.mapDOT > (int16_t)configPage2.maeThresh);
   const bool decelDemand = (currentStatus.tpsDOT < -(int16_t)configPage2.taeThresh)
@@ -424,20 +457,23 @@ void wwAutotuneUpdate(void) {
 
     if (!event.aborted) {
       // Any gate failure while the event is being observed poisons the data
-      if (!gatesOk) { event.aborted = true; }
+      if (!gatesOk) { abortEvent(WW_ABORT_GATE_DROPPED); }
       // A lift-off mid-window empties the film we are trying to characterise
-      if (decelDemand || currentStatus.isDeceleratingTPS) { event.aborted = true; }
+      if (decelDemand || currentStatus.isDeceleratingTPS) { abortEvent(WW_ABORT_DECELERATION); }
       // A second tip-in stacked on the first makes the phases ambiguous
       if (event.age <= WW_LEARN_CAPTURE_TICKS) {
         if (!accelDemand) { event.dotWentQuiet = true; }
-        else if (event.dotWentQuiet) { event.aborted = true; }
+        else if (event.dotWentQuiet) { abortEvent(WW_ABORT_RETRIGGER); }
       }
     }
 
     // Event ends once every capture-phase sample has had time to be observed
     // through the longest possible wideband delay
     if (event.age > (uint8_t)(WW_LEARN_CAPTURE_TICKS + WW_LEARN_MAX_DELAY_TICKS)) {
-      if (!event.aborted) { finalizeEvent(); }
+      if (!event.aborted) {
+        diag.eventsCompleted++;
+        finalizeEvent();
+      }
       event.active = false;
       cooldownTicks = WW_LEARN_RING_SIZE;
     }
@@ -470,8 +506,37 @@ void wwAutotuneUpdate(void) {
 
   ringHead = (ringHead + 1U) % WW_LEARN_RING_SIZE;
   if (ringFilled < WW_LEARN_RING_SIZE) { ringFilled++; }
+
+  // --- Periodic persistence while driving: wwLearnSavePeriod minutes after
+  // learning last left the tables dirty, queue them for the existing
+  // pending-write path so a power cut cannot discard the whole drive ---
+  diag.secondsToNextSave = 0;
+  if ((configPage9.wwLearnSavePeriod > 0U) && tablesDirty) {
+    saveDelayTicks++;
+    const uint32_t savePeriodTicks = (uint32_t)configPage9.wwLearnSavePeriod * WW_TICKS_PER_MINUTE;
+    if (saveDelayTicks >= savePeriodTicks) {
+      setEepromWritePending(true);
+      tablesDirty = false;
+      saveDelayTicks = 0;
+    } else {
+      diag.secondsToNextSave = (uint16_t)((savePeriodTicks - saveDelayTicks) / 30U);
+    }
+  } else {
+    saveDelayTicks = 0;
+  }
+
+  // --- Learner state for the diagnostics channels ---
+  if (event.active) { diag.state = event.aborted ? WW_STATE_DISCARDED : WW_STATE_MEASURING; }
+  else if ((diag.gateBits & WW_GATE_DISABLED) != 0U) { diag.state = WW_STATE_DISABLED; }
+  else if (diag.gateBits != 0U) { diag.state = WW_STATE_BLOCKED; }
+  else if (cooldownTicks > 0U) { diag.state = WW_STATE_COOLDOWN; }
+  else { diag.state = WW_STATE_ARMED; }
+}
+
+const WwAutotuneDiagnostics& wwAutotuneDiag(void) {
+  return diag;
 }
 
 uint16_t wwAutotuneLearnedEventCount(void) {
-  return learnedEventCount;
+  return diag.eventsLearned;
 }

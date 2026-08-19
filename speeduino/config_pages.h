@@ -328,7 +328,7 @@ struct config2 : public config_page_t {
 
   byte decelAmount;
   byte aeBlendPct; /**< Blend percentage between TPS and MAP AE. 0 = pure MAP, 100 = pure TPS */
-  byte wallWettingFuel; /**< Wall wetting fuel enrichment amount. Used only when aeMode == AE_MODE_WALL_WETTING */
+  byte wallWettingFuel; /**< Wall wetting autotune authority: max table counts a cell may move per drive cycle, 0 = autotune off. Used only when aeMode == AE_MODE_WALL_WETTING */
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 
@@ -645,7 +645,7 @@ struct config9 : public config_page_t {
   byte dfcoTaperEnable : 1;
   byte unused10_183 : 6;
 
-  byte unused10_184;
+  byte wwLearnSavePeriod; /**< Wall wetting autotune: minutes of running between periodic EEPROM saves of the learned tables. 0 = save only when the engine stops */
 
   byte afrProtectEnabled : 2; /* < AFR protection enabled status. 0 = disabled, 1 = fixed mode, 2 = table mode */
   byte afrProtectMinMAP; /* < Minimum MAP. Stored value is divided by 2. Increments of 2 kPa, maximum 511 (?) kPa */

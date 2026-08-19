@@ -1,5 +1,6 @@
 #include "globals.h"
 #include "logger.h"
+#include "ww_autotune.h"
 #include "decoders.h"
 #include "init.h"
 #include "maths.h"
@@ -499,6 +500,22 @@ byte getTSLogEntry(uint16_t byteNum)
     case 140: statusValue = lowByte(currentStatus.oilPressureAbsoluteKpa); break;
     case 141: statusValue = highByte(currentStatus.oilPressureAbsoluteKpa); break;
 #endif
+    //Wall wetting autotune diagnostics (see WwAutotuneDiagnostics in ww_autotune.h)
+    case 142: statusValue = lowByte(wwAutotuneDiag().gateBits); break;
+    case 143: statusValue = highByte(wwAutotuneDiag().gateBits); break;
+    case 144: statusValue = wwAutotuneDiag().state; break;
+    case 145: statusValue = wwAutotuneDiag().lastAbortReason; break;
+    case 146: statusValue = lowByte(wwAutotuneDiag().eventsCompleted); break;
+    case 147: statusValue = highByte(wwAutotuneDiag().eventsCompleted); break;
+    case 148: statusValue = lowByte(wwAutotuneDiag().eventsLearned); break;
+    case 149: statusValue = highByte(wwAutotuneDiag().eventsLearned); break;
+    case 150: statusValue = lowByte(wwAutotuneDiag().eventsAborted); break;
+    case 151: statusValue = highByte(wwAutotuneDiag().eventsAborted); break;
+    case 152: statusValue = wwAutotuneDiag().lastCellIndex; break;
+    case 153: statusValue = wwAutotuneDiag().lastAddValue; break;
+    case 154: statusValue = wwAutotuneDiag().lastRemoveValue; break;
+    case 155: statusValue = lowByte(wwAutotuneDiag().secondsToNextSave); break;
+    case 156: statusValue = highByte(wwAutotuneDiag().secondsToNextSave); break;
     default: statusValue = 0; // MISRA check
   }
 
@@ -828,7 +845,7 @@ bool is2ByteEntry(uint8_t key)
   // This array indicates which index values from the log are 2 byte values
   // This array MUST remain in ascending order
   // !!!! WARNING: If any value above 255 is required in this array, changes MUST be made to is2ByteEntry() function !!!!
-  static constexpr byte PROGMEM fsIntIndex[] = {4, 14, 17, 22, 26, 28, 33, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 76, 78, 80, 82, 86, 88, 90, 93, 95, 99, 104, 111, 121, 125, 130, 132, 134, 136 };
+  static constexpr byte PROGMEM fsIntIndex[] = {4, 14, 17, 22, 26, 28, 33, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 76, 78, 80, 82, 86, 88, 90, 93, 95, 99, 104, 111, 121, 125, 130, 132, 134, 136, 142, 146, 148, 150, 155 };
 
   unsigned int bot = 0U;
   unsigned int mid = _countof(fsIntIndex);
