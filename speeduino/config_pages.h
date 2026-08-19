@@ -994,10 +994,15 @@ struct config15 : public config_page_t {
   byte idleAdvClTrimRange;   //Maximum deviation of the learned trim from the configured center, degrees
 
   byte idleAdvClTrimRequiresIacLimit : 1; //Only trim while the IAC closed loop has run out of authority
-  byte idleAdvClUnused195 : 7;
+  byte idleAdvClGainAutotuneRequest : 1;  //One-shot request: run the relay gain autotune at the next settled warm idle. Cleared by the firmware on success
+  byte idleAdvClUnused195 : 6;
 
-  //Bytes 196-255
-  byte Unused15_196_255[60];
+  //Bytes 196-197 - Closed-loop idle ignition center autotune
+  byte idleAdvClLearnAuthority; //Maximum degrees the learned center may move from its power-on value. 0 disables learning
+  byte idleAdvClLearnMinTemp;   //Coolant temperature below which the center is not learned, offset by 40 degrees
+
+  //Bytes 198-255
+  byte Unused15_198_255[58];
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 

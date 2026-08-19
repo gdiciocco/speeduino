@@ -266,6 +266,9 @@ extern int8_t correctionIdleAdvance(int8_t advance);
 extern int16_t computeIdleAdvanceClosedLoopTarget(int16_t centerTenths, int32_t rpmDot);
 extern int16_t idleAdvanceClCenter;
 extern int16_t idleAdvanceClTrim;
+extern int8_t idleAdvanceClLearnedDelta;
+extern uint8_t idleAdvanceGainTuneAttempts;
+extern bool idleAdvanceGainTuneLastRequest;
 
 static void setup_idleadv_tps(void) {
     configPage2.idleAdvAlgorithm = IDLEADVANCE_ALGO_TPS;
@@ -490,6 +493,8 @@ static void setup_correctionIdleAdvance_closed_loop(void) {
     configPage15.idleAdvClTrimRate = 0U;
     configPage15.idleAdvClTrimRange = 5U;
     configPage15.idleAdvClTrimRequiresIacLimit = 1U;
+    configPage15.idleAdvClLearnAuthority = 0U; //Center autotune off unless a test enables it
+    configPage15.idleAdvClGainAutotuneRequest = 0U; //Gain autotune off unless a test requests it
     currentStatus.CLIdleTarget = RPM_MEDIUM.toRaw(1000);
     currentStatus.setRpm(1000U);
     initialiseCorrections();
@@ -631,6 +636,156 @@ static void test_correctionIdleAdvance_closed_loop_trim_is_bounded(void) {
     TEST_ASSERT_EQUAL(20, idleAdvanceClTrim);
 }
 
+static void setup_correctionIdleAdvance_closed_loop_learning(void) {
+    setup_correctionIdleAdvance_closed_loop();
+    configPage15.idleAdvClTrimRate = 1U;   //One trim tenth per tick at 100 RPM of error
+    configPage15.idleAdvClTrimRequiresIacLimit = 0U;
+    configPage15.idleAdvClLearnAuthority = 2U; //degrees per power cycle
+    configPage15.idleAdvClLearnMinTemp = temperatureAddOffset(70);
+    currentStatus.coolant = 85;
+    idleAdvanceClLearnedDelta = 0; //Survives initialiseCorrections() on purpose, so reset it per test
+    BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
+    (void)correctionIdleAdvance(10); //Engage on target.
+}
+
+//Drive the engine 100 RPM below target long enough to bank one whole degree of trim.
+static void run_idleadv_learning_bank_one_degree(void) {
+    currentStatus.setRpm(900U);
+    for(uint8_t tick = 0U; tick < 10U; ++tick) {
+        ++runSecsX10;
+        (void)correctionIdleAdvance(10);
+    }
+    TEST_ASSERT_EQUAL(10, idleAdvanceClTrim);
+    //Return to target and hold through one full settle window (10s) plus the fold tick.
+    currentStatus.setRpm(1000U);
+    for(uint8_t tick = 0U; tick < 101U; ++tick) {
+        ++runSecsX10;
+        (void)correctionIdleAdvance(10);
+    }
+}
+
+static void test_correctionIdleAdvance_closed_loop_learn_folds_trim_into_center(void) {
+    setup_correctionIdleAdvance_closed_loop_learning();
+
+    run_idleadv_learning_bank_one_degree();
+
+    //The settled degree has moved from the volatile trim into the stored center.
+    TEST_ASSERT_EQUAL(IGNITION_ADVANCE_LARGE.toRaw(11), configPage15.idleAdvClCenter);
+    TEST_ASSERT_EQUAL(0, idleAdvanceClTrim);
+    TEST_ASSERT_EQUAL(1, idleAdvanceClLearnedDelta);
+
+    //A fold moves a degree between the two terms of the same sum, so it must
+    //never step the commanded advance.
+    ++runSecsX10;
+    TEST_ASSERT_EQUAL(11, correctionIdleAdvance(10));
+}
+
+static void test_correctionIdleAdvance_closed_loop_learn_respects_authority(void) {
+    setup_correctionIdleAdvance_closed_loop_learning();
+    configPage15.idleAdvClLearnAuthority = 1U;
+
+    //The first fold consumes the whole authority...
+    run_idleadv_learning_bank_one_degree();
+    TEST_ASSERT_EQUAL(IGNITION_ADVANCE_LARGE.toRaw(11), configPage15.idleAdvClCenter);
+
+    //...so a second settled degree must stay in the volatile trim: a persistent
+    //error is not allowed to keep migrating into the tune.
+    run_idleadv_learning_bank_one_degree();
+    TEST_ASSERT_EQUAL(IGNITION_ADVANCE_LARGE.toRaw(11), configPage15.idleAdvClCenter);
+    TEST_ASSERT_EQUAL(10, idleAdvanceClTrim);
+    TEST_ASSERT_EQUAL(1, idleAdvanceClLearnedDelta);
+}
+
+static void test_correctionIdleAdvance_closed_loop_learn_requires_warm_engine(void) {
+    setup_correctionIdleAdvance_closed_loop_learning();
+    currentStatus.coolant = 60; //Below the 70C learning threshold
+
+    //A cold engine idles on different advance: the banked degree must stay in
+    //the volatile trim and the stored center must not move.
+    run_idleadv_learning_bank_one_degree();
+    TEST_ASSERT_EQUAL(IGNITION_ADVANCE_LARGE.toRaw(10), configPage15.idleAdvClCenter);
+    TEST_ASSERT_EQUAL(10, idleAdvanceClTrim);
+    TEST_ASSERT_EQUAL(0, idleAdvanceClLearnedDelta);
+}
+
+static void setup_correctionIdleAdvance_gain_autotune(void) {
+    setup_correctionIdleAdvance_closed_loop();
+    configPage15.idleAdvClLearnMinTemp = temperatureAddOffset(70);
+    currentStatus.coolant = 85;
+    configPage15.idleAdvClGainAutotuneRequest = 1U;
+    idleAdvanceGainTuneAttempts = 0U;      //Per power cycle on purpose, so reset per test
+    idleAdvanceGainTuneLastRequest = false;
+    BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
+    (void)correctionIdleAdvance(10); //Engage on target; first settled tick.
+
+    //Hold a settled idle through the 3s stability window: the relay must not
+    //start before it, and starts on the window's last tick.
+    for(uint8_t tick = 0U; tick < 30U; ++tick) {
+        ++runSecsX10;
+        (void)correctionIdleAdvance(10);
+    }
+    TEST_ASSERT_EQUAL(IDLE_ADV_GAINTUNE_RELAY, idleAdvanceGainAutotuneDiag().state);
+}
+
+static void test_correctionIdleAdvance_gain_autotune_measures_relay_and_writes_gains(void) {
+    setup_correctionIdleAdvance_gain_autotune();
+
+    //While the engine holds the target the relay pushes advance up: center 10 + 3.
+    ++runSecsX10;
+    TEST_ASSERT_EQUAL(13, correctionIdleAdvance(10));
+
+    //Scripted plant response: a 100 RPM square wave with a 1.2s period. The
+    //first two half cycles are the start transient and must be discarded.
+    for(uint8_t phase = 0U; phase < 8U; ++phase) {
+        currentStatus.setRpm(((phase % 2U) == 0U) ? 1100U : 900U);
+        for(uint8_t tick = 0U; tick < 6U; ++tick) {
+            ++runSecsX10;
+            (void)correctionIdleAdvance(10);
+        }
+    }
+
+    //Relay describing function: Ku = 4*3/(pi*100) deg/RPM, Tu = 1.2s.
+    //Ziegler-Nichols PD: Kp = 0.8*Ku -> raw 61; Kd = Kp*Tu/8 -> raw 91.
+    TEST_ASSERT_EQUAL(61, configPage9.idleAdvClKp);
+    TEST_ASSERT_EQUAL(91, configPage9.idleAdvClKd);
+    TEST_ASSERT_EQUAL(12, idleAdvanceGainAutotuneDiag().periodTenths);
+    TEST_ASSERT_EQUAL(100, idleAdvanceGainAutotuneDiag().amplitudeRpm);
+    TEST_ASSERT_EQUAL(IDLE_ADV_GAINTUNE_RESULT_DONE, idleAdvanceGainAutotuneDiag().lastResult);
+    //The request is one-shot: the firmware clears it after writing the gains.
+    TEST_ASSERT_EQUAL(0, configPage15.idleAdvClGainAutotuneRequest);
+}
+
+static void test_correctionIdleAdvance_gain_autotune_aborts_without_oscillation(void) {
+    setup_correctionIdleAdvance_gain_autotune();
+
+    //A plant that never crosses the hysteresis is not oscillating: the test
+    //must give up rather than hold the relay offset forever.
+    for(uint8_t tick = 0U; tick < 51U; ++tick) {
+        ++runSecsX10;
+        (void)correctionIdleAdvance(10);
+    }
+
+    TEST_ASSERT_EQUAL(IDLE_ADV_GAINTUNE_RESULT_NO_OSCILLATION, idleAdvanceGainAutotuneDiag().lastResult);
+    TEST_ASSERT_EQUAL(IDLE_ADV_GAINTUNE_WAITING, idleAdvanceGainAutotuneDiag().state);
+    //The gains and the request are untouched: it will retry at the next settled idle.
+    TEST_ASSERT_EQUAL(40, configPage9.idleAdvClKp);
+    TEST_ASSERT_EQUAL(60, configPage9.idleAdvClKd);
+    TEST_ASSERT_EQUAL(1, configPage15.idleAdvClGainAutotuneRequest);
+}
+
+static void test_correctionIdleAdvance_gain_autotune_aborts_on_disengage(void) {
+    setup_correctionIdleAdvance_gain_autotune();
+
+    //Opening the throttle mid test poisons the measurement and must abort it.
+    currentStatus.TPS = configPage2.idleAdvTPS + 10U;
+    (void)correctionIdleAdvance(10);
+
+    TEST_ASSERT_EQUAL(IDLE_ADV_GAINTUNE_RESULT_DISENGAGED, idleAdvanceGainAutotuneDiag().lastResult);
+    TEST_ASSERT_EQUAL(40, configPage9.idleAdvClKp);
+    TEST_ASSERT_EQUAL(60, configPage9.idleAdvClKd);
+    TEST_ASSERT_EQUAL(1, configPage15.idleAdvClGainAutotuneRequest);
+}
+
 static void test_correctionIdleAdvance(void) {
     RUN_TEST_P(test_correctionIdleAdvance_tps_lookup_nodelay);
     RUN_TEST_P(test_correctionIdleAdvance_ctps_lookup_nodelay);
@@ -654,6 +809,12 @@ static void test_correctionIdleAdvance(void) {
     RUN_TEST_P(test_correctionIdleAdvance_closed_loop_trim_freezes_in_deadband);
     RUN_TEST_P(test_correctionIdleAdvance_closed_loop_trim_yields_to_iac);
     RUN_TEST_P(test_correctionIdleAdvance_closed_loop_trim_is_bounded);
+    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_learn_folds_trim_into_center);
+    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_learn_respects_authority);
+    RUN_TEST_P(test_correctionIdleAdvance_closed_loop_learn_requires_warm_engine);
+    RUN_TEST_P(test_correctionIdleAdvance_gain_autotune_measures_relay_and_writes_gains);
+    RUN_TEST_P(test_correctionIdleAdvance_gain_autotune_aborts_without_oscillation);
+    RUN_TEST_P(test_correctionIdleAdvance_gain_autotune_aborts_on_disengage);
 }
 
 extern int8_t correctionSoftRevLimit(int8_t advance);

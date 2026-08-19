@@ -11,6 +11,7 @@ extern void updateTableU16toU8(table2D_u16_u8_32 &targetTable, uint16_t u16EEpro
 extern void upgradeV25toV26(void);
 extern void upgradeV27toV28(void);
 extern void upgradeV28toV29(void);
+extern void upgradeV29toV30(void);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -139,12 +140,28 @@ static void test_upgradeV28toV29_replaces_bands_with_gains(void)
     TEST_ASSERT_EQUAL(1U, configPage15.idleAdvClTrimRequiresIacLimit);
 }
 
+static void test_upgradeV29toV30_initialises_center_autotune(void)
+{
+    //The autotune settings land in bytes that were previously unused, so their
+    //content is undefined and must be rewritten from the defaults.
+    configPage15.idleAdvClLearnAuthority = 255U;
+    configPage15.idleAdvClLearnMinTemp = 255U;
+    setStorageAPI(setupEepromReadApi(29U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV29toV30();
+
+    //Learning defaults to off so an upgrade cannot start moving the tune by itself.
+    TEST_ASSERT_EQUAL(0U, configPage15.idleAdvClLearnAuthority);
+    TEST_ASSERT_EQUAL(temperatureAddOffset(70), configPage15.idleAdvClLearnMinTemp);
+}
+
 void test_update(void) {
-    SET_UNITY_FILENAME() { 
-        RUN_TEST(test_updateTableU16toU8); 
-        RUN_TEST(test_upgradeV25toV26_positive);  
-        RUN_TEST(test_upgradeV25toV26_negative); 
+    SET_UNITY_FILENAME() {
+        RUN_TEST(test_updateTableU16toU8);
+        RUN_TEST(test_upgradeV25toV26_positive);
+        RUN_TEST(test_upgradeV25toV26_negative);
         RUN_TEST(test_upgradeV27toV28_initialises_idle_advance_closed_loop);
         RUN_TEST(test_upgradeV28toV29_replaces_bands_with_gains);
+        RUN_TEST(test_upgradeV29toV30_initialises_center_autotune);
     }
 }

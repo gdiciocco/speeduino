@@ -99,6 +99,19 @@ TESTABLE_STATIC void upgradeV26toV27(void) {
     }
 }
 
+/** @brief Defaults for the closed-loop idle ignition autotunes (all off).
+ *
+ * The gain autotune request and the spare bits share byte 195 with settings
+ * that predate them, so the previously-undefined bits are cleared explicitly:
+ * a garbage 1 in the request bit would start a relay test on its own.
+ */
+TESTABLE_STATIC void setIdleAdvanceClosedLoopLearnDefaults(void) {
+    configPage15.idleAdvClLearnAuthority = 0U; //Learning disabled
+    configPage15.idleAdvClLearnMinTemp = temperatureAddOffset(70); //degC
+    configPage15.idleAdvClGainAutotuneRequest = 0U;
+    configPage15.idleAdvClUnused195 = 0U;
+}
+
 /** @brief Defaults for the closed-loop idle ignition controller.
  *
  * The trim is off by default: with a closed-loop IAC the air path already owns
@@ -117,6 +130,7 @@ TESTABLE_STATIC void setIdleAdvanceClosedLoopDefaults(void) {
     configPage15.idleAdvClTrimRate = 0U;   //Trim disabled
     configPage15.idleAdvClTrimRange = 5U;  //degrees
     configPage15.idleAdvClTrimRequiresIacLimit = 1U;
+    setIdleAdvanceClosedLoopLearnDefaults();
 }
 
 // V28 adds closed-loop idle ignition settings in bytes that were previously unused.
@@ -151,9 +165,21 @@ TESTABLE_STATIC void upgradeV28toV29(void) {
     }
 }
 
+/** V30 adds the closed-loop idle ignition center autotune settings in bytes
+ * that were previously unused (and therefore of undefined content). */
+TESTABLE_STATIC void upgradeV29toV30(void) {
+    if(loadEEPROMVersion() == 29U)
+    {
+        setIdleAdvanceClosedLoopLearnDefaults();
+
+        saveAllPages();
+        saveEEPROMVersion(30);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    29
+  #define CURRENT_DATA_VERSION    30
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -934,6 +960,7 @@ void doUpdates(void)
   upgradeV26toV27();
   upgradeV27toV28();
   upgradeV28toV29();
+  upgradeV29toV30();
   //Move this #endif to only do latest updates to safe ROM space on small devices.
   #endif
 

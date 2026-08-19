@@ -36,6 +36,7 @@ There are 2 top level functions that call more detailed corrections for Fuel and
 #include "units.h"
 #include "fuel_calcs.h"
 #include "unit_testing.h"
+#include "storage.h"
 
 static long PID_O2;
 static long PID_output;
@@ -72,6 +73,80 @@ static bool idleAdvanceClFilterPrimed;
 static int8_t idleAdvanceClOutput;
 static bool idleAdvanceClLastUpdateValid;
 static uint32_t idleAdvanceClLastUpdate;
+//Center autotune. The learned delta is deliberately NOT reset by
+//initialiseCorrections(): that also runs on every stall, and the learning
+//authority is bounded per power cycle, not per engine run.
+TESTABLE_STATIC int8_t idleAdvanceClLearnedDelta; //Degrees the stored center has moved since power-on
+static uint8_t idleAdvanceClLearnSettleTicks;     //Consecutive 10Hz ticks the fold conditions have held
+static IdleAdvanceLearnDiagnostics idleAdvanceClLearnDiagnostics;
+
+//Gain (relay) autotune state. The attempt budget and request edge detector are
+//per power cycle for the same reason as the learned delta above.
+static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_MAX_ATTEMPTS = 3U;
+static uint8_t idleAdvanceGainTuneState;
+static uint8_t idleAdvanceGainTuneResult;
+TESTABLE_STATIC uint8_t idleAdvanceGainTuneAttempts;
+TESTABLE_STATIC bool idleAdvanceGainTuneLastRequest;
+static uint8_t idleAdvanceGainTuneStableTicks;
+static int16_t idleAdvanceGainTuneCenter;        //Degrees, frozen for the duration of the test
+static int8_t idleAdvanceGainTuneRelaySign;
+static uint8_t idleAdvanceGainTuneTicksSinceSwitch;
+static uint8_t idleAdvanceGainTuneHalfCycles;
+static uint16_t idleAdvanceGainTunePeakError;    //Peak |RPM error| within the current half cycle
+static uint16_t idleAdvanceGainTunePeriodSum;    //Sum of measured half periods, 10Hz ticks
+static uint32_t idleAdvanceGainTuneAmplitudeSum; //Sum of measured half cycle peaks, RPM
+static IdleAdvanceGainAutotuneDiagnostics idleAdvanceGainTuneDiagnostics;
+
+static inline void updateIdleAdvanceGainTuneDiag(void) {
+  idleAdvanceGainTuneDiagnostics.state = idleAdvanceGainTuneState;
+  idleAdvanceGainTuneDiagnostics.lastResult = idleAdvanceGainTuneResult;
+  idleAdvanceGainTuneDiagnostics.kpRaw = configPage9.idleAdvClKp;
+  idleAdvanceGainTuneDiagnostics.kdRaw = configPage9.idleAdvClKd;
+}
+
+static inline void abortIdleAdvanceGainAutotune(uint8_t reason) {
+  idleAdvanceGainTuneResult = reason;
+  idleAdvanceGainTuneState = (idleAdvanceGainTuneAttempts >= IDLE_ADVANCE_GAINTUNE_MAX_ATTEMPTS)
+      ? IDLE_ADV_GAINTUNE_FAILED : IDLE_ADV_GAINTUNE_WAITING;
+  idleAdvanceGainTuneStableTicks = 0U;
+  updateIdleAdvanceGainTuneDiag();
+}
+
+static inline void noteIdleAdvanceGainTuneInactive(void) {
+  if(idleAdvanceGainTuneState == IDLE_ADV_GAINTUNE_RELAY) {
+    abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_DISENGAGED);
+  } else {
+    idleAdvanceGainTuneStableTicks = 0U;
+  }
+}
+
+const IdleAdvanceGainAutotuneDiagnostics& idleAdvanceGainAutotuneDiag(void) {
+  return idleAdvanceGainTuneDiagnostics;
+}
+
+static inline bool isIdleAdvanceLearnEnabled(void) {
+  return (configPage2.idleAdvEnabled == IDLEADVANCE_MODE_CLOSED_LOOP)
+      && (configPage15.idleAdvClLearnAuthority > 0U)
+      && (configPage15.idleAdvClTrimRate > 0U);
+}
+
+static inline void updateIdleAdvanceLearnDiag(uint8_t state) {
+  idleAdvanceClLearnDiagnostics.state = state;
+  idleAdvanceClLearnDiagnostics.trimTenths = idleAdvanceClTrim;
+  idleAdvanceClLearnDiagnostics.learnedDelta = idleAdvanceClLearnedDelta;
+  idleAdvanceClLearnDiagnostics.centerRaw = configPage15.idleAdvClCenter;
+  idleAdvanceClLearnDiagnostics.settleSecs = (uint8_t)(idleAdvanceClLearnSettleTicks / 10U);
+}
+
+static inline void noteIdleAdvanceLearnInactive(void) {
+  idleAdvanceClLearnSettleTicks = 0U;
+  updateIdleAdvanceLearnDiag(isIdleAdvanceLearnEnabled() ? IDLE_ADV_LEARN_INACTIVE : IDLE_ADV_LEARN_OFF);
+  noteIdleAdvanceGainTuneInactive();
+}
+
+const IdleAdvanceLearnDiagnostics& idleAdvanceLearnDiag(void) {
+  return idleAdvanceClLearnDiagnostics;
+}
 
 TESTABLE_CONSTEXPR table2D_u8_u8_4 taeTable(&configPage4.taeBins, &configPage4.taeValues);
 TESTABLE_CONSTEXPR table2D_u8_u8_4 maeTable(&configPage4.maeBins, &configPage4.maeRates);
@@ -139,6 +214,7 @@ void initialiseCorrections(void)
   idleAdvanceClOutput = 0;
   idleAdvanceClLastUpdateValid = false;
   idleAdvanceClLastUpdate = 0U;
+  noteIdleAdvanceLearnInactive();
   if(currentStatus.initialisationComplete == false)
   {
     currentStatus.battery10 = 125; //Set battery voltage to sensible value for dwell correction for "flying start" (else ignition gets spurious pulses after boot)
@@ -1196,6 +1272,244 @@ static inline void updateIdleAdvanceClosedLoopTrim(int32_t rpmError, int16_t tar
   idleAdvanceClTrim = clamp(idleAdvanceClTrim, (int16_t)-trimLimit, trimLimit);
 }
 
+//Held-target time required before each folded degree. Long enough that a load
+//transient (fan, AC clutch) cannot bake its temporary trim into the tune.
+static constexpr uint8_t IDLE_ADVANCE_CL_LEARN_SETTLE_TICKS = 100U; //10s at the 10Hz tick
+
+/** @brief Autotune: fold whole degrees of settled trim into the stored center.
+ *
+ * The trim already finds the advance this engine needs to idle, but what it
+ * learns dies with the session. Once the loop has held the target for the
+ * settle time with a whole degree of trim banked, that degree is moved from
+ * the trim into configPage15.idleAdvClCenter and queued for EEPROM, so the
+ * next start begins from the advance the engine actually idles at. Moving the
+ * degree from one term to the other leaves their sum unchanged: a fold is
+ * never a torque step.
+ */
+static inline void updateIdleAdvanceClosedLoopLearning(int32_t rpmError, int16_t minimumAdvance, int16_t maximumAdvance) {
+  if(!isIdleAdvanceLearnEnabled()) {
+    idleAdvanceClLearnSettleTicks = 0U;
+    updateIdleAdvanceLearnDiag(IDLE_ADV_LEARN_OFF);
+    return;
+  }
+
+  //A cold engine idles on different advance. Learning it into the one stored
+  //center would poison every warm idle that follows.
+  if(currentStatus.coolant < temperatureRemoveOffset(configPage15.idleAdvClLearnMinTemp)) {
+    idleAdvanceClLearnSettleTicks = 0U;
+    updateIdleAdvanceLearnDiag(IDLE_ADV_LEARN_COLD);
+    return;
+  }
+
+  //Fold only what has proven itself: a whole banked degree, while the loop is
+  //inside the deadband. Outside it the trim is still moving, so its value is
+  //not yet the steady state offset.
+  const int32_t deadband = (int32_t)configPage15.idleAdvClDeadband;
+  const bool holdingTarget = (rpmError <= deadband) && (rpmError >= -deadband);
+  const bool wholeDegreeBanked = (idleAdvanceClTrim >= IDLE_ADVANCE_CL_TENTHS)
+                              || (idleAdvanceClTrim <= -IDLE_ADVANCE_CL_TENTHS);
+  if(!holdingTarget || !wholeDegreeBanked) {
+    idleAdvanceClLearnSettleTicks = 0U;
+    updateIdleAdvanceLearnDiag(IDLE_ADV_LEARN_WAITING);
+    return;
+  }
+
+  if(idleAdvanceClLearnSettleTicks < IDLE_ADVANCE_CL_LEARN_SETTLE_TICKS) {
+    idleAdvanceClLearnSettleTicks++;
+    updateIdleAdvanceLearnDiag(IDLE_ADV_LEARN_SETTLING);
+    return;
+  }
+
+  const int8_t step = (idleAdvanceClTrim > 0) ? 1 : -1;
+  const int16_t newDelta = (int16_t)idleAdvanceClLearnedDelta + step;
+  const int16_t newCenter = IGNITION_ADVANCE_LARGE.toUser(configPage15.idleAdvClCenter) + step;
+  const int16_t authority = (int16_t)configPage15.idleAdvClLearnAuthority;
+  if((newDelta > authority) || (newDelta < -authority)
+  || (newCenter < minimumAdvance) || (newCenter > maximumAdvance)) {
+    updateIdleAdvanceLearnDiag(IDLE_ADV_LEARN_LIMITED);
+    return;
+  }
+
+  configPage15.idleAdvClCenter = IGNITION_ADVANCE_LARGE.toRaw(newCenter);
+  idleAdvanceClTrim -= (int16_t)(step * IDLE_ADVANCE_CL_TENTHS);
+  idleAdvanceClLearnedDelta = (int8_t)newDelta;
+  idleAdvanceClLearnSettleTicks = 0U;
+  //Folds are rare (at most one per settle window), so each is queued straight
+  //onto the existing pending-write path instead of being batched.
+  setEepromWritePending(true);
+  updateIdleAdvanceLearnDiag(IDLE_ADV_LEARN_WAITING);
+}
+
+// --- Gain (relay) autotune tuning constants ---
+static constexpr int16_t IDLE_ADVANCE_GAINTUNE_RELAY_DEG = 3;            //Relay amplitude, degrees
+static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_STABLE_TICKS = 30U;       //3s settled idle before the relay may start
+static constexpr int32_t IDLE_ADVANCE_GAINTUNE_STABLE_BAND = 20L;        //RPM
+static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_DISCARD = 2U;             //Half cycles dropped as the start transient
+static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_MEASURE = 6U;             //Half cycles averaged for the measurement
+static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_HALF_CYCLE_TIMEOUT = 50U; //Ticks: no relay switch in 5s = plant not oscillating
+static constexpr int32_t IDLE_ADVANCE_GAINTUNE_RUNAWAY_RPM = 400L;
+static constexpr uint16_t IDLE_ADVANCE_GAINTUNE_MIN_AMPLITUDE = 20U;     //RPM
+static constexpr uint16_t IDLE_ADVANCE_GAINTUNE_MIN_PERIOD_TICKS = 4U;   //0.4s
+static constexpr uint16_t IDLE_ADVANCE_GAINTUNE_MAX_PERIOD_TICKS = 60U;  //6s
+static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_KP_MIN = 4U;              //0.2 deg/100RPM
+static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_KP_MAX = 240U;
+static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_KD_MAX = 240U;
+
+/** @brief Turn the measured limit cycle into PD gains and store them. */
+static void finalizeIdleAdvanceGainAutotune(void) {
+  const uint16_t halfPeriodTicks = (uint16_t)(idleAdvanceGainTunePeriodSum / IDLE_ADVANCE_GAINTUNE_MEASURE);
+  const uint16_t periodTicks = (uint16_t)(halfPeriodTicks * 2U);
+  const uint16_t amplitude = (uint16_t)(idleAdvanceGainTuneAmplitudeSum / IDLE_ADVANCE_GAINTUNE_MEASURE);
+  idleAdvanceGainTuneDiagnostics.periodTenths = (periodTicks > (uint16_t)UINT8_MAX) ? UINT8_MAX : (uint8_t)periodTicks;
+  idleAdvanceGainTuneDiagnostics.amplitudeRpm = amplitude;
+
+  if(amplitude < IDLE_ADVANCE_GAINTUNE_MIN_AMPLITUDE) {
+    abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_AMPLITUDE);
+    return;
+  }
+  if((periodTicks < IDLE_ADVANCE_GAINTUNE_MIN_PERIOD_TICKS) || (periodTicks > IDLE_ADVANCE_GAINTUNE_MAX_PERIOD_TICKS)) {
+    abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_PERIOD);
+    return;
+  }
+
+  //Describing function of the relay: Ku = 4*d / (pi*a) in deg/RPM, with d the
+  //relay amplitude (deg) and a the oscillation amplitude (RPM). Ziegler-Nichols
+  //for a PD controller: Kp = 0.8*Ku, Td = Tu/8.
+  //In raw units (Kp raw = 2000 * deg/RPM, Kd raw = 20000 * deg/(RPM/s), Tu in
+  //0.1s ticks) that collapses to the two integer expressions below (pi ~ 314/100).
+  const int32_t kpRaw = (640000L * IDLE_ADVANCE_GAINTUNE_RELAY_DEG) / (314L * (int32_t)amplitude);
+  const int32_t kdRaw = (80000L * IDLE_ADVANCE_GAINTUNE_RELAY_DEG * (int32_t)periodTicks) / (314L * (int32_t)amplitude);
+  configPage9.idleAdvClKp = (uint8_t)clamp(kpRaw, (int32_t)IDLE_ADVANCE_GAINTUNE_KP_MIN, (int32_t)IDLE_ADVANCE_GAINTUNE_KP_MAX);
+  configPage9.idleAdvClKd = (uint8_t)clamp(kdRaw, (int32_t)0L, (int32_t)IDLE_ADVANCE_GAINTUNE_KD_MAX);
+
+  configPage15.idleAdvClGainAutotuneRequest = 0U; //The request is one-shot
+  setEepromWritePending(true);
+  idleAdvanceGainTuneResult = IDLE_ADV_GAINTUNE_RESULT_DONE;
+  idleAdvanceGainTuneState = IDLE_ADV_GAINTUNE_OFF;
+  idleAdvanceGainTuneStableTicks = 0U;
+  updateIdleAdvanceGainTuneDiag();
+}
+
+/** @brief On-demand relay (Astrom-Hagglund) autotune of the closed loop gains.
+ *
+ * While the request bit is set, waits for a settled warm idle, then replaces
+ * the loop output with a relay: center+d while the engine is slow, center-d
+ * while it is fast. The plant answers with a bounded limit cycle whose
+ * amplitude and period are exactly the two numbers Ziegler-Nichols needs, so
+ * a ~20s wobble at idle measures what no amount of steady running can.
+ *
+ * The center, trim and learning stay frozen for the duration so the measured
+ * oscillation belongs to the plant, not to the controller being retuned.
+ *
+ * @return true when the relay owns the loop output for this tick
+ */
+static inline bool updateIdleAdvanceGainAutotune(int32_t rpmError, int16_t minimumAdvance, int16_t maximumAdvance, int8_t &relayAdvance) {
+  const bool requested = (configPage15.idleAdvClGainAutotuneRequest == 1U);
+  if(requested && !idleAdvanceGainTuneLastRequest) {
+    //A fresh request re-arms the attempt budget
+    idleAdvanceGainTuneAttempts = 0U;
+    idleAdvanceGainTuneResult = IDLE_ADV_GAINTUNE_RESULT_NONE;
+  }
+  idleAdvanceGainTuneLastRequest = requested;
+
+  if(!requested) {
+    idleAdvanceGainTuneState = IDLE_ADV_GAINTUNE_OFF;
+    idleAdvanceGainTuneStableTicks = 0U;
+    updateIdleAdvanceGainTuneDiag();
+    return false;
+  }
+
+  if(idleAdvanceGainTuneAttempts >= IDLE_ADVANCE_GAINTUNE_MAX_ATTEMPTS) {
+    idleAdvanceGainTuneState = IDLE_ADV_GAINTUNE_FAILED;
+    updateIdleAdvanceGainTuneDiag();
+    return false;
+  }
+
+  if(idleAdvanceGainTuneState != IDLE_ADV_GAINTUNE_RELAY) {
+    idleAdvanceGainTuneState = IDLE_ADV_GAINTUNE_WAITING;
+    //Same warm gate as the center autotune: gains measured on a cold engine
+    //would be just as wrong as a cold-learned center.
+    if((currentStatus.coolant < temperatureRemoveOffset(configPage15.idleAdvClLearnMinTemp))
+    || (rpmError > IDLE_ADVANCE_GAINTUNE_STABLE_BAND) || (rpmError < -IDLE_ADVANCE_GAINTUNE_STABLE_BAND)) {
+      idleAdvanceGainTuneStableTicks = 0U;
+      updateIdleAdvanceGainTuneDiag();
+      return false;
+    }
+    if(idleAdvanceGainTuneStableTicks < IDLE_ADVANCE_GAINTUNE_STABLE_TICKS) {
+      idleAdvanceGainTuneStableTicks++;
+      updateIdleAdvanceGainTuneDiag();
+      return false;
+    }
+
+    //Start the relay around the frozen working center
+    const int16_t centerDegrees = (idleAdvanceClCenter >= 0)
+        ? (int16_t)((idleAdvanceClCenter + (IDLE_ADVANCE_CL_TENTHS / 2)) / IDLE_ADVANCE_CL_TENTHS)
+        : (int16_t)((idleAdvanceClCenter - (IDLE_ADVANCE_CL_TENTHS / 2)) / IDLE_ADVANCE_CL_TENTHS);
+    if(((centerDegrees - IDLE_ADVANCE_GAINTUNE_RELAY_DEG) < minimumAdvance)
+    || ((centerDegrees + IDLE_ADVANCE_GAINTUNE_RELAY_DEG) > maximumAdvance)) {
+      //Retrying cannot create advance range, so spend the whole budget at once
+      idleAdvanceGainTuneAttempts = IDLE_ADVANCE_GAINTUNE_MAX_ATTEMPTS;
+      abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_AUTHORITY);
+      return false;
+    }
+    idleAdvanceGainTuneAttempts++;
+    idleAdvanceGainTuneState = IDLE_ADV_GAINTUNE_RELAY;
+    idleAdvanceGainTuneCenter = centerDegrees;
+    idleAdvanceGainTuneRelaySign = 1; //More advance = more torque: push upward first
+    idleAdvanceGainTuneTicksSinceSwitch = 0U;
+    idleAdvanceGainTuneHalfCycles = 0U;
+    idleAdvanceGainTunePeakError = 0U;
+    idleAdvanceGainTunePeriodSum = 0U;
+    idleAdvanceGainTuneAmplitudeSum = 0UL;
+    relayAdvance = (int8_t)(centerDegrees + IDLE_ADVANCE_GAINTUNE_RELAY_DEG);
+    updateIdleAdvanceGainTuneDiag();
+    return true;
+  }
+
+  //--- Relay running ---
+  if((rpmError > IDLE_ADVANCE_GAINTUNE_RUNAWAY_RPM) || (rpmError < -IDLE_ADVANCE_GAINTUNE_RUNAWAY_RPM)) {
+    abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_RUNAWAY);
+    return false;
+  }
+  idleAdvanceGainTuneTicksSinceSwitch++;
+  if(idleAdvanceGainTuneTicksSinceSwitch > IDLE_ADVANCE_GAINTUNE_HALF_CYCLE_TIMEOUT) {
+    abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_NO_OSCILLATION);
+    return false;
+  }
+
+  const uint16_t absError = (rpmError < 0L) ? (uint16_t)(-rpmError) : (uint16_t)rpmError;
+  if(absError > idleAdvanceGainTunePeakError) { idleAdvanceGainTunePeakError = absError; }
+
+  //Hysteresis keeps cycle-to-cycle combustion noise from switching the relay
+  const int32_t hysteresis = (configPage15.idleAdvClDeadband > 10U) ? (int32_t)configPage15.idleAdvClDeadband : 10L;
+  int8_t desiredSign = idleAdvanceGainTuneRelaySign;
+  if(rpmError > hysteresis) { desiredSign = 1; }        //Engine slow: add torque
+  else if(rpmError < -hysteresis) { desiredSign = -1; } //Engine fast: remove torque
+  else { /* inside the hysteresis band: hold the current relay state */ }
+
+  if(desiredSign != idleAdvanceGainTuneRelaySign) {
+    idleAdvanceGainTuneHalfCycles++;
+    if(idleAdvanceGainTuneHalfCycles > IDLE_ADVANCE_GAINTUNE_DISCARD) {
+      idleAdvanceGainTunePeriodSum += idleAdvanceGainTuneTicksSinceSwitch;
+      idleAdvanceGainTuneAmplitudeSum += idleAdvanceGainTunePeakError;
+    }
+    idleAdvanceGainTuneRelaySign = desiredSign;
+    idleAdvanceGainTuneTicksSinceSwitch = 0U;
+    idleAdvanceGainTunePeakError = 0U;
+
+    if(idleAdvanceGainTuneHalfCycles >= (uint8_t)(IDLE_ADVANCE_GAINTUNE_DISCARD + IDLE_ADVANCE_GAINTUNE_MEASURE)) {
+      finalizeIdleAdvanceGainAutotune();
+      return false; //The loop resumes with the new gains on this very tick
+    }
+  }
+
+  relayAdvance = (int8_t)clamp((int16_t)(idleAdvanceGainTuneCenter
+                    + ((int16_t)idleAdvanceGainTuneRelaySign * IDLE_ADVANCE_GAINTUNE_RELAY_DEG)),
+                    minimumAdvance, maximumAdvance);
+  updateIdleAdvanceGainTuneDiag();
+  return true;
+}
+
 /** @brief Where the center is heading: the configured base advance plus the learned trim. */
 static inline int16_t getIdleAdvanceClosedLoopCenterTarget(int16_t minimumAdvance, int16_t maximumAdvance) {
   const int16_t configuredCenter = clamp(IGNITION_ADVANCE_LARGE.toUser(configPage15.idleAdvClCenter),
@@ -1252,22 +1566,31 @@ static inline int8_t updateIdleAdvanceClosedLoop(int8_t currentAdvance) {
     const int32_t rpmDot = updateIdleAdvanceClosedLoopRpmDot();
     const int32_t rpmError = getIdleAdvanceRpmError();
 
-    // Only the center is rate limited. Rate limiting the proportional and
-    // derivative terms as well would put the fastest actuator on the engine into
-    // the same frequency band as the air path and cost the loop its phase margin.
-    const int16_t centerTarget = getIdleAdvanceClosedLoopCenterTarget(minimumAdvance, maximumAdvance);
-    idleAdvanceClCenter += clamp((int16_t)(centerTarget - idleAdvanceClCenter),
-                                 (int16_t)-IDLE_ADVANCE_CL_CENTER_SLEW_TENTHS,
-                                 (int16_t)IDLE_ADVANCE_CL_CENTER_SLEW_TENTHS);
+    int8_t relayAdvance = 0;
+    if(updateIdleAdvanceGainAutotune(rpmError, minimumAdvance, maximumAdvance, relayAdvance)) {
+      //The relay owns the output; the center, trim and learning are frozen so
+      //the measured oscillation is the plant's, not the controller's.
+      idleAdvanceClOutput = relayAdvance;
+      updateIdleAdvanceLearnDiag(IDLE_ADV_LEARN_WAITING);
+    } else {
+      // Only the center is rate limited. Rate limiting the proportional and
+      // derivative terms as well would put the fastest actuator on the engine into
+      // the same frequency band as the air path and cost the loop its phase margin.
+      const int16_t centerTarget = getIdleAdvanceClosedLoopCenterTarget(minimumAdvance, maximumAdvance);
+      idleAdvanceClCenter += clamp((int16_t)(centerTarget - idleAdvanceClCenter),
+                                   (int16_t)-IDLE_ADVANCE_CL_CENTER_SLEW_TENTHS,
+                                   (int16_t)IDLE_ADVANCE_CL_CENTER_SLEW_TENTHS);
 
-    const int16_t targetTenths = computeIdleAdvanceClosedLoopTarget(idleAdvanceClCenter, rpmDot);
-    updateIdleAdvanceClosedLoopTrim(rpmError, targetTenths, minimumAdvance, maximumAdvance);
+      const int16_t targetTenths = computeIdleAdvanceClosedLoopTarget(idleAdvanceClCenter, rpmDot);
+      updateIdleAdvanceClosedLoopTrim(rpmError, targetTenths, minimumAdvance, maximumAdvance);
+      updateIdleAdvanceClosedLoopLearning(rpmError, minimumAdvance, maximumAdvance);
 
-    const int16_t roundedTenths = (targetTenths >= 0)
-        ? (int16_t)(targetTenths + (IDLE_ADVANCE_CL_TENTHS / 2))
-        : (int16_t)(targetTenths - (IDLE_ADVANCE_CL_TENTHS / 2));
-    idleAdvanceClOutput = (int8_t)clamp((int16_t)(roundedTenths / IDLE_ADVANCE_CL_TENTHS),
-                                        minimumAdvance, maximumAdvance);
+      const int16_t roundedTenths = (targetTenths >= 0)
+          ? (int16_t)(targetTenths + (IDLE_ADVANCE_CL_TENTHS / 2))
+          : (int16_t)(targetTenths - (IDLE_ADVANCE_CL_TENTHS / 2));
+      idleAdvanceClOutput = (int8_t)clamp((int16_t)(roundedTenths / IDLE_ADVANCE_CL_TENTHS),
+                                          minimumAdvance, maximumAdvance);
+    }
     idleAdvanceClLastUpdate = runSecsX10;
     idleAdvanceClLastUpdateValid = true;
   }
@@ -1281,6 +1604,7 @@ TESTABLE_INLINE_STATIC int8_t correctionIdleAdvance(int8_t advance)
     const bool resetLearnedTrim = (configPage2.idleAdvEnabled == IDLEADVANCE_MODE_OFF)
         || (currentStatus.rotationStatus != EngineRotationStatus::Running);
     resetIdleAdvanceEngagement(resetLearnedTrim);
+    noteIdleAdvanceLearnInactive();
     return advance;
   }
 
@@ -1288,16 +1612,21 @@ TESTABLE_INLINE_STATIC int8_t correctionIdleAdvance(int8_t advance)
     // Preserve the learned trim during a short throttle opening or gear change,
     // but require the configured start delay again on re-entry.
     resetIdleAdvanceEngagement(false);
+    noteIdleAdvanceLearnInactive();
     return advance;
   }
 
-  if(!hasIdleAdvanceStartDelayElapsed()) { return advance; }
+  if(!hasIdleAdvanceStartDelayElapsed()) {
+    noteIdleAdvanceLearnInactive();
+    return advance;
+  }
 
   if(configPage2.idleAdvEnabled == IDLEADVANCE_MODE_CLOSED_LOOP) {
     return updateIdleAdvanceClosedLoop(advance);
   }
 
   resetIdleAdvanceClosedLoop(true);
+  noteIdleAdvanceLearnInactive();
   const int16_t advanceIdleAdjust = IGNITION_ADVANCE_SMALL.toUser(
       table2D_getValue(&idleAdvanceTable, computeIdleAdvanceRpmDelta()));
   return applyIdleAdvanceAdjust(advance, (int8_t)advanceIdleAdjust);

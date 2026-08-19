@@ -1,6 +1,7 @@
 #include "globals.h"
 #include "logger.h"
 #include "ww_autotune.h"
+#include "corrections.h"
 #include "decoders.h"
 #include "init.h"
 #include "maths.h"
@@ -516,6 +517,21 @@ byte getTSLogEntry(uint16_t byteNum)
     case 154: statusValue = wwAutotuneDiag().lastRemoveValue; break;
     case 155: statusValue = lowByte(wwAutotuneDiag().secondsToNextSave); break;
     case 156: statusValue = highByte(wwAutotuneDiag().secondsToNextSave); break;
+    //Closed-loop idle ignition center autotune diagnostics (see IdleAdvanceLearnDiagnostics in corrections.h)
+    case 157: statusValue = idleAdvanceLearnDiag().state; break;
+    case 158: statusValue = lowByte((uint16_t)idleAdvanceLearnDiag().trimTenths); break;
+    case 159: statusValue = highByte((uint16_t)idleAdvanceLearnDiag().trimTenths); break;
+    case 160: statusValue = (uint8_t)idleAdvanceLearnDiag().learnedDelta; break;
+    case 161: statusValue = idleAdvanceLearnDiag().centerRaw; break;
+    case 162: statusValue = idleAdvanceLearnDiag().settleSecs; break;
+    //Closed-loop idle ignition gain autotune diagnostics (see IdleAdvanceGainAutotuneDiagnostics in corrections.h)
+    case 163: statusValue = idleAdvanceGainAutotuneDiag().state; break;
+    case 164: statusValue = idleAdvanceGainAutotuneDiag().lastResult; break;
+    case 165: statusValue = idleAdvanceGainAutotuneDiag().kpRaw; break;
+    case 166: statusValue = idleAdvanceGainAutotuneDiag().kdRaw; break;
+    case 167: statusValue = idleAdvanceGainAutotuneDiag().periodTenths; break;
+    case 168: statusValue = lowByte(idleAdvanceGainAutotuneDiag().amplitudeRpm); break;
+    case 169: statusValue = highByte(idleAdvanceGainAutotuneDiag().amplitudeRpm); break;
     default: statusValue = 0; // MISRA check
   }
 
