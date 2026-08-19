@@ -217,8 +217,9 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 6U; break; //Custom block layout version
-    case 3: statusValue = buildStorageStatus(); break; //Backup SRAM integrity status (see buildStorageStatus)
+    case 2: statusValue = 7U; break; //Custom block layout version
+    //Backup SRAM integrity status in bits 0-3 (see buildStorageStatus), dashboard inputs D5-D8 in bits 4-7
+    case 3: statusValue = buildStorageStatus() | static_cast<byte>(currentStatus.dashInputs << 4U); break;
     case 4: statusValue = lowByte(currentStatus.RPM); break;
     case 5: statusValue = highByte(currentStatus.RPM); break;
     case 6: statusValue = lowByte(currentStatus.MAP); break;

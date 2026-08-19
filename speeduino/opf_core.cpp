@@ -326,6 +326,24 @@ static constexpr byte LED_WARNING = PG10;
 static constexpr byte LED_ALERT = PG11;
 static constexpr byte LED_COMS = PG12;
 
+//Dashboard digital inputs, board silkscreen D5-D8. The sources are open
+//collector, so the pins idle high on the internal pull-up and are pulled low
+//while the 12V signal is present: LOW = active.
+static constexpr byte PIN_DASH_D5 = PF1;  //Unused, still sampled as spare
+static constexpr byte PIN_DASH_D6 = PF0;  //Right turn signal
+static constexpr byte PIN_DASH_D7 = PE6;  //Left turn signal
+static constexpr byte PIN_DASH_D8 = PC13; //High beam
+
+static void readDashInputs()
+{
+  byte inputs = 0U;
+  if (digitalRead(PIN_DASH_D8) == LOW) { inputs |= DASH_INPUT_HIGH_BEAM; }
+  if (digitalRead(PIN_DASH_D7) == LOW) { inputs |= DASH_INPUT_LEFT_TURN; }
+  if (digitalRead(PIN_DASH_D6) == LOW) { inputs |= DASH_INPUT_RIGHT_TURN; }
+  if (digitalRead(PIN_DASH_D5) == LOW) { inputs |= DASH_INPUT_SPARE_D5; }
+  currentStatus.dashInputs = inputs;
+}
+
 static emp_pump::Config caponordEmpPumpConfig()
 {
   emp_pump::Config config = {};
@@ -751,6 +769,12 @@ void setupBoard()
   setStatusLedOff(LED_ALERT);
   setStatusLedOff(LED_COMS);
 
+  pinMode(PIN_DASH_D5, INPUT_PULLUP);
+  pinMode(PIN_DASH_D6, INPUT_PULLUP);
+  pinMode(PIN_DASH_D7, INPUT_PULLUP);
+  pinMode(PIN_DASH_D8, INPUT_PULLUP);
+  readDashInputs();
+
 #ifdef OIL_SENSOR_OPST
   pinMode(PIN_OPST, INPUT);
 #endif
@@ -775,7 +799,8 @@ void caponordSetPins()
 {
   pinTrigger = PE5;
   pinTrigger2 = PE4;
-  pinVSS = PC13;
+  //PC13 is the D8 dashboard input (high beam), so there is no default VSS pin.
+  //Pulse based VSS can still be mapped to a free pin via the TS vssPin setting.
 
   pinBat = PA0;
   pinCLT = PA3;
@@ -893,6 +918,7 @@ void runLoop()
 
   if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ))
   {
+    readDashInputs();
     caponordEmpPumpRunCanBridge();
 
     if (Serial.available() > 0)
