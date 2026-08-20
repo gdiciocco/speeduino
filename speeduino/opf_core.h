@@ -38,10 +38,9 @@ void caponordSetPins();
 /** Dashboard digital input bits published in currentStatus.dashInputs.
  * The inputs are open collector sources sampled against the internal pull-ups,
  * so a bit is set while the corresponding pin reads LOW (signal present). */
-static constexpr uint8_t DASH_INPUT_HIGH_BEAM  = 1U << 0; ///< D8, PC13
-static constexpr uint8_t DASH_INPUT_LEFT_TURN  = 1U << 1; ///< D7, PE6
-static constexpr uint8_t DASH_INPUT_RIGHT_TURN = 1U << 2; ///< D6, PF0
-static constexpr uint8_t DASH_INPUT_SPARE_D5   = 1U << 3; ///< D5, PF1 (unused)
+static constexpr uint8_t DASH_INPUT_HIGH_BEAM  = 1U << 0; ///< D5, PF1
+static constexpr uint8_t DASH_INPUT_LEFT_TURN  = 1U << 1; ///< D6, PF0
+static constexpr uint8_t DASH_INPUT_RIGHT_TURN = 1U << 2; ///< D7, PE6
 
 /** TS "w" sub-command used to drive the shock absorber preload controller */
 static constexpr uint8_t CAPONORD_TS_PRELOAD_WRITE_COMMAND = 0x50U;

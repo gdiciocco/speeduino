@@ -297,7 +297,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     case 76: statusValue = caponordEmpPumpGetCoolingDemandRaw(); break;
     case 77: statusValue = lowByte(caponordEmpPumpGetSaturationSeconds()); break;
     case 78: statusValue = highByte(caponordEmpPumpGetSaturationSeconds()); break;
-    //Dashboard digital inputs D5-D8, see the DASH_INPUT_* masks in opf_core.h (bits 4-7 spare for future inputs)
+    //Dashboard digital inputs D5-D7, see the DASH_INPUT_* masks in opf_core.h (bits 3-7 spare for future inputs)
     case 79: statusValue = currentStatus.dashInputs; break;
     default: statusValue = 0; break;
   }

@@ -23,21 +23,19 @@ static constexpr byte LED_WARNING = PG10;
 static constexpr byte LED_ALERT = PG11;
 static constexpr byte LED_COMS = PG12;
 
-//Dashboard digital inputs, board silkscreen D5-D8. The sources are open
+//Dashboard digital inputs, board silkscreen D5-D7. The sources are open
 //collector, so the pins idle high on the internal pull-up and are pulled low
 //while the 12V signal is present: LOW = active.
-static constexpr byte PIN_DASH_D5 = PF1;  //Unused, still sampled as spare
-static constexpr byte PIN_DASH_D6 = PF0;  //Right turn signal
-static constexpr byte PIN_DASH_D7 = PE6;  //Left turn signal
-static constexpr byte PIN_DASH_D8 = PC13; //High beam
+static constexpr byte PIN_DASH_D5 = PF1; //High beam
+static constexpr byte PIN_DASH_D6 = PF0; //Left turn signal
+static constexpr byte PIN_DASH_D7 = PE6; //Right turn signal
 
 static void readDashInputs()
 {
   byte inputs = 0U;
-  if (digitalRead(PIN_DASH_D8) == LOW) { inputs |= DASH_INPUT_HIGH_BEAM; }
-  if (digitalRead(PIN_DASH_D7) == LOW) { inputs |= DASH_INPUT_LEFT_TURN; }
-  if (digitalRead(PIN_DASH_D6) == LOW) { inputs |= DASH_INPUT_RIGHT_TURN; }
-  if (digitalRead(PIN_DASH_D5) == LOW) { inputs |= DASH_INPUT_SPARE_D5; }
+  if (digitalRead(PIN_DASH_D5) == LOW) { inputs |= DASH_INPUT_HIGH_BEAM; }
+  if (digitalRead(PIN_DASH_D6) == LOW) { inputs |= DASH_INPUT_LEFT_TURN; }
+  if (digitalRead(PIN_DASH_D7) == LOW) { inputs |= DASH_INPUT_RIGHT_TURN; }
   currentStatus.dashInputs = inputs;
 }
 
@@ -469,7 +467,6 @@ void setupBoard()
   pinMode(PIN_DASH_D5, INPUT);
   pinMode(PIN_DASH_D6, INPUT);
   pinMode(PIN_DASH_D7, INPUT);
-  pinMode(PIN_DASH_D8, INPUT);
   readDashInputs();
 
 #ifdef OIL_SENSOR_OPST
@@ -481,8 +478,7 @@ void caponordSetPins()
 {
   pinTrigger = PE5;
   pinTrigger2 = PE4;
-  //PC13 is the D8 dashboard input (high beam), so there is no default VSS pin.
-  //Pulse based VSS can still be mapped to a free pin via the TS vssPin setting.
+  pinVSS = PC13; //D8
 
   pinBat = PA0;
   pinCLT = PA3;
