@@ -236,6 +236,7 @@ struct statuses {
   uint16_t oilPressureAbsoluteKpa; /**< OPS-T absolute oil pressure in kPa */
 #if defined(CAPONORD_BOARD)
   byte dashInputs;                 /**< Dashboard digital inputs D5-D7, see the DASH_INPUT_* masks in opf_core.h (bit set = input active) */
+  byte fuelLevel;                  /**< Heavily filtered fuel level converted from AUX0, in litres */
 #endif
 
   /** @brief Engine protection status fields. */

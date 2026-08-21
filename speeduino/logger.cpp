@@ -219,7 +219,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 8U; break; //Custom block layout version
+    case 2: statusValue = 9U; break; //Custom block layout version
     //Backup SRAM integrity status in bits 0-3 (see buildStorageStatus). Bits 4-7 spare (dashboard inputs moved to their own byte in layout v8)
     case 3: statusValue = buildStorageStatus(); break;
     case 4: statusValue = lowByte(currentStatus.RPM); break;
@@ -299,6 +299,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     case 78: statusValue = highByte(caponordEmpPumpGetSaturationSeconds()); break;
     //Dashboard digital inputs D5-D7, see the DASH_INPUT_* masks in opf_core.h (bits 3-7 spare for future inputs)
     case 79: statusValue = currentStatus.dashInputs; break;
+    case 80: statusValue = currentStatus.fuelLevel; break;
     default: statusValue = 0; break;
   }
 

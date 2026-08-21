@@ -177,9 +177,44 @@ TESTABLE_STATIC void upgradeV29toV30(void) {
     }
 }
 
+static uint8_t legacyStepperValueToSingleSteps(uint8_t legacyValue) {
+    constexpr uint8_t MAX_LEGACY_VALUE_WITHOUT_SATURATION = UINT8_MAX / 3U;
+    return (legacyValue > MAX_LEGACY_VALUE_WITHOUT_SATURATION)
+        ? UINT8_MAX
+        : (uint8_t)(legacyValue * 3U);
+}
+
+/** V31 changes every persisted stepper position from three STEP pulses per
+ * stored count to one pulse per count. Preserve the physical positions of old
+ * tunes where they fit in the new 0-255 range. Closed-loop limits are shared
+ * with PWM idle, so only convert those fields for a stepper closed-loop mode.
+ */
+TESTABLE_STATIC void upgradeV30toV31(void) {
+    if(loadEEPROMVersion() == 30U)
+    {
+        for (uint8_t i = 0U; i < 10U; i++) {
+            configPage6.iacOLStepVal[i] = legacyStepperValueToSingleSteps(configPage6.iacOLStepVal[i]);
+        }
+        for (uint8_t i = 0U; i < 4U; i++) {
+            configPage6.iacCrankSteps[i] = legacyStepperValueToSingleSteps(configPage6.iacCrankSteps[i]);
+        }
+
+        configPage6.iacStepHome = legacyStepperValueToSingleSteps(configPage6.iacStepHome);
+        configPage9.iacMaxSteps = legacyStepperValueToSingleSteps(configPage9.iacMaxSteps);
+
+        if (isStepperIac(configPage6) && isClosedLoopIac(configPage6)) {
+            configPage2.iacCLminValue = legacyStepperValueToSingleSteps(configPage2.iacCLminValue);
+            configPage2.iacCLmaxValue = legacyStepperValueToSingleSteps(configPage2.iacCLmaxValue);
+        }
+
+        saveAllPages();
+        saveEEPROMVersion(31);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    30
+  #define CURRENT_DATA_VERSION    31
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -961,6 +996,7 @@ void doUpdates(void)
   upgradeV27toV28();
   upgradeV28toV29();
   upgradeV29toV30();
+  upgradeV30toV31();
   //Move this #endif to only do latest updates to safe ROM space on small devices.
   #endif
 

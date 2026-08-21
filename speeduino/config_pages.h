@@ -523,10 +523,10 @@ struct config6 : public config_page_t {
   byte flatSArm;
 
   byte iacCLValues[10]; //Closed loop target RPM value
-  byte iacOLStepVal[10]; //Open loop step values for stepper motors
+  byte iacOLStepVal[10]; //Open loop step values for stepper motors (one count per STEP pulse)
   byte iacOLPWMVal[10]; //Open loop duty values for PMWM valves
   byte iacBins[10]; //Temperature Bins for the above 3 curves
-  byte iacCrankSteps[4]; //Steps to use when cranking (Stepper motor)
+  byte iacCrankSteps[4]; //Steps to use when cranking (one count per STEP pulse)
   byte iacCrankDuty[4]; //Duty cycle to use on PWM valves when cranking
   byte iacCrankBins[4]; //Temperature Bins for the above 2 curves
 
@@ -537,7 +537,7 @@ struct config6 : public config_page_t {
 
   byte iacFastTemp; //Fast idle temp when using a simple on/off valve
 
-  byte iacStepHome; //When using a stepper motor, the number of steps to be taken on startup to home the motor
+  byte iacStepHome; //Number of STEP pulses used to home the stepper motor on startup
   byte iacStepHyster; //Hysteresis temperature (*10). Eg 2.2C = 22
 
   byte fanInv : 1;        // Fan output inversion bit
@@ -623,7 +623,7 @@ struct config9 : public config_page_t {
   byte blankField : 1;
   byte iacStepperPower : 1; //Whether or not to power the stepper motor when not in use
 
-  byte iacMaxSteps; // Step limit beyond which the stepper won't be driven. Should always be less than homing steps. Stored div 3 as per home steps.
+  byte iacMaxSteps; // Step limit beyond which the stepper won't be driven. Should always be less than homing steps.
   byte idleAdvStartDelay;     //delay for idle advance engage
   
   byte boostByGear1;
