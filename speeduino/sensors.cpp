@@ -38,6 +38,10 @@ A full copy of the license may be found in the projects root directory
 #include "opst_sensor_math.h"
 #endif
 
+#if defined(CAPONORD_BOARD)
+#include "fuel_level.h"
+#endif
+
 uint8_t statusSensors = 0;
 
 static volatile uint32_t vssTimes[VSS_SAMPLES] = {0};
@@ -1060,6 +1064,24 @@ static inline void updateOilPressure(void)
 #endif
 }
 
+#if defined(CAPONORD_BOARD)
+static FuelLevelFilter fuelLevelFilter;
+
+static inline void updateFuelLevel(void)
+{
+  if(isAuxAnalogInputActive(0U))
+  {
+    const uint8_t fuelLevelPin = pinTranslateAnalog(configPage9.Auxinpina[0] & 63U);
+    currentStatus.fuelLevel = fuelLevelFilter.update(readAnalogSensor(fuelLevelPin));
+  }
+  else
+  {
+    fuelLevelFilter.reset();
+    currentStatus.fuelLevel = 0U;
+  }
+}
+#endif
+
 BEGIN_LTO_ALWAYS_INLINE(void) readPolledSensors(byte loopTimer)
 {
   static constexpr polledAction_t polledSensors[] = {
@@ -1077,6 +1099,9 @@ BEGIN_LTO_ALWAYS_INLINE(void) readPolledSensors(byte loopTimer)
     {BIT_TIMER_10HZ, readGear},
     {BIT_TIMER_4HZ, updateFuelPressure},
     {BIT_TIMER_4HZ, updateOilPressure},
+#if defined(CAPONORD_BOARD)
+    {BIT_TIMER_4HZ, updateFuelLevel},
+#endif
   };
   
   static_for<0, _countof(polledSensors)>::repeat_n(executePolledArrayAction, polledSensors, loopTimer);
