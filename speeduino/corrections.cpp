@@ -581,7 +581,9 @@ static inline uint16_t correctionAccelWallWetting(void)
         uint8_t extraPct = (uint8_t)min(((uint32_t)netWallDiff * ONE_HUNDRED_PCT) / denominator, (uint32_t)UINT8_MAX);
         uint8_t taperedExtra = applyAeRpmTaper(extraPct);
         correction = BASELINE_FUEL_CORRECTION + applyAeCoolantTaper(taperedExtra);
-        currentStatus.isAcceleratingTPS = true;
+        // Report AE as active only when the computed enrichment changes fueling.
+        // A positive wall-film delta can still round or taper down to 0%.
+        currentStatus.isAcceleratingTPS = correction > NO_FUEL_CORRECTION;
       }
     }
     else if (netWallDiff < 0)

@@ -963,6 +963,7 @@ static void reset_AE(void) {
 
 static void setup_AE(void) {
   initialiseCorrections();
+  configPage2.aeMode = AE_MODE_BLENDED;
 
   //Divided by 100
   configPage2.aeTaperMin = 10; //1000
@@ -1903,6 +1904,36 @@ static void test_corrections_WW_acceleration(void)
   TEST_ASSERT_TRUE(currentStatus.isAcceleratingTPS);
 }
 
+static void test_corrections_WW_sub_percent_acceleration(void)
+{
+  setup_wall_wetting();
+
+  // netWallDiff is positive, but the calculated enrichment rounds down to 0%.
+  // No fuel correction is applied, so the acceleration flag must remain off.
+  fill_table_values(wallWettingAddTable, 1);
+  fill_table_values(wallWettingRemoveTable, 0);
+  currentStatus.wallFuel = 0;
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT_EQUAL(NO_FUEL_CORRECTION, correction);
+  TEST_ASSERT_FALSE(currentStatus.isAcceleratingTPS);
+}
+
+static void test_corrections_WW_rpm_taper_disables_acceleration(void)
+{
+  setup_wall_wetting();
+
+  // The wall-film model requests enrichment, but the RPM taper removes it.
+  fill_table_values(wallWettingAddTable, 128);
+  fill_table_values(wallWettingRemoveTable, 0);
+  currentStatus.wallFuel = 0;
+  currentStatus.setRpm(7000U);
+
+  uint16_t correction = correctionAccel();
+  TEST_ASSERT_EQUAL(NO_FUEL_CORRECTION, correction);
+  TEST_ASSERT_FALSE(currentStatus.isAcceleratingTPS);
+}
+
 static void test_corrections_WW_deceleration(void)
 {
   setup_wall_wetting();
@@ -1956,6 +1987,8 @@ static void test_corrections_WW(void)
 {
   RUN_TEST_P(test_corrections_WW_steady_state);
   RUN_TEST_P(test_corrections_WW_acceleration);
+  RUN_TEST_P(test_corrections_WW_sub_percent_acceleration);
+  RUN_TEST_P(test_corrections_WW_rpm_taper_disables_acceleration);
   RUN_TEST_P(test_corrections_WW_deceleration);
   RUN_TEST_P(test_corrections_WW_zero_fuel_demand);
   RUN_TEST_P(test_corrections_WW_wall_fuel_update);
