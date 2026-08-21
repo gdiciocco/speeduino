@@ -26,9 +26,9 @@ static constexpr byte LED_COMS = PG12;
 //Dashboard digital inputs, board silkscreen D5-D7. The sources are open
 //collector, so the pins idle high on the internal pull-up and are pulled low
 //while the 12V signal is present: LOW = active.
-static constexpr byte PIN_DASH_D5 = PF1; //High beam
+static constexpr byte PIN_DASH_D5 = PE6; //High beam
 static constexpr byte PIN_DASH_D6 = PF0; //Left turn signal
-static constexpr byte PIN_DASH_D7 = PE6; //Right turn signal
+static constexpr byte PIN_DASH_D7 = PF1; //Right turn signal
 
 static void readDashInputs()
 {
