@@ -12,6 +12,7 @@ extern void upgradeV25toV26(void);
 extern void upgradeV27toV28(void);
 extern void upgradeV28toV29(void);
 extern void upgradeV29toV30(void);
+extern void upgradeV30toV31(void);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -155,6 +156,44 @@ static void test_upgradeV29toV30_initialises_center_autotune(void)
     TEST_ASSERT_EQUAL(temperatureAddOffset(70), configPage15.idleAdvClLearnMinTemp);
 }
 
+static void test_upgradeV30toV31_converts_stepper_positions(void)
+{
+    configPage6.iacAlgorithm = IAC_ALGORITHM_STEP_OLCL;
+    for (uint8_t i = 0U; i < 10U; i++) { configPage6.iacOLStepVal[i] = i; }
+    for (uint8_t i = 0U; i < 4U; i++) { configPage6.iacCrankSteps[i] = (uint8_t)(20U + i); }
+    configPage6.iacOLStepVal[9] = 86U; //Would exceed the new one-byte range.
+    configPage6.iacStepHome = 27U;
+    configPage9.iacMaxSteps = 26U;
+    configPage2.iacCLminValue = 10U;
+    configPage2.iacCLmaxValue = 59U;
+    setStorageAPI(setupEepromReadApi(30U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV30toV31();
+
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage6.iacOLStepVal[0]);
+    TEST_ASSERT_EQUAL_UINT8(24U, configPage6.iacOLStepVal[8]);
+    TEST_ASSERT_EQUAL_UINT8(UINT8_MAX, configPage6.iacOLStepVal[9]);
+    TEST_ASSERT_EQUAL_UINT8(60U, configPage6.iacCrankSteps[0]);
+    TEST_ASSERT_EQUAL_UINT8(69U, configPage6.iacCrankSteps[3]);
+    TEST_ASSERT_EQUAL_UINT8(81U, configPage6.iacStepHome);
+    TEST_ASSERT_EQUAL_UINT8(78U, configPage9.iacMaxSteps);
+    TEST_ASSERT_EQUAL_UINT8(30U, configPage2.iacCLminValue);
+    TEST_ASSERT_EQUAL_UINT8(177U, configPage2.iacCLmaxValue);
+}
+
+static void test_upgradeV30toV31_preserves_pwm_limits(void)
+{
+    configPage6.iacAlgorithm = IAC_ALGORITHM_PWM_CL;
+    configPage2.iacCLminValue = 10U;
+    configPage2.iacCLmaxValue = 90U;
+    setStorageAPI(setupEepromReadApi(30U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV30toV31();
+
+    TEST_ASSERT_EQUAL_UINT8(10U, configPage2.iacCLminValue);
+    TEST_ASSERT_EQUAL_UINT8(90U, configPage2.iacCLmaxValue);
+}
+
 void test_update(void) {
     SET_UNITY_FILENAME() {
         RUN_TEST(test_updateTableU16toU8);
@@ -163,5 +202,7 @@ void test_update(void) {
         RUN_TEST(test_upgradeV27toV28_initialises_idle_advance_closed_loop);
         RUN_TEST(test_upgradeV28toV29_replaces_bands_with_gains);
         RUN_TEST(test_upgradeV29toV30_initialises_center_autotune);
+        RUN_TEST(test_upgradeV30toV31_converts_stepper_positions);
+        RUN_TEST(test_upgradeV30toV31_preserves_pwm_limits);
     }
 }
