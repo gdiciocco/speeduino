@@ -12,6 +12,8 @@ A full copy of the license may be found in the projects root directory
 #include "src/PID/integerPID.h"
 #include "units.h"
 #include "globals.h"
+#include "storage.h"
+#include "unit_testing.h"
 #include "src/pins/fastOutputPin.h"
 
 #define STEPPER_FORWARD 0
@@ -75,6 +77,380 @@ Idle Control
 Currently limited to on/off control and open loop PWM and stepper drive
 */
 integerPID idlePID(&currentStatus.longRPM, &idle_pid_target_value, &idle_cl_target_rpm, configPage6.idleKP, configPage6.idleKI, configPage6.idleKD, DIRECT); //This is the PID object if that algorithm is used. Needs to be global as it maintains state outside of each function call
+
+//IAC relay-autotune state. The active settings and center are frozen at the
+//start of an attempt so a live TunerStudio edit cannot change a running test.
+static uint8_t iacGainTuneState;
+static uint8_t iacGainTuneResult;
+TESTABLE_STATIC uint8_t iacGainTuneAttempts;
+TESTABLE_STATIC bool iacGainTuneLastRequest;
+static uint16_t iacGainTuneStableTicks;
+static uint16_t iacGainTuneTicksSinceSwitch;
+static uint8_t iacGainTuneHalfCycles;
+static uint16_t iacGainTunePeakError;
+static uint16_t iacGainTunePeriodSum;
+static uint32_t iacGainTuneAmplitudeSum;
+static long iacGainTuneCenter;
+static long iacGainTuneRelayAmplitude;
+static long iacGainTuneRelayOutput;
+static int8_t iacGainTuneRelaySign;
+static bool iacGainTuneIdleUp;
+static bool iacGainTuneAircon;
+static bool iacGainTuneStepper;
+static uint8_t iacGainTuneFanDuty;
+static uint8_t iacGainTuneWaitingFanDuty;
+static bool iacGainTuneWaitingFanValid;
+static uint8_t iacGainTuneActiveHysteresis;
+static uint8_t iacGainTuneActiveDiscard;
+static uint8_t iacGainTuneActiveMeasure;
+static uint8_t iacGainTuneActiveMaxTps;
+static uint8_t iacGainTuneActiveMaxAttempts;
+static uint16_t iacGainTuneActiveTimeoutTicks;
+static uint16_t iacGainTuneActiveRunawayRpm;
+static uint16_t iacGainTuneActiveMinAmplitude;
+static uint16_t iacGainTuneActiveMinPeriod;
+static uint16_t iacGainTuneActiveMaxPeriod;
+static bool iacGainTuneLastTickValid;
+static uint32_t iacGainTuneLastTick;
+static IacGainAutotuneDiagnostics iacGainTuneDiagnostics;
+
+static inline bool hasIacGainTuneFanLoadChanged(uint8_t referenceDuty) {
+  const int16_t delta = (int16_t)currentStatus.fanDuty - (int16_t)referenceDuty;
+  return (delta > 2) || (delta < -2);
+}
+
+static inline uint8_t getIacGainTuneMaxAttempts(void) {
+  return (uint8_t)clamp((int16_t)configPage15.iacGainTuneMaxAttempts, (int16_t)1, (int16_t)5);
+}
+
+static inline uint16_t getIacGainTuneStableTicks(void) {
+  return (uint16_t)clamp((int16_t)configPage15.iacGainTuneSettleTime, (int16_t)1, (int16_t)25) * 10U;
+}
+
+static inline int32_t getIacGainTuneStableBand(void) {
+  return (int32_t)clamp((int16_t)configPage15.iacGainTuneSettleBand, (int16_t)5, (int16_t)100);
+}
+
+static inline int32_t getIacGainTuneHysteresis(void) {
+  return (configPage15.iacGainTuneHysteresis == 0U)
+      ? 10L
+      : (int32_t)clamp((int16_t)configPage15.iacGainTuneHysteresis, (int16_t)5, (int16_t)100);
+}
+
+static inline uint8_t getIacGainTuneDiscardHalfCycles(void) {
+  return (uint8_t)min(configPage15.iacGainTuneDiscard, (uint8_t)8U);
+}
+
+static inline uint8_t getIacGainTuneMeasureHalfCycles(void) {
+  return (uint8_t)clamp((int16_t)configPage15.iacGainTuneMeasure, (int16_t)4, (int16_t)20);
+}
+
+static inline uint16_t getIacGainTuneTimeoutTicks(void) {
+  return (uint16_t)clamp((int16_t)configPage15.iacGainTuneTimeout, (int16_t)1, (int16_t)30) * 10U;
+}
+
+static inline int32_t getIacGainTuneRunawayRpm(void) {
+  return clamp((int32_t)configPage15.iacGainTuneRunawayDiv10 * (int32_t)10,
+               (int32_t)100, (int32_t)1000);
+}
+
+static inline uint16_t getIacGainTuneMinAmplitude(void) {
+  return (uint16_t)clamp((int16_t)configPage15.iacGainTuneMinAmplitude, (int16_t)10, (int16_t)200);
+}
+
+static inline uint16_t getIacGainTuneMinPeriodTicks(void) {
+  return (uint16_t)clamp((int16_t)configPage15.iacGainTuneMinPeriod, (int16_t)2, (int16_t)30);
+}
+
+static inline uint16_t getIacGainTuneMaxPeriodTicks(void) {
+  const uint16_t minimum = getIacGainTuneMinPeriodTicks();
+  return (uint16_t)clamp((int16_t)configPage15.iacGainTuneMaxPeriod, (int16_t)minimum, (int16_t)200);
+}
+
+static inline void updateIacGainTuneDiag(void) {
+  iacGainTuneDiagnostics.state = iacGainTuneState;
+  iacGainTuneDiagnostics.lastResult = iacGainTuneResult;
+  iacGainTuneDiagnostics.kpRaw = configPage6.idleKP;
+  iacGainTuneDiagnostics.kiRaw = configPage6.idleKI;
+  iacGainTuneDiagnostics.kdRaw = configPage6.idleKD;
+  iacGainTuneDiagnostics.relayHigh = (iacGainTuneState == IAC_GAINTUNE_RELAY) && (iacGainTuneRelaySign > 0);
+  iacGainTuneDiagnostics.stepper = isStepperIac(configPage6);
+}
+
+const IacGainAutotuneDiagnostics& iacGainAutotuneDiag(void) {
+  return iacGainTuneDiagnostics;
+}
+
+uint8_t buildIacGainAutotuneStatus(void) {
+  return (uint8_t)((iacGainTuneDiagnostics.state & 0x03U)
+      | ((iacGainTuneDiagnostics.lastResult & 0x0FU) << 2U)
+      | (iacGainTuneDiagnostics.relayHigh ? 0x40U : 0U)
+      | (iacGainTuneDiagnostics.stepper ? 0x80U : 0U));
+}
+
+static inline void seedIacPidFromRelay(void) {
+  idle_pid_target_value = clamp(iacGainTuneRelayOutput, idle_pid_output_min, idle_pid_output_max);
+  idlePID.Initialize();
+}
+
+static inline void abortIacGainAutotune(uint8_t reason) {
+  if(iacGainTuneState == IAC_GAINTUNE_RELAY) { seedIacPidFromRelay(); }
+  iacGainTuneResult = reason;
+  const uint8_t maxAttempts = ((iacGainTuneState == IAC_GAINTUNE_RELAY) && (iacGainTuneActiveMaxAttempts > 0U))
+      ? iacGainTuneActiveMaxAttempts : getIacGainTuneMaxAttempts();
+  iacGainTuneState = (iacGainTuneAttempts >= maxAttempts)
+      ? IAC_GAINTUNE_FAILED : IAC_GAINTUNE_WAITING;
+  iacGainTuneStableTicks = 0U;
+  updateIacGainTuneDiag();
+}
+
+/** Convert relay-test measurements into the integerPID raw Kp/Ki/Kd units. */
+TESTABLE_STATIC bool calculateIacGainAutotuneGains(long relayInternal, uint16_t amplitudeRpm,
+                                                   uint16_t periodTenths,
+                                                   uint8_t &kpRaw, uint8_t &kiRaw, uint8_t &kdRaw) {
+  if((relayInternal <= 0L) || (amplitudeRpm == 0U) || (periodTenths == 0U)) { return false; }
+
+  //Ku=4d/(pi*a), classic Ziegler-Nichols PID: Kp=.6Ku, Ti=Tu/2, Td=Tu/8.
+  //integerPID stores Kp/Ki in 1/32 and Kd in 1/128 units. The relay amplitude
+  //is already expressed in the PID output's x4 internal units.
+  const int32_t amplitude = (int32_t)amplitudeRpm;
+  const int32_t period = (int32_t)periodTenths;
+  const int32_t kp = (7680L * relayInternal) / (314L * amplitude);
+  const int32_t ki = (153600L * relayInternal) / (314L * amplitude * period);
+  const int32_t kd = (384L * relayInternal * period) / (314L * amplitude);
+  kpRaw = (uint8_t)clamp(kp, (int32_t)1, (int32_t)255);
+  kiRaw = (uint8_t)clamp(ki, (int32_t)1, (int32_t)255);
+  kdRaw = (uint8_t)clamp(kd, (int32_t)0, (int32_t)255);
+  return true;
+}
+
+static void finalizeIacGainAutotune(void) {
+  const uint8_t measured = iacGainTuneActiveMeasure;
+  const uint16_t halfPeriod = (uint16_t)(iacGainTunePeriodSum / measured);
+  const uint16_t period = (uint16_t)(halfPeriod * 2U);
+  const uint16_t amplitude = (uint16_t)(iacGainTuneAmplitudeSum / measured);
+  iacGainTuneDiagnostics.periodTenths = (period > UINT8_MAX) ? UINT8_MAX : (uint8_t)period;
+  iacGainTuneDiagnostics.amplitudeRpm = (amplitude > UINT8_MAX) ? UINT8_MAX : (uint8_t)amplitude;
+
+  if(amplitude < iacGainTuneActiveMinAmplitude) {
+    abortIacGainAutotune(IAC_GAINTUNE_RESULT_AMPLITUDE);
+    return;
+  }
+  if((period < iacGainTuneActiveMinPeriod) || (period > iacGainTuneActiveMaxPeriod)) {
+    abortIacGainAutotune(IAC_GAINTUNE_RESULT_PERIOD);
+    return;
+  }
+
+  uint8_t kp;
+  uint8_t ki;
+  uint8_t kd;
+  if(!calculateIacGainAutotuneGains(iacGainTuneRelayAmplitude, amplitude, period, kp, ki, kd)) {
+    abortIacGainAutotune(IAC_GAINTUNE_RESULT_AMPLITUDE);
+    return;
+  }
+  configPage6.idleKP = kp;
+  configPage6.idleKI = ki;
+  configPage6.idleKD = kd;
+  idlePID.SetTunings(kp, ki, kd);
+  seedIacPidFromRelay();
+  configPage15.iacGainAutotuneRequest = 0U;
+  setEepromWritePending(true);
+  iacGainTuneResult = IAC_GAINTUNE_RESULT_DONE;
+  iacGainTuneState = IAC_GAINTUNE_OFF;
+  iacGainTuneStableTicks = 0U;
+  updateIacGainTuneDiag();
+}
+
+static inline long getIacGainTuneRelayAmplitude(void) {
+  if(isStepperIac(configPage6)) {
+    const long steps = clamp((long)configPage15.iacGainTuneStep, 1L, 50L);
+    return steps << 2;
+  }
+  const uint8_t percent = (uint8_t)clamp((int16_t)configPage15.iacGainTuneStep, (int16_t)1, (int16_t)20);
+  return percentage(percent, idle_pwm_max_count << 2);
+}
+
+static inline bool iacGainTuneGatesPass(int32_t rpmError, bool actuatorSettled) {
+  const bool taperComplete = ((configPage6.iacAlgorithm == IAC_ALGORITHM_PWM_CL)
+      || (idleTaper >= configPage2.idleTaperTime));
+  return (currentStatus.rotationStatus == EngineRotationStatus::Running)
+      && (currentStatus.coolant >= temperatureRemoveOffset(configPage15.iacGainTuneMinTemp))
+      && (currentStatus.TPS <= (uint8_t)clamp((int16_t)configPage15.iacGainTuneMaxTps, (int16_t)0, (int16_t)40))
+      && !currentStatus.isDFCOActive
+      && taperComplete
+      && (currentStatus.vss == 0U)
+      && !currentStatus.idleUpActive
+      && !currentStatus.airconTurningOn
+      && !currentStatus.airconCompressorOn
+      && actuatorSettled
+      && (rpmError <= getIacGainTuneStableBand())
+      && (rpmError >= -getIacGainTuneStableBand());
+}
+
+/** Run the IAC relay test. Returns true while the relay owns the PID output. */
+static inline bool updateIacGainAutotune(long currentCenter, bool actuatorSettled, long &relayOutput) {
+  const bool requested = (configPage15.iacGainAutotuneRequest == 1U);
+  if(requested && !iacGainTuneLastRequest) {
+    iacGainTuneAttempts = 0U;
+    iacGainTuneResult = IAC_GAINTUNE_RESULT_NONE;
+    iacGainTuneDiagnostics.periodTenths = 0U;
+    iacGainTuneDiagnostics.amplitudeRpm = 0U;
+    iacGainTuneWaitingFanValid = false;
+  }
+  iacGainTuneLastRequest = requested;
+
+  if(!requested) {
+    if(iacGainTuneState == IAC_GAINTUNE_RELAY) { seedIacPidFromRelay(); }
+    iacGainTuneState = IAC_GAINTUNE_OFF;
+    iacGainTuneStableTicks = 0U;
+    iacGainTuneWaitingFanValid = false;
+    updateIacGainTuneDiag();
+    return false;
+  }
+  if(!isClosedLoopIac(configPage6)) {
+    iacGainTuneState = IAC_GAINTUNE_FAILED;
+    iacGainTuneResult = IAC_GAINTUNE_RESULT_INVALID_MODE;
+    updateIacGainTuneDiag();
+    return false;
+  }
+  if(configPage2.idleAdvEnabled != IDLEADVANCE_MODE_OFF) {
+    if(iacGainTuneState == IAC_GAINTUNE_RELAY) { abortIacGainAutotune(IAC_GAINTUNE_RESULT_IGNITION_ACTIVE); }
+    else {
+      iacGainTuneState = IAC_GAINTUNE_WAITING;
+      iacGainTuneResult = IAC_GAINTUNE_RESULT_IGNITION_ACTIVE;
+      iacGainTuneStableTicks = 0U;
+      updateIacGainTuneDiag();
+    }
+    return false;
+  }
+  if(iacGainTuneResult == IAC_GAINTUNE_RESULT_IGNITION_ACTIVE) {
+    iacGainTuneResult = IAC_GAINTUNE_RESULT_NONE;
+  }
+  if(iacGainTuneAttempts >= getIacGainTuneMaxAttempts()) {
+    iacGainTuneState = IAC_GAINTUNE_FAILED;
+    updateIacGainTuneDiag();
+    return false;
+  }
+
+  const int32_t rpmError = ((int32_t)currentStatus.CLIdleTarget * 10L) - (int32_t)currentStatus.RPM;
+  //runSecsX10 is the canonical 10Hz epoch. Comparing it directly means a
+  //stepper pulse that happens to occupy the exact timer-flag loop cannot make
+  //the relay miss a sample; the next actuator-ready loop consumes that epoch.
+  const bool newTick = (!iacGainTuneLastTickValid) || (iacGainTuneLastTick != runSecsX10);
+  if(newTick) {
+    iacGainTuneLastTick = runSecsX10;
+    iacGainTuneLastTickValid = true;
+  }
+
+  if(iacGainTuneState != IAC_GAINTUNE_RELAY) {
+    iacGainTuneState = IAC_GAINTUNE_WAITING;
+    if(!iacGainTuneWaitingFanValid || hasIacGainTuneFanLoadChanged(iacGainTuneWaitingFanDuty)) {
+      iacGainTuneWaitingFanDuty = currentStatus.fanDuty;
+      iacGainTuneWaitingFanValid = true;
+      iacGainTuneStableTicks = 0U;
+      updateIacGainTuneDiag();
+      return false;
+    }
+    if(!iacGainTuneGatesPass(rpmError, actuatorSettled)) {
+      iacGainTuneStableTicks = 0U;
+      iacGainTuneResult = IAC_GAINTUNE_RESULT_NONE;
+      updateIacGainTuneDiag();
+      return false;
+    }
+    if(!newTick) { updateIacGainTuneDiag(); return false; }
+    if(iacGainTuneStableTicks < getIacGainTuneStableTicks()) {
+      iacGainTuneStableTicks++;
+      updateIacGainTuneDiag();
+      return false;
+    }
+
+    const long amplitude = getIacGainTuneRelayAmplitude();
+    if((amplitude <= 0L) || ((currentCenter - amplitude) < idle_pid_output_min)
+    || ((currentCenter + amplitude) > idle_pid_output_max)) {
+      iacGainTuneAttempts = getIacGainTuneMaxAttempts();
+      abortIacGainAutotune(IAC_GAINTUNE_RESULT_AUTHORITY);
+      return false;
+    }
+    iacGainTuneAttempts++;
+    iacGainTuneState = IAC_GAINTUNE_RELAY;
+    iacGainTuneCenter = currentCenter;
+    iacGainTuneRelayAmplitude = amplitude;
+    iacGainTuneRelaySign = 1;
+    iacGainTuneIdleUp = currentStatus.idleUpActive;
+    iacGainTuneAircon = currentStatus.airconTurningOn || currentStatus.airconCompressorOn;
+    iacGainTuneStepper = isStepperIac(configPage6);
+    iacGainTuneFanDuty = currentStatus.fanDuty;
+    iacGainTuneActiveHysteresis = (uint8_t)getIacGainTuneHysteresis();
+    iacGainTuneActiveDiscard = getIacGainTuneDiscardHalfCycles();
+    iacGainTuneActiveMeasure = getIacGainTuneMeasureHalfCycles();
+    iacGainTuneActiveMaxTps = (uint8_t)clamp((int16_t)configPage15.iacGainTuneMaxTps, (int16_t)0, (int16_t)40);
+    iacGainTuneActiveMaxAttempts = getIacGainTuneMaxAttempts();
+    iacGainTuneActiveTimeoutTicks = getIacGainTuneTimeoutTicks();
+    iacGainTuneActiveRunawayRpm = (uint16_t)getIacGainTuneRunawayRpm();
+    iacGainTuneActiveMinAmplitude = getIacGainTuneMinAmplitude();
+    iacGainTuneActiveMinPeriod = getIacGainTuneMinPeriodTicks();
+    iacGainTuneActiveMaxPeriod = getIacGainTuneMaxPeriodTicks();
+    iacGainTuneTicksSinceSwitch = 0U;
+    iacGainTuneHalfCycles = 0U;
+    iacGainTunePeakError = 0U;
+    iacGainTunePeriodSum = 0U;
+    iacGainTuneAmplitudeSum = 0UL;
+  }
+
+  if((currentStatus.rotationStatus != EngineRotationStatus::Running)
+  || (currentStatus.TPS > iacGainTuneActiveMaxTps)
+  || currentStatus.isDFCOActive || (currentStatus.vss > 0U)
+  || (isStepperIac(configPage6) != iacGainTuneStepper)
+  || hasIacGainTuneFanLoadChanged(iacGainTuneFanDuty)
+  || (currentStatus.idleUpActive != iacGainTuneIdleUp)
+  || ((currentStatus.airconTurningOn || currentStatus.airconCompressorOn) != iacGainTuneAircon)) {
+    abortIacGainAutotune(IAC_GAINTUNE_RESULT_DISENGAGED);
+    return false;
+  }
+
+  if(newTick) {
+    const int32_t runaway = (int32_t)iacGainTuneActiveRunawayRpm;
+    if((rpmError > runaway) || (rpmError < -runaway)) {
+      abortIacGainAutotune(IAC_GAINTUNE_RESULT_RUNAWAY);
+      return false;
+    }
+    iacGainTuneTicksSinceSwitch++;
+    if(iacGainTuneTicksSinceSwitch > iacGainTuneActiveTimeoutTicks) {
+      abortIacGainAutotune(IAC_GAINTUNE_RESULT_NO_OSCILLATION);
+      return false;
+    }
+
+    const uint16_t absError = (rpmError < 0L) ? (uint16_t)(-rpmError) : (uint16_t)rpmError;
+    if(absError > iacGainTunePeakError) { iacGainTunePeakError = absError; }
+    int8_t desiredSign = iacGainTuneRelaySign;
+    const int32_t hysteresis = (int32_t)iacGainTuneActiveHysteresis;
+    if(rpmError > hysteresis) { desiredSign = 1; }
+    else if(rpmError < -hysteresis) { desiredSign = -1; }
+
+    if(desiredSign != iacGainTuneRelaySign) {
+      iacGainTuneHalfCycles++;
+      const uint8_t discarded = iacGainTuneActiveDiscard;
+      const uint8_t measured = iacGainTuneActiveMeasure;
+      if(iacGainTuneHalfCycles > discarded) {
+        iacGainTunePeriodSum += iacGainTuneTicksSinceSwitch;
+        iacGainTuneAmplitudeSum += iacGainTunePeakError;
+      }
+      iacGainTuneRelaySign = desiredSign;
+      iacGainTuneTicksSinceSwitch = 0U;
+      iacGainTunePeakError = 0U;
+      if(iacGainTuneHalfCycles >= (uint8_t)(discarded + measured)) {
+        finalizeIacGainAutotune();
+        return false;
+      }
+    }
+  }
+
+  iacGainTuneRelayOutput = clamp(iacGainTuneCenter + ((long)iacGainTuneRelaySign * iacGainTuneRelayAmplitude),
+                                 idle_pid_output_min, idle_pid_output_max);
+  relayOutput = iacGainTuneRelayOutput;
+  updateIacGainTuneDiag();
+  return true;
+}
 
 //Any common functions associated with starting the Idle
 //Typically this is enabling the PWM interrupt
@@ -381,6 +757,25 @@ void idleControl(void)
   }
   else { currentStatus.idleUpActive = false; }
 
+  //Keep the request state honest even when the selected algorithm has no
+  //closed-loop running branch (engine stopped, cranking or mode changed).
+  if(configPage15.iacGainAutotuneRequest == 0U) {
+    iacGainTuneLastRequest = false;
+    if(iacGainTuneState == IAC_GAINTUNE_RELAY) { seedIacPidFromRelay(); }
+    iacGainTuneState = IAC_GAINTUNE_OFF;
+    iacGainTuneStableTicks = 0U;
+    iacGainTuneWaitingFanValid = false;
+    updateIacGainTuneDiag();
+  } else if(!isClosedLoopIac(configPage6)) {
+    if(iacGainTuneState == IAC_GAINTUNE_RELAY) { seedIacPidFromRelay(); }
+    iacGainTuneState = IAC_GAINTUNE_FAILED;
+    iacGainTuneResult = IAC_GAINTUNE_RESULT_INVALID_MODE;
+    updateIacGainTuneDiag();
+  } else if((currentStatus.rotationStatus != EngineRotationStatus::Running)
+         && (iacGainTuneState == IAC_GAINTUNE_RELAY)) {
+    abortIacGainAutotune(IAC_GAINTUNE_RESULT_DISENGAGED);
+  }
+
   bool PID_computed = false;
   switch(configPage6.iacAlgorithm)
   {
@@ -471,7 +866,13 @@ void idleControl(void)
         idle_cl_target_rpm = (uint16_t)currentStatus.CLIdleTarget * 10; //Multiply the byte target value back out by 10
         if( BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_1HZ) ) { idlePID.SetTunings(configPage6.idleKP, configPage6.idleKI, configPage6.idleKD); } //Re-read the PID settings once per second
         
-        PID_computed = idlePID.Compute();
+        long relayOutput = 0L;
+        if(updateIacGainAutotune(idle_pid_target_value, true, relayOutput)) {
+          idle_pid_target_value = relayOutput;
+          PID_computed = true;
+        } else {
+          PID_computed = idlePID.Compute();
+        }
         long TEMP_idle_pwm_target_value;
         if(PID_computed == true)
         {
@@ -555,7 +956,13 @@ void idleControl(void)
           idlePID.ResetIntegeral();
         }
         
-        PID_computed = idlePID.Compute(true, FeedForwardTerm);
+        long relayOutput = 0L;
+        if(updateIacGainAutotune(idle_pid_target_value, true, relayOutput)) {
+          idle_pid_target_value = relayOutput;
+          PID_computed = true;
+        } else {
+          PID_computed = idlePID.Compute(true, FeedForwardTerm);
+        }
 
         if(PID_computed == true)
         {
@@ -669,7 +1076,16 @@ void idleControl(void)
             else { FeedForwardTerm = idle_pid_target_value; }
           }
 
-          PID_computed = idlePID.Compute(true, FeedForwardTerm);
+          long relayOutput = 0L;
+          const int16_t stepError = (int16_t)(idleStepper.targetIdleStep - idleStepper.curIdleStep);
+          const bool actuatorSettled = (stepError >= -((int16_t)configPage6.iacStepHyster))
+                                    && (stepError <= (int16_t)configPage6.iacStepHyster);
+          if(updateIacGainAutotune(idle_pid_target_value, actuatorSettled, relayOutput)) {
+            idle_pid_target_value = relayOutput;
+            PID_computed = true;
+          } else {
+            PID_computed = idlePID.Compute(true, FeedForwardTerm);
+          }
 
           //If DFCO conditions are met keep output from changing
           if( (currentStatus.TPS > configPage2.iacTPSlimit) || lastDFCOValue

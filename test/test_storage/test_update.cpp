@@ -14,6 +14,7 @@ extern void upgradeV28toV29(void);
 extern void upgradeV29toV30(void);
 extern void upgradeV30toV31(void);
 extern void upgradeV31toV32(void);
+extern void upgradeV32toV33(void);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -227,6 +228,46 @@ static void test_upgradeV31toV32_initialises_gain_autotune_setup(void)
     TEST_ASSERT_EQUAL_UINT8(3U, configPage15.idleAdvClGainTuneMaxAttempts);
 }
 
+static void test_upgradeV32toV33_initialises_iac_gain_autotune_setup(void)
+{
+    configPage15.iacGainAutotuneRequest = 1U;
+    configPage15.iacGainAutotuneUnused210 = 127U;
+    configPage15.iacGainTuneMinTemp = UINT8_MAX;
+    configPage15.iacGainTuneStep = UINT8_MAX;
+    configPage15.iacGainTuneSettleTime = UINT8_MAX;
+    configPage15.iacGainTuneSettleBand = UINT8_MAX;
+    configPage15.iacGainTuneHysteresis = UINT8_MAX;
+    configPage15.iacGainTuneDiscard = UINT8_MAX;
+    configPage15.iacGainTuneMeasure = UINT8_MAX;
+    configPage15.iacGainTuneTimeout = UINT8_MAX;
+    configPage15.iacGainTuneRunawayDiv10 = UINT8_MAX;
+    configPage15.iacGainTuneMinAmplitude = UINT8_MAX;
+    configPage15.iacGainTuneMinPeriod = UINT8_MAX;
+    configPage15.iacGainTuneMaxPeriod = UINT8_MAX;
+    configPage15.iacGainTuneMaxAttempts = UINT8_MAX;
+    configPage15.iacGainTuneMaxTps = UINT8_MAX;
+    setStorageAPI(setupEepromReadApi(32U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV32toV33();
+
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.iacGainAutotuneRequest);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.iacGainAutotuneUnused210);
+    TEST_ASSERT_EQUAL_UINT8(temperatureAddOffset(70), configPage15.iacGainTuneMinTemp);
+    TEST_ASSERT_EQUAL_UINT8(5U, configPage15.iacGainTuneStep);
+    TEST_ASSERT_EQUAL_UINT8(5U, configPage15.iacGainTuneSettleTime);
+    TEST_ASSERT_EQUAL_UINT8(25U, configPage15.iacGainTuneSettleBand);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.iacGainTuneHysteresis);
+    TEST_ASSERT_EQUAL_UINT8(2U, configPage15.iacGainTuneDiscard);
+    TEST_ASSERT_EQUAL_UINT8(6U, configPage15.iacGainTuneMeasure);
+    TEST_ASSERT_EQUAL_UINT8(10U, configPage15.iacGainTuneTimeout);
+    TEST_ASSERT_EQUAL_UINT8(40U, configPage15.iacGainTuneRunawayDiv10);
+    TEST_ASSERT_EQUAL_UINT8(20U, configPage15.iacGainTuneMinAmplitude);
+    TEST_ASSERT_EQUAL_UINT8(5U, configPage15.iacGainTuneMinPeriod);
+    TEST_ASSERT_EQUAL_UINT8(200U, configPage15.iacGainTuneMaxPeriod);
+    TEST_ASSERT_EQUAL_UINT8(3U, configPage15.iacGainTuneMaxAttempts);
+    TEST_ASSERT_EQUAL_UINT8(10U, configPage15.iacGainTuneMaxTps);
+}
+
 void test_update(void) {
     SET_UNITY_FILENAME() {
         RUN_TEST(test_updateTableU16toU8);
@@ -238,5 +279,6 @@ void test_update(void) {
         RUN_TEST(test_upgradeV30toV31_converts_stepper_positions);
         RUN_TEST(test_upgradeV30toV31_preserves_pwm_limits);
         RUN_TEST(test_upgradeV31toV32_initialises_gain_autotune_setup);
+        RUN_TEST(test_upgradeV32toV33_initialises_iac_gain_autotune_setup);
     }
 }

@@ -197,9 +197,9 @@ static void caponordEmpPumpSetDefaultsIfNeeded()
     configPage15.empPumpEngineRpmBins[index] = engineRpmBins[index];
     configPage15.empPumpMinimumFlowRpmBins[index] = minimumFlowRpmBins[index];
   }
-  //Only the still reserved tail is cleared. Bytes 190-209 now hold the closed
-  //loop idle ignition settings, which this pump routine must not wipe.
-  for (uint8_t index = 0U; index < 46U; index++) { configPage15.Unused15_210_255[index] = 0U; }
+  //Only the still reserved tail is cleared. Bytes 190-224 now hold idle
+  //ignition and IAC autotune settings, which this pump routine must not wipe.
+  for (uint8_t index = 0U; index < 31U; index++) { configPage15.Unused15_225_255[index] = 0U; }
   configPage15.empPumpConfigMagic = emp_pump::CONFIG_MAGIC;
   configPage15.empPumpConfigVersion = emp_pump::CONFIG_VERSION;
   configPage15.empPumpReserved151 = 0U;

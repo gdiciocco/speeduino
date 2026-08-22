@@ -6,6 +6,20 @@
 #include "units.h"
 
 extern int8_t correctionFixedTiming(int8_t advance);
+extern bool calculateIacGainAutotuneGains(long relayInternal, uint16_t amplitudeRpm,
+                                          uint16_t periodTenths,
+                                          uint8_t &kpRaw, uint8_t &kiRaw, uint8_t &kdRaw);
+
+static void test_iac_gain_autotune_converts_relay_measurement(void) {
+    uint8_t kp = 0U;
+    uint8_t ki = 0U;
+    uint8_t kd = 0U;
+    TEST_ASSERT_TRUE(calculateIacGainAutotuneGains(20L, 100U, 12U, kp, ki, kd));
+    TEST_ASSERT_EQUAL_UINT8(4U, kp);
+    TEST_ASSERT_EQUAL_UINT8(8U, ki);
+    TEST_ASSERT_EQUAL_UINT8(2U, kd);
+    TEST_ASSERT_FALSE(calculateIacGainAutotuneGains(20L, 0U, 12U, kp, ki, kd));
+}
 
 static void test_correctionFixedTiming_inactive(void) {
     configPage2.fixAngEnable = 0;
@@ -1349,6 +1363,7 @@ static void test_correctionsDwell(void) {
 
 void testIgnCorrections(void) {
     SET_UNITY_FILENAME() {
+        RUN_TEST(test_iac_gain_autotune_converts_relay_measurement);
         test_correctionFixedTiming();
         test_correctionCLTadvance();
         test_correctionCrankingFixedTiming();

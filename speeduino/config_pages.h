@@ -1015,8 +1015,26 @@ struct config15 : public config_page_t {
   byte idleAdvClGainTuneMaxPeriod;     //Maximum accepted full period, 0.1 seconds
   byte idleAdvClGainTuneMaxAttempts;   //Attempts allowed per request and power cycle
 
-  //Bytes 210-255
-  byte Unused15_210_255[46];
+  //Bytes 210-224 - Closed-loop IAC gain autotune setup
+  byte iacGainAutotuneRequest : 1; //One-shot request. Cleared after valid gains have been stored
+  byte iacGainAutotuneUnused210 : 7;
+  byte iacGainTuneMinTemp;          //Minimum coolant temperature, offset by 40 degrees
+  byte iacGainTuneStep;             //Relay amplitude: PWM percent or physical stepper steps
+  byte iacGainTuneSettleTime;       //Settled idle required before starting, seconds
+  byte iacGainTuneSettleBand;       //Maximum absolute RPM error while settling
+  byte iacGainTuneHysteresis;       //Relay switching hysteresis, RPM. 0 selects 10 RPM
+  byte iacGainTuneDiscard;          //Initial half cycles excluded from the measurement
+  byte iacGainTuneMeasure;          //Half cycles averaged for the result
+  byte iacGainTuneTimeout;          //Maximum time without a relay crossing, seconds
+  byte iacGainTuneRunawayDiv10;     //Absolute RPM error that aborts the test, divided by 10
+  byte iacGainTuneMinAmplitude;     //Minimum measured oscillation amplitude, RPM
+  byte iacGainTuneMinPeriod;        //Minimum accepted full period, 0.1 seconds
+  byte iacGainTuneMaxPeriod;        //Maximum accepted full period, 0.1 seconds
+  byte iacGainTuneMaxAttempts;      //Attempts allowed per request and power cycle
+  byte iacGainTuneMaxTps;           //Maximum TPS during the test, 0.5 percent
+
+  //Bytes 225-255
+  byte Unused15_225_255[31];
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 

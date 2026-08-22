@@ -128,6 +128,26 @@ TESTABLE_STATIC void setIdleAdvanceGainAutotuneDefaults(void) {
     configPage15.idleAdvClGainTuneMaxAttempts = 3U;
 }
 
+/** @brief Safe defaults for the closed-loop IAC relay autotune. */
+TESTABLE_STATIC void setIacGainAutotuneDefaults(void) {
+    configPage15.iacGainAutotuneRequest = 0U;
+    configPage15.iacGainAutotuneUnused210 = 0U;
+    configPage15.iacGainTuneMinTemp = temperatureAddOffset(70);
+    configPage15.iacGainTuneStep = 5U;             //PWM percent or physical stepper steps
+    configPage15.iacGainTuneSettleTime = 5U;       //seconds
+    configPage15.iacGainTuneSettleBand = 25U;      //RPM
+    configPage15.iacGainTuneHysteresis = 0U;       //Auto: 10 RPM
+    configPage15.iacGainTuneDiscard = 2U;          //half cycles
+    configPage15.iacGainTuneMeasure = 6U;          //half cycles
+    configPage15.iacGainTuneTimeout = 10U;         //seconds per half cycle
+    configPage15.iacGainTuneRunawayDiv10 = 40U;    //400 RPM
+    configPage15.iacGainTuneMinAmplitude = 20U;    //RPM
+    configPage15.iacGainTuneMinPeriod = 5U;        //0.5 seconds
+    configPage15.iacGainTuneMaxPeriod = 200U;      //20 seconds
+    configPage15.iacGainTuneMaxAttempts = 3U;
+    configPage15.iacGainTuneMaxTps = 10U;          //5 percent (0.5 percent raw units)
+}
+
 /** @brief Defaults for the closed-loop idle ignition controller.
  *
  * The trim is off by default: with a closed-loop IAC the air path already owns
@@ -241,9 +261,20 @@ TESTABLE_STATIC void upgradeV31toV32(void) {
     }
 }
 
+/** V33 adds the IAC gain-autotune request and setup in previously unused bytes. */
+TESTABLE_STATIC void upgradeV32toV33(void) {
+    if(loadEEPROMVersion() == 32U)
+    {
+        setIacGainAutotuneDefaults();
+
+        saveAllPages();
+        saveEEPROMVersion(33);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    32
+  #define CURRENT_DATA_VERSION    33
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -1026,9 +1057,10 @@ void doUpdates(void)
   upgradeV28toV29();
   upgradeV29toV30();
   upgradeV30toV31();
+  upgradeV31toV32();
   //Move this #endif to only do latest updates to safe ROM space on small devices.
   #endif
-  upgradeV31toV32();
+  upgradeV32toV33();
 
   //Final check is always for 255 and 0 (Brand new arduino)
   if( (loadEEPROMVersion() == 0) || (loadEEPROMVersion() == 255) )
@@ -1036,6 +1068,7 @@ void doUpdates(void)
     configPage9.true_address = 0x200;
     configPage2.idleAdvEnabled = IDLEADVANCE_MODE_OFF;
     setIdleAdvanceClosedLoopDefaults();
+    setIacGainAutotuneDefaults();
 
     //Programmable outputs added. Set all to disabled
     configPage13.outputPin[0] = 0;

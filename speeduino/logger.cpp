@@ -1,6 +1,7 @@
 #include "globals.h"
 #include "logger.h"
 #include "ww_autotune.h"
+#include "idle.h"
 #include "corrections.h"
 #include "decoders.h"
 #include "init.h"
@@ -535,6 +536,13 @@ byte getTSLogEntry(uint16_t byteNum)
     case 167: statusValue = idleAdvanceGainAutotuneDiag().periodTenths; break;
     case 168: statusValue = lowByte(idleAdvanceGainAutotuneDiag().amplitudeRpm); break;
     case 169: statusValue = highByte(idleAdvanceGainAutotuneDiag().amplitudeRpm); break;
+    //Closed-loop IAC gain autotune. State/result/relay/motor type share byte 170.
+    case 170: statusValue = buildIacGainAutotuneStatus(); break;
+    case 171: statusValue = iacGainAutotuneDiag().kpRaw; break;
+    case 172: statusValue = iacGainAutotuneDiag().kiRaw; break;
+    case 173: statusValue = iacGainAutotuneDiag().kdRaw; break;
+    case 174: statusValue = iacGainAutotuneDiag().periodTenths; break;
+    case 175: statusValue = iacGainAutotuneDiag().amplitudeRpm; break;
     default: statusValue = 0; // MISRA check
   }
 
