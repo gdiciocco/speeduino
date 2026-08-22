@@ -495,6 +495,18 @@ static void setup_correctionIdleAdvance_closed_loop(void) {
     configPage15.idleAdvClTrimRequiresIacLimit = 1U;
     configPage15.idleAdvClLearnAuthority = 0U; //Center autotune off unless a test enables it
     configPage15.idleAdvClGainAutotuneRequest = 0U; //Gain autotune off unless a test requests it
+    configPage15.idleAdvClGainTuneStep = 3U;
+    configPage15.idleAdvClGainTuneSettleTime = 3U;
+    configPage15.idleAdvClGainTuneSettleBand = 20U;
+    configPage15.idleAdvClGainTuneHysteresis = 0U;
+    configPage15.idleAdvClGainTuneDiscard = 2U;
+    configPage15.idleAdvClGainTuneMeasure = 6U;
+    configPage15.idleAdvClGainTuneTimeout = 5U;
+    configPage15.idleAdvClGainTuneRunawayDiv10 = 40U;
+    configPage15.idleAdvClGainTuneMinAmplitude = 20U;
+    configPage15.idleAdvClGainTuneMinPeriod = 4U;
+    configPage15.idleAdvClGainTuneMaxPeriod = 60U;
+    configPage15.idleAdvClGainTuneMaxAttempts = 3U;
     currentStatus.CLIdleTarget = RPM_MEDIUM.toRaw(1000);
     currentStatus.setRpm(1000U);
     initialiseCorrections();
@@ -755,6 +767,44 @@ static void test_correctionIdleAdvance_gain_autotune_measures_relay_and_writes_g
     TEST_ASSERT_EQUAL(0, configPage15.idleAdvClGainAutotuneRequest);
 }
 
+static void test_correctionIdleAdvance_gain_autotune_uses_configured_setup(void) {
+    setup_correctionIdleAdvance_closed_loop();
+    configPage15.idleAdvClLearnMinTemp = temperatureAddOffset(70);
+    configPage15.idleAdvClGainTuneStep = 5U;
+    configPage15.idleAdvClGainTuneSettleTime = 1U;
+    configPage15.idleAdvClGainTuneMeasure = 4U;
+    currentStatus.coolant = 85;
+    configPage15.idleAdvClGainAutotuneRequest = 1U;
+    idleAdvanceGainTuneAttempts = 0U;
+    idleAdvanceGainTuneLastRequest = false;
+    BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ);
+    (void)correctionIdleAdvance(10); //Engage and count the first stable tick.
+
+    for(uint8_t tick = 0U; tick < 10U; ++tick) {
+        ++runSecsX10;
+        (void)correctionIdleAdvance(10);
+    }
+    TEST_ASSERT_EQUAL(IDLE_ADV_GAINTUNE_RELAY, idleAdvanceGainAutotuneDiag().state);
+
+    //The configured 5 degree relay step is applied around the 10 degree center.
+    ++runSecsX10;
+    TEST_ASSERT_EQUAL(15, correctionIdleAdvance(10));
+
+    //Two discarded plus four measured half-cycles complete the configured test.
+    for(uint8_t phase = 0U; phase < 6U; ++phase) {
+        currentStatus.setRpm(((phase % 2U) == 0U) ? 1100U : 900U);
+        for(uint8_t tick = 0U; tick < 6U; ++tick) {
+            ++runSecsX10;
+            (void)correctionIdleAdvance(10);
+        }
+    }
+
+    //The same plant with a 5 rather than 3 degree relay produces larger gains.
+    TEST_ASSERT_EQUAL(101, configPage9.idleAdvClKp);
+    TEST_ASSERT_EQUAL(152, configPage9.idleAdvClKd);
+    TEST_ASSERT_EQUAL(IDLE_ADV_GAINTUNE_RESULT_DONE, idleAdvanceGainAutotuneDiag().lastResult);
+}
+
 static void test_correctionIdleAdvance_gain_autotune_aborts_without_oscillation(void) {
     setup_correctionIdleAdvance_gain_autotune();
 
@@ -813,6 +863,7 @@ static void test_correctionIdleAdvance(void) {
     RUN_TEST_P(test_correctionIdleAdvance_closed_loop_learn_respects_authority);
     RUN_TEST_P(test_correctionIdleAdvance_closed_loop_learn_requires_warm_engine);
     RUN_TEST_P(test_correctionIdleAdvance_gain_autotune_measures_relay_and_writes_gains);
+    RUN_TEST_P(test_correctionIdleAdvance_gain_autotune_uses_configured_setup);
     RUN_TEST_P(test_correctionIdleAdvance_gain_autotune_aborts_without_oscillation);
     RUN_TEST_P(test_correctionIdleAdvance_gain_autotune_aborts_on_disengage);
 }

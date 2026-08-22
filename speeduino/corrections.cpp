@@ -82,7 +82,6 @@ static IdleAdvanceLearnDiagnostics idleAdvanceClLearnDiagnostics;
 
 //Gain (relay) autotune state. The attempt budget and request edge detector are
 //per power cycle for the same reason as the learned delta above.
-static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_MAX_ATTEMPTS = 3U;
 static uint8_t idleAdvanceGainTuneState;
 static uint8_t idleAdvanceGainTuneResult;
 TESTABLE_STATIC uint8_t idleAdvanceGainTuneAttempts;
@@ -97,6 +96,10 @@ static uint16_t idleAdvanceGainTunePeriodSum;    //Sum of measured half periods,
 static uint32_t idleAdvanceGainTuneAmplitudeSum; //Sum of measured half cycle peaks, RPM
 static IdleAdvanceGainAutotuneDiagnostics idleAdvanceGainTuneDiagnostics;
 
+static inline uint8_t getIdleAdvanceGainTuneMaxAttempts(void) {
+  return (uint8_t)clamp((int16_t)configPage15.idleAdvClGainTuneMaxAttempts, (int16_t)1, (int16_t)10);
+}
+
 static inline void updateIdleAdvanceGainTuneDiag(void) {
   idleAdvanceGainTuneDiagnostics.state = idleAdvanceGainTuneState;
   idleAdvanceGainTuneDiagnostics.lastResult = idleAdvanceGainTuneResult;
@@ -106,7 +109,7 @@ static inline void updateIdleAdvanceGainTuneDiag(void) {
 
 static inline void abortIdleAdvanceGainAutotune(uint8_t reason) {
   idleAdvanceGainTuneResult = reason;
-  idleAdvanceGainTuneState = (idleAdvanceGainTuneAttempts >= IDLE_ADVANCE_GAINTUNE_MAX_ATTEMPTS)
+  idleAdvanceGainTuneState = (idleAdvanceGainTuneAttempts >= getIdleAdvanceGainTuneMaxAttempts())
       ? IDLE_ADV_GAINTUNE_FAILED : IDLE_ADV_GAINTUNE_WAITING;
   idleAdvanceGainTuneStableTicks = 0U;
   updateIdleAdvanceGainTuneDiag();
@@ -1342,34 +1345,78 @@ static inline void updateIdleAdvanceClosedLoopLearning(int32_t rpmError, int16_t
   updateIdleAdvanceLearnDiag(IDLE_ADV_LEARN_WAITING);
 }
 
-// --- Gain (relay) autotune tuning constants ---
-static constexpr int16_t IDLE_ADVANCE_GAINTUNE_RELAY_DEG = 3;            //Relay amplitude, degrees
-static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_STABLE_TICKS = 30U;       //3s settled idle before the relay may start
-static constexpr int32_t IDLE_ADVANCE_GAINTUNE_STABLE_BAND = 20L;        //RPM
-static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_DISCARD = 2U;             //Half cycles dropped as the start transient
-static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_MEASURE = 6U;             //Half cycles averaged for the measurement
-static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_HALF_CYCLE_TIMEOUT = 50U; //Ticks: no relay switch in 5s = plant not oscillating
-static constexpr int32_t IDLE_ADVANCE_GAINTUNE_RUNAWAY_RPM = 400L;
-static constexpr uint16_t IDLE_ADVANCE_GAINTUNE_MIN_AMPLITUDE = 20U;     //RPM
-static constexpr uint16_t IDLE_ADVANCE_GAINTUNE_MIN_PERIOD_TICKS = 4U;   //0.4s
-static constexpr uint16_t IDLE_ADVANCE_GAINTUNE_MAX_PERIOD_TICKS = 60U;  //6s
+// --- Gain (relay) autotune hard safety limits ---
+//TunerStudio constrains the setup too, but these clamps also protect restored,
+//old or corrupted tunes. All time values below use the controller's 10Hz tick.
+static inline int16_t getIdleAdvanceGainTuneRelayDegrees(void) {
+  return clamp((int16_t)configPage15.idleAdvClGainTuneStep, (int16_t)1, (int16_t)10);
+}
+
+static inline uint8_t getIdleAdvanceGainTuneStableTicks(void) {
+  const uint8_t seconds = (uint8_t)clamp((int16_t)configPage15.idleAdvClGainTuneSettleTime, (int16_t)1, (int16_t)25);
+  return (uint8_t)(seconds * 10U);
+}
+
+static inline int32_t getIdleAdvanceGainTuneStableBand(void) {
+  return (int32_t)clamp((int16_t)configPage15.idleAdvClGainTuneSettleBand, (int16_t)5, (int16_t)100);
+}
+
+static inline int32_t getIdleAdvanceGainTuneHysteresis(void) {
+  if(configPage15.idleAdvClGainTuneHysteresis == 0U) {
+    return (configPage15.idleAdvClDeadband > 10U) ? (int32_t)configPage15.idleAdvClDeadband : 10L;
+  }
+  return (int32_t)clamp((int16_t)configPage15.idleAdvClGainTuneHysteresis, (int16_t)5, (int16_t)100);
+}
+
+static inline uint8_t getIdleAdvanceGainTuneDiscardHalfCycles(void) {
+  return (uint8_t)min(configPage15.idleAdvClGainTuneDiscard, (uint8_t)8U);
+}
+
+static inline uint8_t getIdleAdvanceGainTuneMeasureHalfCycles(void) {
+  return (uint8_t)clamp((int16_t)configPage15.idleAdvClGainTuneMeasure, (int16_t)4, (int16_t)20);
+}
+
+static inline uint8_t getIdleAdvanceGainTuneTimeoutTicks(void) {
+  const uint8_t seconds = (uint8_t)clamp((int16_t)configPage15.idleAdvClGainTuneTimeout, (int16_t)1, (int16_t)25);
+  return (uint8_t)(seconds * 10U);
+}
+
+static inline int32_t getIdleAdvanceGainTuneRunawayRpm(void) {
+  const int32_t rpm = (int32_t)configPage15.idleAdvClGainTuneRunawayDiv10 * 10L;
+  return clamp(rpm, 100L, 1000L);
+}
+
+static inline uint16_t getIdleAdvanceGainTuneMinAmplitude(void) {
+  return (uint16_t)clamp((int16_t)configPage15.idleAdvClGainTuneMinAmplitude, (int16_t)10, (int16_t)200);
+}
+
+static inline uint16_t getIdleAdvanceGainTuneMinPeriodTicks(void) {
+  return (uint16_t)clamp((int16_t)configPage15.idleAdvClGainTuneMinPeriod, (int16_t)2, (int16_t)20);
+}
+
+static inline uint16_t getIdleAdvanceGainTuneMaxPeriodTicks(void) {
+  const uint16_t minimum = getIdleAdvanceGainTuneMinPeriodTicks();
+  return (uint16_t)clamp((int16_t)configPage15.idleAdvClGainTuneMaxPeriod, (int16_t)minimum, (int16_t)100);
+}
+
 static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_KP_MIN = 4U;              //0.2 deg/100RPM
 static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_KP_MAX = 240U;
 static constexpr uint8_t IDLE_ADVANCE_GAINTUNE_KD_MAX = 240U;
 
 /** @brief Turn the measured limit cycle into PD gains and store them. */
 static void finalizeIdleAdvanceGainAutotune(void) {
-  const uint16_t halfPeriodTicks = (uint16_t)(idleAdvanceGainTunePeriodSum / IDLE_ADVANCE_GAINTUNE_MEASURE);
+  const uint8_t measuredHalfCycles = getIdleAdvanceGainTuneMeasureHalfCycles();
+  const uint16_t halfPeriodTicks = (uint16_t)(idleAdvanceGainTunePeriodSum / measuredHalfCycles);
   const uint16_t periodTicks = (uint16_t)(halfPeriodTicks * 2U);
-  const uint16_t amplitude = (uint16_t)(idleAdvanceGainTuneAmplitudeSum / IDLE_ADVANCE_GAINTUNE_MEASURE);
+  const uint16_t amplitude = (uint16_t)(idleAdvanceGainTuneAmplitudeSum / measuredHalfCycles);
   idleAdvanceGainTuneDiagnostics.periodTenths = (periodTicks > (uint16_t)UINT8_MAX) ? UINT8_MAX : (uint8_t)periodTicks;
   idleAdvanceGainTuneDiagnostics.amplitudeRpm = amplitude;
 
-  if(amplitude < IDLE_ADVANCE_GAINTUNE_MIN_AMPLITUDE) {
+  if(amplitude < getIdleAdvanceGainTuneMinAmplitude()) {
     abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_AMPLITUDE);
     return;
   }
-  if((periodTicks < IDLE_ADVANCE_GAINTUNE_MIN_PERIOD_TICKS) || (periodTicks > IDLE_ADVANCE_GAINTUNE_MAX_PERIOD_TICKS)) {
+  if((periodTicks < getIdleAdvanceGainTuneMinPeriodTicks()) || (periodTicks > getIdleAdvanceGainTuneMaxPeriodTicks())) {
     abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_PERIOD);
     return;
   }
@@ -1379,8 +1426,9 @@ static void finalizeIdleAdvanceGainAutotune(void) {
   //for a PD controller: Kp = 0.8*Ku, Td = Tu/8.
   //In raw units (Kp raw = 2000 * deg/RPM, Kd raw = 20000 * deg/(RPM/s), Tu in
   //0.1s ticks) that collapses to the two integer expressions below (pi ~ 314/100).
-  const int32_t kpRaw = (640000L * IDLE_ADVANCE_GAINTUNE_RELAY_DEG) / (314L * (int32_t)amplitude);
-  const int32_t kdRaw = (80000L * IDLE_ADVANCE_GAINTUNE_RELAY_DEG * (int32_t)periodTicks) / (314L * (int32_t)amplitude);
+  const int32_t relayDegrees = (int32_t)getIdleAdvanceGainTuneRelayDegrees();
+  const int32_t kpRaw = (640000L * relayDegrees) / (314L * (int32_t)amplitude);
+  const int32_t kdRaw = (80000L * relayDegrees * (int32_t)periodTicks) / (314L * (int32_t)amplitude);
   configPage9.idleAdvClKp = (uint8_t)clamp(kpRaw, (int32_t)IDLE_ADVANCE_GAINTUNE_KP_MIN, (int32_t)IDLE_ADVANCE_GAINTUNE_KP_MAX);
   configPage9.idleAdvClKd = (uint8_t)clamp(kdRaw, (int32_t)0L, (int32_t)IDLE_ADVANCE_GAINTUNE_KD_MAX);
 
@@ -1421,7 +1469,7 @@ static inline bool updateIdleAdvanceGainAutotune(int32_t rpmError, int16_t minim
     return false;
   }
 
-  if(idleAdvanceGainTuneAttempts >= IDLE_ADVANCE_GAINTUNE_MAX_ATTEMPTS) {
+  if(idleAdvanceGainTuneAttempts >= getIdleAdvanceGainTuneMaxAttempts()) {
     idleAdvanceGainTuneState = IDLE_ADV_GAINTUNE_FAILED;
     updateIdleAdvanceGainTuneDiag();
     return false;
@@ -1431,13 +1479,14 @@ static inline bool updateIdleAdvanceGainAutotune(int32_t rpmError, int16_t minim
     idleAdvanceGainTuneState = IDLE_ADV_GAINTUNE_WAITING;
     //Same warm gate as the center autotune: gains measured on a cold engine
     //would be just as wrong as a cold-learned center.
+    const int32_t stableBand = getIdleAdvanceGainTuneStableBand();
     if((currentStatus.coolant < temperatureRemoveOffset(configPage15.idleAdvClLearnMinTemp))
-    || (rpmError > IDLE_ADVANCE_GAINTUNE_STABLE_BAND) || (rpmError < -IDLE_ADVANCE_GAINTUNE_STABLE_BAND)) {
+    || (rpmError > stableBand) || (rpmError < -stableBand)) {
       idleAdvanceGainTuneStableTicks = 0U;
       updateIdleAdvanceGainTuneDiag();
       return false;
     }
-    if(idleAdvanceGainTuneStableTicks < IDLE_ADVANCE_GAINTUNE_STABLE_TICKS) {
+    if(idleAdvanceGainTuneStableTicks < getIdleAdvanceGainTuneStableTicks()) {
       idleAdvanceGainTuneStableTicks++;
       updateIdleAdvanceGainTuneDiag();
       return false;
@@ -1447,10 +1496,11 @@ static inline bool updateIdleAdvanceGainAutotune(int32_t rpmError, int16_t minim
     const int16_t centerDegrees = (idleAdvanceClCenter >= 0)
         ? (int16_t)((idleAdvanceClCenter + (IDLE_ADVANCE_CL_TENTHS / 2)) / IDLE_ADVANCE_CL_TENTHS)
         : (int16_t)((idleAdvanceClCenter - (IDLE_ADVANCE_CL_TENTHS / 2)) / IDLE_ADVANCE_CL_TENTHS);
-    if(((centerDegrees - IDLE_ADVANCE_GAINTUNE_RELAY_DEG) < minimumAdvance)
-    || ((centerDegrees + IDLE_ADVANCE_GAINTUNE_RELAY_DEG) > maximumAdvance)) {
+    const int16_t relayDegrees = getIdleAdvanceGainTuneRelayDegrees();
+    if(((centerDegrees - relayDegrees) < minimumAdvance)
+    || ((centerDegrees + relayDegrees) > maximumAdvance)) {
       //Retrying cannot create advance range, so spend the whole budget at once
-      idleAdvanceGainTuneAttempts = IDLE_ADVANCE_GAINTUNE_MAX_ATTEMPTS;
+      idleAdvanceGainTuneAttempts = getIdleAdvanceGainTuneMaxAttempts();
       abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_AUTHORITY);
       return false;
     }
@@ -1463,18 +1513,19 @@ static inline bool updateIdleAdvanceGainAutotune(int32_t rpmError, int16_t minim
     idleAdvanceGainTunePeakError = 0U;
     idleAdvanceGainTunePeriodSum = 0U;
     idleAdvanceGainTuneAmplitudeSum = 0UL;
-    relayAdvance = (int8_t)(centerDegrees + IDLE_ADVANCE_GAINTUNE_RELAY_DEG);
+    relayAdvance = (int8_t)(centerDegrees + relayDegrees);
     updateIdleAdvanceGainTuneDiag();
     return true;
   }
 
   //--- Relay running ---
-  if((rpmError > IDLE_ADVANCE_GAINTUNE_RUNAWAY_RPM) || (rpmError < -IDLE_ADVANCE_GAINTUNE_RUNAWAY_RPM)) {
+  const int32_t runawayRpm = getIdleAdvanceGainTuneRunawayRpm();
+  if((rpmError > runawayRpm) || (rpmError < -runawayRpm)) {
     abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_RUNAWAY);
     return false;
   }
   idleAdvanceGainTuneTicksSinceSwitch++;
-  if(idleAdvanceGainTuneTicksSinceSwitch > IDLE_ADVANCE_GAINTUNE_HALF_CYCLE_TIMEOUT) {
+  if(idleAdvanceGainTuneTicksSinceSwitch > getIdleAdvanceGainTuneTimeoutTicks()) {
     abortIdleAdvanceGainAutotune(IDLE_ADV_GAINTUNE_RESULT_NO_OSCILLATION);
     return false;
   }
@@ -1483,7 +1534,7 @@ static inline bool updateIdleAdvanceGainAutotune(int32_t rpmError, int16_t minim
   if(absError > idleAdvanceGainTunePeakError) { idleAdvanceGainTunePeakError = absError; }
 
   //Hysteresis keeps cycle-to-cycle combustion noise from switching the relay
-  const int32_t hysteresis = (configPage15.idleAdvClDeadband > 10U) ? (int32_t)configPage15.idleAdvClDeadband : 10L;
+  const int32_t hysteresis = getIdleAdvanceGainTuneHysteresis();
   int8_t desiredSign = idleAdvanceGainTuneRelaySign;
   if(rpmError > hysteresis) { desiredSign = 1; }        //Engine slow: add torque
   else if(rpmError < -hysteresis) { desiredSign = -1; } //Engine fast: remove torque
@@ -1491,7 +1542,9 @@ static inline bool updateIdleAdvanceGainAutotune(int32_t rpmError, int16_t minim
 
   if(desiredSign != idleAdvanceGainTuneRelaySign) {
     idleAdvanceGainTuneHalfCycles++;
-    if(idleAdvanceGainTuneHalfCycles > IDLE_ADVANCE_GAINTUNE_DISCARD) {
+    const uint8_t discardedHalfCycles = getIdleAdvanceGainTuneDiscardHalfCycles();
+    const uint8_t measuredHalfCycles = getIdleAdvanceGainTuneMeasureHalfCycles();
+    if(idleAdvanceGainTuneHalfCycles > discardedHalfCycles) {
       idleAdvanceGainTunePeriodSum += idleAdvanceGainTuneTicksSinceSwitch;
       idleAdvanceGainTuneAmplitudeSum += idleAdvanceGainTunePeakError;
     }
@@ -1499,14 +1552,14 @@ static inline bool updateIdleAdvanceGainAutotune(int32_t rpmError, int16_t minim
     idleAdvanceGainTuneTicksSinceSwitch = 0U;
     idleAdvanceGainTunePeakError = 0U;
 
-    if(idleAdvanceGainTuneHalfCycles >= (uint8_t)(IDLE_ADVANCE_GAINTUNE_DISCARD + IDLE_ADVANCE_GAINTUNE_MEASURE)) {
+    if(idleAdvanceGainTuneHalfCycles >= (uint8_t)(discardedHalfCycles + measuredHalfCycles)) {
       finalizeIdleAdvanceGainAutotune();
       return false; //The loop resumes with the new gains on this very tick
     }
   }
 
   relayAdvance = (int8_t)clamp((int16_t)(idleAdvanceGainTuneCenter
-                    + ((int16_t)idleAdvanceGainTuneRelaySign * IDLE_ADVANCE_GAINTUNE_RELAY_DEG)),
+                    + ((int16_t)idleAdvanceGainTuneRelaySign * getIdleAdvanceGainTuneRelayDegrees())),
                     minimumAdvance, maximumAdvance);
   updateIdleAdvanceGainTuneDiag();
   return true;

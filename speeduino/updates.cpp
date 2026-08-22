@@ -112,6 +112,22 @@ TESTABLE_STATIC void setIdleAdvanceClosedLoopLearnDefaults(void) {
     configPage15.idleAdvClUnused195 = 0U;
 }
 
+/** @brief Safe defaults for the closed-loop idle ignition gain relay test. */
+TESTABLE_STATIC void setIdleAdvanceGainAutotuneDefaults(void) {
+    configPage15.idleAdvClGainTuneStep = 3U;          //degrees either side of center
+    configPage15.idleAdvClGainTuneSettleTime = 3U;    //seconds
+    configPage15.idleAdvClGainTuneSettleBand = 20U;   //RPM
+    configPage15.idleAdvClGainTuneHysteresis = 0U;    //Auto: max(idle deadband, 10 RPM)
+    configPage15.idleAdvClGainTuneDiscard = 2U;       //half cycles
+    configPage15.idleAdvClGainTuneMeasure = 6U;       //half cycles
+    configPage15.idleAdvClGainTuneTimeout = 5U;       //seconds per half cycle
+    configPage15.idleAdvClGainTuneRunawayDiv10 = 40U; //400 RPM
+    configPage15.idleAdvClGainTuneMinAmplitude = 20U; //RPM
+    configPage15.idleAdvClGainTuneMinPeriod = 4U;     //0.4 seconds
+    configPage15.idleAdvClGainTuneMaxPeriod = 60U;    //6.0 seconds
+    configPage15.idleAdvClGainTuneMaxAttempts = 3U;
+}
+
 /** @brief Defaults for the closed-loop idle ignition controller.
  *
  * The trim is off by default: with a closed-loop IAC the air path already owns
@@ -131,6 +147,7 @@ TESTABLE_STATIC void setIdleAdvanceClosedLoopDefaults(void) {
     configPage15.idleAdvClTrimRange = 5U;  //degrees
     configPage15.idleAdvClTrimRequiresIacLimit = 1U;
     setIdleAdvanceClosedLoopLearnDefaults();
+    setIdleAdvanceGainAutotuneDefaults();
 }
 
 // V28 adds closed-loop idle ignition settings in bytes that were previously unused.
@@ -212,9 +229,21 @@ TESTABLE_STATIC void upgradeV30toV31(void) {
     }
 }
 
+/** V32 adds configurable gain-autotune setup in bytes that were previously
+ * unused, so every field must be initialised rather than trusting old data. */
+TESTABLE_STATIC void upgradeV31toV32(void) {
+    if(loadEEPROMVersion() == 31U)
+    {
+        setIdleAdvanceGainAutotuneDefaults();
+
+        saveAllPages();
+        saveEEPROMVersion(32);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    31
+  #define CURRENT_DATA_VERSION    32
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -999,6 +1028,7 @@ void doUpdates(void)
   upgradeV30toV31();
   //Move this #endif to only do latest updates to safe ROM space on small devices.
   #endif
+  upgradeV31toV32();
 
   //Final check is always for 255 and 0 (Brand new arduino)
   if( (loadEEPROMVersion() == 0) || (loadEEPROMVersion() == 255) )

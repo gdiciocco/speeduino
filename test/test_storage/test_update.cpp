@@ -13,6 +13,7 @@ extern void upgradeV27toV28(void);
 extern void upgradeV28toV29(void);
 extern void upgradeV29toV30(void);
 extern void upgradeV30toV31(void);
+extern void upgradeV31toV32(void);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -194,6 +195,38 @@ static void test_upgradeV30toV31_preserves_pwm_limits(void)
     TEST_ASSERT_EQUAL_UINT8(90U, configPage2.iacCLmaxValue);
 }
 
+static void test_upgradeV31toV32_initialises_gain_autotune_setup(void)
+{
+    configPage15.idleAdvClGainTuneStep = UINT8_MAX;
+    configPage15.idleAdvClGainTuneSettleTime = UINT8_MAX;
+    configPage15.idleAdvClGainTuneSettleBand = UINT8_MAX;
+    configPage15.idleAdvClGainTuneHysteresis = UINT8_MAX;
+    configPage15.idleAdvClGainTuneDiscard = UINT8_MAX;
+    configPage15.idleAdvClGainTuneMeasure = UINT8_MAX;
+    configPage15.idleAdvClGainTuneTimeout = UINT8_MAX;
+    configPage15.idleAdvClGainTuneRunawayDiv10 = UINT8_MAX;
+    configPage15.idleAdvClGainTuneMinAmplitude = UINT8_MAX;
+    configPage15.idleAdvClGainTuneMinPeriod = UINT8_MAX;
+    configPage15.idleAdvClGainTuneMaxPeriod = UINT8_MAX;
+    configPage15.idleAdvClGainTuneMaxAttempts = UINT8_MAX;
+    setStorageAPI(setupEepromReadApi(31U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV31toV32();
+
+    TEST_ASSERT_EQUAL_UINT8(3U, configPage15.idleAdvClGainTuneStep);
+    TEST_ASSERT_EQUAL_UINT8(3U, configPage15.idleAdvClGainTuneSettleTime);
+    TEST_ASSERT_EQUAL_UINT8(20U, configPage15.idleAdvClGainTuneSettleBand);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.idleAdvClGainTuneHysteresis);
+    TEST_ASSERT_EQUAL_UINT8(2U, configPage15.idleAdvClGainTuneDiscard);
+    TEST_ASSERT_EQUAL_UINT8(6U, configPage15.idleAdvClGainTuneMeasure);
+    TEST_ASSERT_EQUAL_UINT8(5U, configPage15.idleAdvClGainTuneTimeout);
+    TEST_ASSERT_EQUAL_UINT8(40U, configPage15.idleAdvClGainTuneRunawayDiv10);
+    TEST_ASSERT_EQUAL_UINT8(20U, configPage15.idleAdvClGainTuneMinAmplitude);
+    TEST_ASSERT_EQUAL_UINT8(4U, configPage15.idleAdvClGainTuneMinPeriod);
+    TEST_ASSERT_EQUAL_UINT8(60U, configPage15.idleAdvClGainTuneMaxPeriod);
+    TEST_ASSERT_EQUAL_UINT8(3U, configPage15.idleAdvClGainTuneMaxAttempts);
+}
+
 void test_update(void) {
     SET_UNITY_FILENAME() {
         RUN_TEST(test_updateTableU16toU8);
@@ -204,5 +237,6 @@ void test_update(void) {
         RUN_TEST(test_upgradeV29toV30_initialises_center_autotune);
         RUN_TEST(test_upgradeV30toV31_converts_stepper_positions);
         RUN_TEST(test_upgradeV30toV31_preserves_pwm_limits);
+        RUN_TEST(test_upgradeV31toV32_initialises_gain_autotune_setup);
     }
 }

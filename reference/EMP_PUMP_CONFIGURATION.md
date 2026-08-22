@@ -466,7 +466,7 @@ nell'INI, ma non sono mostrati nei pannelli operativi:
 | `empPumpConfigMagic` | 148–149 | `0xE6A5` | Identifica una configurazione EMP inizializzata. |
 | `empPumpConfigVersion` | 150 | 2 | Forza il caricamento dei nuovi default quando cambia il layout o la semantica. |
 | `empPumpReserved151` | 151 | 0 | Byte riservato. |
-| `Unused15_190_255` | 190–255 | tutti zero | 66 byte riservati per futuri sviluppi. |
+| `Unused15_210_255` | 210–255 | tutti zero | 46 byte riservati per futuri sviluppi; gli offset 190–209 appartengono all'Idle Advance closed-loop e ai relativi autotune. |
 
 Non devono essere modificati manualmente. Un magic o una versione errati
 rendono la configurazione non valida e al successivo setup causano il

@@ -1001,8 +1001,22 @@ struct config15 : public config_page_t {
   byte idleAdvClLearnAuthority; //Maximum degrees the learned center may move from its power-on value. 0 disables learning
   byte idleAdvClLearnMinTemp;   //Coolant temperature below which the center is not learned, offset by 40 degrees
 
-  //Bytes 198-255
-  byte Unused15_198_255[58];
+  //Bytes 198-209 - Closed-loop idle ignition gain autotune setup
+  byte idleAdvClGainTuneStep;          //Relay step either side of center, degrees
+  byte idleAdvClGainTuneSettleTime;    //Settled idle required before starting the relay, seconds
+  byte idleAdvClGainTuneSettleBand;    //Maximum absolute RPM error while settling
+  byte idleAdvClGainTuneHysteresis;    //Relay switching hysteresis, RPM. 0 uses max(idle deadband, 10 RPM)
+  byte idleAdvClGainTuneDiscard;       //Initial half cycles excluded from the measurement
+  byte idleAdvClGainTuneMeasure;       //Half cycles averaged for the result
+  byte idleAdvClGainTuneTimeout;       //Maximum time without a relay crossing, seconds
+  byte idleAdvClGainTuneRunawayDiv10;  //Absolute RPM error that aborts the test, divided by 10
+  byte idleAdvClGainTuneMinAmplitude;  //Minimum measured oscillation amplitude, RPM
+  byte idleAdvClGainTuneMinPeriod;     //Minimum accepted full period, 0.1 seconds
+  byte idleAdvClGainTuneMaxPeriod;     //Maximum accepted full period, 0.1 seconds
+  byte idleAdvClGainTuneMaxAttempts;   //Attempts allowed per request and power cycle
+
+  //Bytes 210-255
+  byte Unused15_210_255[46];
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 
