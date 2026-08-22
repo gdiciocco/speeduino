@@ -6,6 +6,8 @@
 #include "sensors.h"
 #include "globals.h"
 #include "units.h"
+#include "emp_pump.h"
+#include <string.h>
 
 extern void updateTableU16toU8(table2D_u16_u8_32 &targetTable, uint16_t u16EEpromBinAddress);
 extern void upgradeV25toV26(void);
@@ -15,6 +17,7 @@ extern void upgradeV29toV30(void);
 extern void upgradeV30toV31(void);
 extern void upgradeV31toV32(void);
 extern void upgradeV32toV33(void);
+extern void upgradeV33toV34(uint8_t originalVersion);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -231,7 +234,7 @@ static void test_upgradeV31toV32_initialises_gain_autotune_setup(void)
 static void test_upgradeV32toV33_initialises_iac_gain_autotune_setup(void)
 {
     configPage15.iacGainAutotuneRequest = 1U;
-    configPage15.iacGainAutotuneUnused210 = 127U;
+    configPage15.iacGainAutotuneUnused126 = 127U;
     configPage15.iacGainTuneMinTemp = UINT8_MAX;
     configPage15.iacGainTuneStep = UINT8_MAX;
     configPage15.iacGainTuneSettleTime = UINT8_MAX;
@@ -251,7 +254,7 @@ static void test_upgradeV32toV33_initialises_iac_gain_autotune_setup(void)
     upgradeV32toV33();
 
     TEST_ASSERT_EQUAL_UINT8(0U, configPage15.iacGainAutotuneRequest);
-    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.iacGainAutotuneUnused210);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.iacGainAutotuneUnused126);
     TEST_ASSERT_EQUAL_UINT8(temperatureAddOffset(70), configPage15.iacGainTuneMinTemp);
     TEST_ASSERT_EQUAL_UINT8(5U, configPage15.iacGainTuneStep);
     TEST_ASSERT_EQUAL_UINT8(5U, configPage15.iacGainTuneSettleTime);
@@ -268,6 +271,58 @@ static void test_upgradeV32toV33_initialises_iac_gain_autotune_setup(void)
     TEST_ASSERT_EQUAL_UINT8(10U, configPage15.iacGainTuneMaxTps);
 }
 
+static void test_upgradeV33toV34_compacts_page15_and_preserves_idle_settings(void)
+{
+    constexpr uint8_t PAGE15_CONFIG_TS_OFFSET = 80U;
+    constexpr uint8_t OLD_IDLE_ADV_TS_OFFSET = 190U;
+    constexpr uint8_t OLD_IAC_TUNE_TS_OFFSET = 210U;
+    byte *rawPage15 = reinterpret_cast<byte *>(&configPage15);
+    (void)memset(rawPage15, 0, sizeof(configPage15));
+    for(uint8_t index = 0U; index < 20U; index++) {
+        rawPage15[OLD_IDLE_ADV_TS_OFFSET - PAGE15_CONFIG_TS_OFFSET + index] = (byte)(index + 1U);
+    }
+    for(uint8_t index = 0U; index < 15U; index++) {
+        rawPage15[OLD_IAC_TUNE_TS_OFFSET - PAGE15_CONFIG_TS_OFFSET + index] = (byte)(index + 101U);
+    }
+    setStorageAPI(setupEepromReadApi(33U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV33toV34(33U);
+
+    TEST_ASSERT_EQUAL_UINT8(1U, configPage15.idleAdvClCenter);
+    TEST_ASSERT_EQUAL_UINT8(20U, configPage15.idleAdvClGainTuneMaxAttempts);
+    TEST_ASSERT_EQUAL_UINT8(1U, configPage15.iacGainAutotuneRequest);
+    TEST_ASSERT_EQUAL_UINT8(102U, configPage15.iacGainTuneMinTemp);
+    TEST_ASSERT_EQUAL_UINT8(115U, configPage15.iacGainTuneMaxTps);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.empPumpFlags & emp_pump::ENABLED);
+    TEST_ASSERT_EQUAL_UINT16(1500U, configPage15.empPumpMinimumRunRpm);
+    TEST_ASSERT_EQUAL_UINT16(6000U, configPage15.empPumpMaximumRpm);
+    TEST_ASSERT_EACH_EQUAL_UINT8(0U, configPage15.Unused15_221_255, 35U);
+}
+
+static void test_upgradeV33toV34_preserves_v32_idle_and_defaults_new_iac(void)
+{
+    constexpr uint8_t PAGE15_CONFIG_TS_OFFSET = 80U;
+    constexpr uint8_t OLD_IDLE_ADV_TS_OFFSET = 190U;
+    constexpr uint8_t OLD_IAC_TUNE_TS_OFFSET = 210U;
+    byte *rawPage15 = reinterpret_cast<byte *>(&configPage15);
+    (void)memset(rawPage15, 0, sizeof(configPage15));
+    for(uint8_t index = 0U; index < 20U; index++) {
+        rawPage15[OLD_IDLE_ADV_TS_OFFSET - PAGE15_CONFIG_TS_OFFSET + index] = (byte)(index + 1U);
+    }
+    for(uint8_t index = 0U; index < 15U; index++) {
+        rawPage15[OLD_IAC_TUNE_TS_OFFSET - PAGE15_CONFIG_TS_OFFSET + index] = UINT8_MAX;
+    }
+    setStorageAPI(setupEepromReadApi(33U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV33toV34(32U);
+
+    TEST_ASSERT_EQUAL_UINT8(1U, configPage15.idleAdvClCenter);
+    TEST_ASSERT_EQUAL_UINT8(20U, configPage15.idleAdvClGainTuneMaxAttempts);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.iacGainAutotuneRequest);
+    TEST_ASSERT_EQUAL_UINT8(temperatureAddOffset(70), configPage15.iacGainTuneMinTemp);
+    TEST_ASSERT_EQUAL_UINT8(10U, configPage15.iacGainTuneMaxTps);
+}
+
 void test_update(void) {
     SET_UNITY_FILENAME() {
         RUN_TEST(test_updateTableU16toU8);
@@ -280,5 +335,7 @@ void test_update(void) {
         RUN_TEST(test_upgradeV30toV31_preserves_pwm_limits);
         RUN_TEST(test_upgradeV31toV32_initialises_gain_autotune_setup);
         RUN_TEST(test_upgradeV32toV33_initialises_iac_gain_autotune_setup);
+        RUN_TEST(test_upgradeV33toV34_compacts_page15_and_preserves_idle_settings);
+        RUN_TEST(test_upgradeV33toV34_preserves_v32_idle_and_defaults_new_iac);
     }
 }

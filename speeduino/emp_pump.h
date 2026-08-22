@@ -5,8 +5,6 @@
 namespace emp_pump
 {
 
-constexpr uint16_t CONFIG_MAGIC = 0xE6A5U;
-constexpr uint8_t CONFIG_VERSION = 2U;
 constexpr uint16_t HEARTBEAT_MS = 500U;
 
 enum ConfigFlag : uint8_t

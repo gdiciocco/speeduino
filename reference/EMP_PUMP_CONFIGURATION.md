@@ -51,8 +51,7 @@ La configurazione EMP usa:
 
 | Elemento | Valore |
 |---|---:|
-| Magic di configurazione | `0xE6A5` |
-| Versione configurazione | `2` |
+| Versione layout EEPROM globale | `34` |
 | Flag predefiniti | `0x2E` |
 | Pompa globalmente abilitata al primo avvio | No |
 | Closed-loop predisposto | Sì |
@@ -61,9 +60,9 @@ La configurazione EMP usa:
 | Funzionamento durante cranking | Sì |
 | Hot boot recovery | No |
 
-Quando magic o versione non corrispondono, `opf_core` carica tutti i default
-descritti in questo documento. Il bit globale `Enable EMP pump` resta spento:
-la pompa non viene attivata automaticamente dopo un aggiornamento firmware.
+La migrazione al layout EEPROM 34 carica tutti i default EMP descritti in
+questo documento. Il bit globale `Enable EMP pump` resta spento: la pompa non
+viene attivata automaticamente dopo un aggiornamento firmware.
 
 Dopo aver verificato la configurazione in TunerStudio è necessario abilitarla
 esplicitamente e salvare/burnare la pagina.
@@ -78,16 +77,16 @@ mostra nelle unità selezionate dal progetto.
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default | Descrizione |
 |---|---|---:|---:|---:|---|
-| Enable EMP pump | `empPumpEnabled` | 106 bit 0 | Off/On | Off | Abilitazione globale. Se disabilitato, il modulo porta il comando a zero e rilascia il Power Hold eventualmente attivo. |
-| Enable after-run | `empPumpAfterRunEnabled` | 106 bit 1 | Off/On | On | Consente il raffreddamento dopo l'arresto motore. |
-| Keep pump power alive | `empPumpPowerHoldEnabled` | 106 bit 2 | Off/On | On | Usa i comandi Power Hold previsti dal controller EMP. Non mantiene alimentata la ECU. |
-| Run while cranking | `empPumpRunDuringCranking` | 106 bit 3 | Off/On | On | Considera il cranking come stato motore attivo. |
-| Recover after ECU hot reboot | `empPumpHotBootRecovery` | 106 bit 4 | Off/On | Off | Permette di iniziare un after-run dopo un riavvio ECU se la CLT è già sopra la soglia di avvio. |
-| Running control strategy | `empPumpClosedLoopEnabled` | 106 bit 5 | Curve fallback/Closed loop | Closed loop | Se spento, a motore acceso usa direttamente la curva CLT→RPM. |
-| Controller address | `empPumpControllerAddress` | 107 | 0–240 | 150 (`0x96`) | Source address CAN della pompa, usato anche per riconoscere i frame di stato. |
-| ECU source address | `empPumpSourceAddress` | 108 | 0–240 | 163 (`0xA3`) | Source address inserito nei frame di comando ECU→pompa. Deve essere diverso dall'indirizzo pompa. |
-| Engine stop debounce | `empPumpStopDebounce` | 109 | 0–25,5 s | 1,0 s | Tempo per confermare l'arresto motore prima di passare a after-run o stop. |
-| Status timeout | `empPumpStatusTimeoutSeconds` | 147 | 1–30 s | 3 s | Età massima ammessa dell'ultimo messaggio di stato principale mentre la pompa dovrebbe essere operativa. |
+| Enable EMP pump | `empPumpEnabled` | 141 bit 0 | Off/On | Off | Abilitazione globale. Se disabilitato, il modulo porta il comando a zero e rilascia il Power Hold eventualmente attivo. |
+| Enable after-run | `empPumpAfterRunEnabled` | 141 bit 1 | Off/On | On | Consente il raffreddamento dopo l'arresto motore. |
+| Keep pump power alive | `empPumpPowerHoldEnabled` | 141 bit 2 | Off/On | On | Usa i comandi Power Hold previsti dal controller EMP. Non mantiene alimentata la ECU. |
+| Run while cranking | `empPumpRunDuringCranking` | 141 bit 3 | Off/On | On | Considera il cranking come stato motore attivo. |
+| Recover after ECU hot reboot | `empPumpHotBootRecovery` | 141 bit 4 | Off/On | Off | Permette di iniziare un after-run dopo un riavvio ECU se la CLT è già sopra la soglia di avvio. |
+| Running control strategy | `empPumpClosedLoopEnabled` | 141 bit 5 | Curve fallback/Closed loop | Closed loop | Se spento, a motore acceso usa direttamente la curva CLT→RPM. |
+| Controller address | `empPumpControllerAddress` | 142 | 0–240 | 150 (`0x96`) | Source address CAN della pompa, usato anche per riconoscere i frame di stato. |
+| ECU source address | `empPumpSourceAddress` | 143 | 0–240 | 163 (`0xA3`) | Source address inserito nei frame di comando ECU→pompa. Deve essere diverso dall'indirizzo pompa. |
+| Engine stop debounce | `empPumpStopDebounce` | 144 | 0–25,5 s | 1,0 s | Tempo per confermare l'arresto motore prima di passare a after-run o stop. |
+| Status timeout | `empPumpStatusTimeoutSeconds` | 182 | 1–30 s | 3 s | Età massima ammessa dell'ultimo messaggio di stato principale mentre la pompa dovrebbe essere operativa. |
 
 Gli indirizzi sono mostrati in decimale da TunerStudio. Con i default:
 
@@ -99,10 +98,10 @@ ID comando = 0x18EF96A3
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default | Descrizione |
 |---|---|---:|---:|---:|---|
-| Minimum running speed | `empPumpMinimumRunRpm` | 110–111 | 500–12000 RPM | 1500 RPM | Limite assoluto inferiore per ogni comando non nullo. |
-| Maximum speed | `empPumpMaximumRpm` | 112–113 | 500–12000 RPM | 6000 RPM | Limite assoluto superiore del comando. |
-| CLT sensor failsafe speed | `empPumpFailsafeRpm` | 116–117 | 500–12000 RPM | 3000 RPM | Comando usato con motore attivo quando la CLT non è valida. |
-| Command ramp | `empPumpRampRpmPerSecond` | 118–119 | 0–12000 RPM/s | 2000 RPM/s | Limita la velocità di variazione del target trasmesso. Zero disabilita la rampa. |
+| Minimum running speed | `empPumpMinimumRunRpm` | 145–146 | 500–12000 RPM | 1500 RPM | Limite assoluto inferiore per ogni comando non nullo. |
+| Maximum speed | `empPumpMaximumRpm` | 147–148 | 500–12000 RPM | 6000 RPM | Limite assoluto superiore del comando. |
+| CLT sensor failsafe speed | `empPumpFailsafeRpm` | 151–152 | 500–12000 RPM | 3000 RPM | Comando usato con motore attivo quando la CLT non è valida. |
+| Command ramp | `empPumpRampRpmPerSecond` | 153–154 | 0–12000 RPM/s | 2000 RPM/s | Limita la velocità di variazione del target trasmesso. Zero disabilita la rampa. |
 
 Relazioni obbligatorie:
 
@@ -119,11 +118,11 @@ arresto a zero è anch'esso immediato.
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default | Effetto |
 |---|---|---:|---:|---:|---|
-| CLT target | `empPumpTargetTemperature` | 152 | -20–130 °C | 90 °C | Temperatura obiettivo costante del liquido. |
-| Control deadband | `empPumpTemperatureDeadband` | 153 | 0–10 °C | 1 °C | Zona attorno al target nella quale l'errore usato da P e I vale zero. |
-| Proportional gain | `empPumpProportionalGain` | 154–155 | 0–2000 RPM/°C | 250 | Correzione immediata per ogni grado di errore fuori deadband. |
-| Integral gain | `empPumpIntegralGain` | 156–157 | 0–1000 RPM/(°C·s) | 12 | Velocità con cui viene eliminato l'errore termico persistente. |
-| Integral correction limit | `empPumpIntegralLimitRpm` | 158–159 | 0–12000 RPM | 2000 RPM | Limite simmetrico positivo e negativo del contributo integrale. Deve essere ≤ Maximum speed. |
+| CLT target | `empPumpTargetTemperature` | 183 | -20–130 °C | 90 °C | Temperatura obiettivo costante del liquido. |
+| Control deadband | `empPumpTemperatureDeadband` | 184 | 0–10 °C | 1 °C | Zona attorno al target nella quale l'errore usato da P e I vale zero. |
+| Proportional gain | `empPumpProportionalGain` | 185–186 | 0–2000 RPM/°C | 250 | Correzione immediata per ogni grado di errore fuori deadband. |
+| Integral gain | `empPumpIntegralGain` | 187–188 | 0–1000 RPM/(°C·s) | 12 | Velocità con cui viene eliminato l'errore termico persistente. |
+| Integral correction limit | `empPumpIntegralLimitRpm` | 189–190 | 0–12000 RPM | 2000 RPM | Limite simmetrico positivo e negativo del contributo integrale. Deve essere ≤ Maximum speed. |
 
 L'errore interno, dopo la deadband, è:
 
@@ -173,8 +172,8 @@ I simboli sono:
 
 | Simbolo INI | Offset | Dimensione | Range TS |
 |---|---:|---:|---:|
-| `empPumpEngineRpmBins` | 174–181 | 4 × U16 | 0–20000 RPM |
-| `empPumpMinimumFlowRpmBins` | 182–189 | 4 × U16 | 500–12000 RPM |
+| `empPumpEngineRpmBins` | 205–212 | 4 × U16 | 0–20000 RPM |
+| `empPumpMinimumFlowRpmBins` | 213–220 | 4 × U16 | 500–12000 RPM |
 
 I bin del regime devono essere strettamente crescenti. Ogni valore di portata
 deve essere compreso tra `Minimum running speed` e `Maximum speed`.
@@ -191,7 +190,7 @@ ridurla sotto di esso.
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default |
 |---|---|---:|---:|---:|
-| MAP x engine RPM feed-forward | `empPumpLoadFeedForwardGain` | 162–163 | 0–2000 RPM | 220 RPM |
+| MAP x engine RPM feed-forward | `empPumpLoadFeedForwardGain` | 193–194 | 0–2000 RPM | 220 RPM |
 
 La stima di carico termico usa RPM motore e MAP:
 
@@ -220,8 +219,8 @@ CLT salga. Non modifica il target CLT.
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default |
 |---|---|---:|---:|---:|
-| IAT reference | `empPumpIatReferenceTemperature` | 164 | -40–100 °C | 20 °C |
-| IAT compensation gain | `empPumpIatCompensationGain` | 165–166 | 0–500 RPM/°C | 18 RPM/°C |
+| IAT reference | `empPumpIatReferenceTemperature` | 195 | -40–100 °C | 20 °C |
+| IAT compensation gain | `empPumpIatCompensationGain` | 196–197 | 0–500 RPM/°C | 18 RPM/°C |
 
 Formula:
 
@@ -250,9 +249,9 @@ valida il relativo contributo viene omesso e viene esposto il fault
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default |
 |---|---|---:|---:|---:|
-| Full ram-air speed | `empPumpAirflowFullSpeedKph` | 167 | 1–255 km/h | 100 km/h |
-| Ram-air RPM relief at full speed | `empPumpAirflowReliefRpm` | 168–169 | 0–12000 RPM | 600 RPM |
-| Fan equivalent air speed | `empPumpFanEquivalentSpeedKph` | 170 | 0–255 km/h | 35 km/h |
+| Full ram-air speed | `empPumpAirflowFullSpeedKph` | 198 | 1–255 km/h | 100 km/h |
+| Ram-air RPM relief at full speed | `empPumpAirflowReliefRpm` | 199–200 | 0–12000 RPM | 600 RPM |
+| Fan equivalent air speed | `empPumpFanEquivalentSpeedKph` | 201 | 0–255 km/h | 35 km/h |
 
 Il flusso d'aria equivalente è:
 
@@ -279,7 +278,7 @@ lo stato come informazione sulla capacità di raffreddamento disponibile.
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default |
 |---|---|---:|---:|---:|
-| Positive CLT slope gain | `empPumpDerivativeGain` | 160–161 | 0–200 RPM/(°C/min) | 8 |
+| Positive CLT slope gain | `empPumpDerivativeGain` | 191–192 | 0–200 RPM/(°C/min) | 8 |
 
 La pendenza viene campionata almeno ogni secondo:
 
@@ -325,9 +324,9 @@ assoluto `Minimum running speed` / `Maximum speed`.
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default |
 |---|---|---:|---:|---:|
-| Capacity-limited CLT delta | `empPumpCoolingLimitedDelta` | 171 | 1–30 °C | 3 °C |
-| Thermal-overload CLT delta | `empPumpOverloadDelta` | 172 | 1–50 °C | 8 °C |
-| Overload confirmation delay | `empPumpOverloadDelaySeconds` | 173 | 1–60 s | 5 s |
+| Capacity-limited CLT delta | `empPumpCoolingLimitedDelta` | 202 | 1–30 °C | 3 °C |
+| Thermal-overload CLT delta | `empPumpOverloadDelta` | 203 | 1–50 °C | 8 °C |
+| Overload confirmation delay | `empPumpOverloadDelaySeconds` | 204 | 1–60 s | 5 s |
 
 Lo stato `CapacityLimited` richiede contemporaneamente:
 
@@ -366,8 +365,8 @@ La curva `EMP pump after-run / fallback` ha sei punti:
 
 | Simbolo INI | Offset | Dimensione |
 |---|---:|---:|
-| `empPumpTemperatureBins` | 126–131 | 6 × U08 |
-| `empPumpRpmBins` | 132–143 | 6 × U16 |
+| `empPumpTemperatureBins` | 161–166 | 6 × U08 |
+| `empPumpRpmBins` | 167–178 | 6 × U16 |
 
 I bin temperatura devono essere strettamente crescenti.
 
@@ -385,12 +384,12 @@ Durante l'after-run il risultato della curva non può scendere sotto
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default |
 |---|---|---:|---:|---:|
-| Start temperature | `empPumpAfterRunStartTemperature` | 122 | -40–215 °C | 95 °C |
-| Stop temperature | `empPumpAfterRunStopTemperature` | 123 | -40–215 °C | 85 °C |
-| Maximum duration | `empPumpAfterRunMaximumSeconds` | 120–121 | 1–3600 s | 180 s |
-| Minimum after-run speed | `empPumpAfterRunMinimumRpm` | 114–115 | 500–12000 RPM | 1800 RPM |
-| Battery cut-off | `empPumpBatteryCutoff` | 124 | 8,0–16,0 V | 11,5 V |
-| Battery restart threshold | `empPumpBatteryResume` | 125 | 8,0–16,0 V | 12,0 V |
+| Start temperature | `empPumpAfterRunStartTemperature` | 157 | -40–215 °C | 95 °C |
+| Stop temperature | `empPumpAfterRunStopTemperature` | 158 | -40–215 °C | 85 °C |
+| Maximum duration | `empPumpAfterRunMaximumSeconds` | 155–156 | 1–3600 s | 180 s |
+| Minimum after-run speed | `empPumpAfterRunMinimumRpm` | 149–150 | 500–12000 RPM | 1800 RPM |
+| Battery cut-off | `empPumpBatteryCutoff` | 159 | 8,0–16,0 V | 11,5 V |
+| Battery restart threshold | `empPumpBatteryResume` | 160 | 8,0–16,0 V | 12,0 V |
 
 Vincoli:
 
@@ -435,8 +434,8 @@ se il firmware non ha osservato il motore acceso prima del riavvio.
 
 | Nome TunerStudio | Simbolo INI | Offset | Range TS | Default |
 |---|---|---:|---:|---:|
-| Test speed | `empPumpManualTestRpm` | 144–145 | 500–12000 RPM | 2000 RPM |
-| Test duration | `empPumpManualTestSeconds` | 146 | 1–255 s | 10 s |
+| Test speed | `empPumpManualTestRpm` | 179–180 | 500–12000 RPM | 2000 RPM |
+| Test duration | `empPumpManualTestSeconds` | 181 | 1–255 s | 10 s |
 
 Pulsanti disponibili:
 
@@ -462,15 +461,11 @@ nell'INI, ma non sono mostrati nei pannelli operativi:
 
 | Campo | Offset | Default | Uso |
 |---|---:|---:|---|
-| `empPumpUnusedFlags` | 106 bit 6–7 | 0 | Bit riservati per funzioni future. |
-| `empPumpConfigMagic` | 148–149 | `0xE6A5` | Identifica una configurazione EMP inizializzata. |
-| `empPumpConfigVersion` | 150 | 2 | Forza il caricamento dei nuovi default quando cambia il layout o la semantica. |
-| `empPumpReserved151` | 151 | 0 | Byte riservato. |
-| `Unused15_225_255` | 225–255 | tutti zero | 31 byte riservati per futuri sviluppi; gli offset 190–209 appartengono all'Idle Advance e 210–224 all'autotune IAC closed-loop. |
+| `empPumpUnusedFlags` | 141 bit 6–7 | 0 | Bit riservati per funzioni future. |
+| `Unused15_221_255` | 221–255 | tutti zero | 35 byte contigui riservati per futuri sviluppi. La compatibilità del layout è gestita dalla versione EEPROM globale 34. |
 
-Non devono essere modificati manualmente. Un magic o una versione errati
-rendono la configurazione non valida e al successivo setup causano il
-caricamento dei default correnti.
+Non devono essere modificati manualmente. Le future variazioni di layout sono
+gestite dalla versione EEPROM globale e dalla relativa migrazione.
 
 ## 6. Costanti interne non configurabili
 
@@ -698,9 +693,6 @@ canali ECU utili alla correlazione.
 La configurazione è accettata solo se tutte le condizioni seguenti sono vere:
 
 ```text
-magic == 0xE6A5
-version == 2
-
 controllerAddress <= 0xF0
 sourceAddress <= 0xF0
 controllerAddress != sourceAddress

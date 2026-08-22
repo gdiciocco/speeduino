@@ -103,9 +103,7 @@ static emp_pump::Config caponordEmpPumpConfig()
     }
   }
 
-  config.valid = (configPage15.empPumpConfigMagic == emp_pump::CONFIG_MAGIC) &&
-                 (configPage15.empPumpConfigVersion == emp_pump::CONFIG_VERSION) &&
-                 (config.controllerAddress <= 0xF0U) &&
+  config.valid = (config.controllerAddress <= 0xF0U) &&
                  (config.sourceAddress <= 0xF0U) &&
                  (config.controllerAddress != config.sourceAddress) &&
                  (config.minimumRunRpm > 0U) &&
@@ -135,74 +133,6 @@ static emp_pump::Config caponordEmpPumpConfig()
                  (config.overloadDelaySeconds > 0U) &&
                  binsAscending && engineBinsAscending && minimumFlowValid;
   return config;
-}
-
-static void caponordEmpPumpSetDefaultsIfNeeded()
-{
-  if ((configPage15.empPumpConfigMagic == emp_pump::CONFIG_MAGIC) &&
-      (configPage15.empPumpConfigVersion == emp_pump::CONFIG_VERSION))
-  {
-    return;
-  }
-
-  //Safe default: parameters are ready for inspection, but pump control remains disabled.
-  configPage15.empPumpFlags = emp_pump::AFTER_RUN_ENABLED |
-                              emp_pump::POWER_HOLD_ENABLED |
-                              emp_pump::RUN_DURING_CRANKING |
-                              emp_pump::CLOSED_LOOP_ENABLED;
-  configPage15.empPumpControllerAddress = 0x96U;
-  configPage15.empPumpSourceAddress = 0xA3U;
-  configPage15.empPumpStopDebounce100ms = 10U;
-  configPage15.empPumpMinimumRunRpm = 1500U;
-  configPage15.empPumpMaximumRpm = 6000U;
-  configPage15.empPumpAfterRunMinimumRpm = 1800U;
-  configPage15.empPumpFailsafeRpm = 3000U;
-  configPage15.empPumpRampRpmPerSecond = 2000U;
-  configPage15.empPumpAfterRunMaximumSeconds = 180U;
-  configPage15.empPumpAfterRunStartTemperature = 135U; //95 C, temperatures are stored +40
-  configPage15.empPumpAfterRunStopTemperature = 125U; //85 C
-  configPage15.empPumpBatteryCutoff10 = 115U;
-  configPage15.empPumpBatteryResume10 = 120U;
-
-  static constexpr byte temperatureBins[6] = {80U, 110U, 125U, 135U, 145U, 155U};
-  static constexpr uint16_t rpmBins[6] = {1500U, 1500U, 2000U, 3000U, 4500U, 6000U};
-  for (uint8_t index = 0U; index < 6U; index++)
-  {
-    configPage15.empPumpTemperatureBins[index] = temperatureBins[index];
-    configPage15.empPumpRpmBins[index] = rpmBins[index];
-  }
-
-  configPage15.empPumpManualTestRpm = 2000U;
-  configPage15.empPumpManualTestSeconds = 10U;
-  configPage15.empPumpStatusTimeoutSeconds = 3U;
-  configPage15.empPumpTargetTemperature = 130U; //90 C, temperatures are stored +40
-  configPage15.empPumpTemperatureDeadband = 1U;
-  configPage15.empPumpProportionalGain = 250U; //RPM per degree C outside the deadband
-  configPage15.empPumpIntegralGain = 12U; //RPM per degree C per second
-  configPage15.empPumpIntegralLimitRpm = 2000U;
-  configPage15.empPumpDerivativeGain = 8U; //RPM per degree C/minute of positive slope
-  configPage15.empPumpLoadFeedForwardGain = 220U;
-  configPage15.empPumpIatReferenceTemperature = 60U; //20 C
-  configPage15.empPumpIatCompensationGain = 18U; //RPM per degree C from reference
-  configPage15.empPumpAirflowFullSpeedKph = 100U;
-  configPage15.empPumpAirflowReliefRpm = 600U;
-  configPage15.empPumpFanEquivalentSpeedKph = 35U;
-  configPage15.empPumpCoolingLimitedDelta = 3U;
-  configPage15.empPumpOverloadDelta = 8U;
-  configPage15.empPumpOverloadDelaySeconds = 5U;
-  static constexpr uint16_t engineRpmBins[4] = {0U, 2000U, 5000U, 9000U};
-  static constexpr uint16_t minimumFlowRpmBins[4] = {1500U, 1800U, 2300U, 3000U};
-  for (uint8_t index = 0U; index < 4U; index++)
-  {
-    configPage15.empPumpEngineRpmBins[index] = engineRpmBins[index];
-    configPage15.empPumpMinimumFlowRpmBins[index] = minimumFlowRpmBins[index];
-  }
-  //Only the still reserved tail is cleared. Bytes 190-224 now hold idle
-  //ignition and IAC autotune settings, which this pump routine must not wipe.
-  for (uint8_t index = 0U; index < 31U; index++) { configPage15.Unused15_225_255[index] = 0U; }
-  configPage15.empPumpConfigMagic = emp_pump::CONFIG_MAGIC;
-  configPage15.empPumpConfigVersion = emp_pump::CONFIG_VERSION;
-  configPage15.empPumpReserved151 = 0U;
 }
 
 //Shock absorber preload controller CAN interface
@@ -456,7 +386,6 @@ static void resetPin(byte &pin)
 void setupBoard()
 {
   initialiseAll();
-  caponordEmpPumpSetDefaultsIfNeeded();
   emp_pump::reset(millis());
 
   setStatusLedOff(LED_RUNNING);

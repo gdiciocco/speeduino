@@ -17,6 +17,8 @@
 #include "scheduler.h"
 #include "units.h"
 #include "unit_testing.h"
+#include "emp_pump.h"
+#include <string.h>
 
 // Minimize flash usage of the non-performance critical code in this file.
 #pragma GCC optimize ("Os") 
@@ -109,7 +111,7 @@ TESTABLE_STATIC void setIdleAdvanceClosedLoopLearnDefaults(void) {
     configPage15.idleAdvClLearnAuthority = 0U; //Learning disabled
     configPage15.idleAdvClLearnMinTemp = temperatureAddOffset(70); //degC
     configPage15.idleAdvClGainAutotuneRequest = 0U;
-    configPage15.idleAdvClUnused195 = 0U;
+    configPage15.idleAdvClUnused111 = 0U;
 }
 
 /** @brief Safe defaults for the closed-loop idle ignition gain relay test. */
@@ -131,7 +133,7 @@ TESTABLE_STATIC void setIdleAdvanceGainAutotuneDefaults(void) {
 /** @brief Safe defaults for the closed-loop IAC relay autotune. */
 TESTABLE_STATIC void setIacGainAutotuneDefaults(void) {
     configPage15.iacGainAutotuneRequest = 0U;
-    configPage15.iacGainAutotuneUnused210 = 0U;
+    configPage15.iacGainAutotuneUnused126 = 0U;
     configPage15.iacGainTuneMinTemp = temperatureAddOffset(70);
     configPage15.iacGainTuneStep = 5U;             //PWM percent or physical stepper steps
     configPage15.iacGainTuneSettleTime = 5U;       //seconds
@@ -146,6 +148,69 @@ TESTABLE_STATIC void setIacGainAutotuneDefaults(void) {
     configPage15.iacGainTuneMaxPeriod = 200U;      //20 seconds
     configPage15.iacGainTuneMaxAttempts = 3U;
     configPage15.iacGainTuneMaxTps = 10U;          //5 percent (0.5 percent raw units)
+}
+
+/** @brief Complete EMP defaults for the compact page-15 layout.
+ *
+ * The global EEPROM data version now owns layout compatibility. EMP no longer
+ * consumes a second magic/version/reserved tuple inside the tune page.
+ */
+TESTABLE_STATIC void setEmpPumpDefaults(void) {
+    //Safe default: parameters are ready for inspection, but pump control remains disabled.
+    configPage15.empPumpFlags = emp_pump::AFTER_RUN_ENABLED |
+                                emp_pump::POWER_HOLD_ENABLED |
+                                emp_pump::RUN_DURING_CRANKING |
+                                emp_pump::CLOSED_LOOP_ENABLED;
+    configPage15.empPumpControllerAddress = 0x96U;
+    configPage15.empPumpSourceAddress = 0xA3U;
+    configPage15.empPumpStopDebounce100ms = 10U;
+    configPage15.empPumpMinimumRunRpm = 1500U;
+    configPage15.empPumpMaximumRpm = 6000U;
+    configPage15.empPumpAfterRunMinimumRpm = 1800U;
+    configPage15.empPumpFailsafeRpm = 3000U;
+    configPage15.empPumpRampRpmPerSecond = 2000U;
+    configPage15.empPumpAfterRunMaximumSeconds = 180U;
+    configPage15.empPumpAfterRunStartTemperature = temperatureAddOffset(95);
+    configPage15.empPumpAfterRunStopTemperature = temperatureAddOffset(85);
+    configPage15.empPumpBatteryCutoff10 = 115U;
+    configPage15.empPumpBatteryResume10 = 120U;
+
+    static constexpr byte temperatureBins[6] = {80U, 110U, 125U, 135U, 145U, 155U};
+    static constexpr uint16_t rpmBins[6] = {1500U, 1500U, 2000U, 3000U, 4500U, 6000U};
+    for (uint8_t index = 0U; index < 6U; index++) {
+        configPage15.empPumpTemperatureBins[index] = temperatureBins[index];
+        configPage15.empPumpRpmBins[index] = rpmBins[index];
+    }
+
+    configPage15.empPumpManualTestRpm = 2000U;
+    configPage15.empPumpManualTestSeconds = 10U;
+    configPage15.empPumpStatusTimeoutSeconds = 3U;
+    configPage15.empPumpTargetTemperature = temperatureAddOffset(90);
+    configPage15.empPumpTemperatureDeadband = 1U;
+    configPage15.empPumpProportionalGain = 250U;
+    configPage15.empPumpIntegralGain = 12U;
+    configPage15.empPumpIntegralLimitRpm = 2000U;
+    configPage15.empPumpDerivativeGain = 8U;
+    configPage15.empPumpLoadFeedForwardGain = 220U;
+    configPage15.empPumpIatReferenceTemperature = temperatureAddOffset(20);
+    configPage15.empPumpIatCompensationGain = 18U;
+    configPage15.empPumpAirflowFullSpeedKph = 100U;
+    configPage15.empPumpAirflowReliefRpm = 600U;
+    configPage15.empPumpFanEquivalentSpeedKph = 35U;
+    configPage15.empPumpCoolingLimitedDelta = 3U;
+    configPage15.empPumpOverloadDelta = 8U;
+    configPage15.empPumpOverloadDelaySeconds = 5U;
+
+    static constexpr uint16_t engineRpmBins[4] = {0U, 2000U, 5000U, 9000U};
+    static constexpr uint16_t minimumFlowRpmBins[4] = {1500U, 1800U, 2300U, 3000U};
+    for (uint8_t index = 0U; index < 4U; index++) {
+        configPage15.empPumpEngineRpmBins[index] = engineRpmBins[index];
+        configPage15.empPumpMinimumFlowRpmBins[index] = minimumFlowRpmBins[index];
+    }
+
+    for (uint8_t index = 0U; index < 35U; index++) {
+        configPage15.Unused15_221_255[index] = 0U;
+    }
 }
 
 /** @brief Defaults for the closed-loop idle ignition controller.
@@ -272,9 +337,58 @@ TESTABLE_STATIC void upgradeV32toV33(void) {
     }
 }
 
+/** V34 compacts page 15.
+ *
+ * Preserve every Idle Advance sub-block that existed in the original version,
+ * and preserve IAC autotune when upgrading an original V33 tune, before their
+ * old offsets are repurposed for EMP. Missing fields receive current defaults.
+ * EMP itself is deliberately reset because the old block was never deployed.
+ */
+TESTABLE_STATIC void upgradeV33toV34(uint8_t originalVersion) {
+    if(loadEEPROMVersion() == 33U)
+    {
+        constexpr uint8_t PAGE15_CONFIG_TS_OFFSET = 80U;
+        constexpr uint8_t OLD_IDLE_ADV_TS_OFFSET = 190U;
+        constexpr uint8_t OLD_IAC_TUNE_TS_OFFSET = 210U;
+        constexpr uint8_t NEW_IDLE_ADV_TS_OFFSET = 106U;
+        constexpr uint8_t NEW_IAC_TUNE_TS_OFFSET = 126U;
+        constexpr uint8_t IDLE_ADV_BYTES = 20U;
+        constexpr uint8_t IAC_TUNE_BYTES = 15U;
+        const uint8_t idleBytesToPreserve = (originalVersion >= 32U) ? 20U :
+                                            (originalVersion >= 30U) ? 8U :
+                                            (originalVersion == 29U) ? 6U : 0U;
+        const bool preserveIacAutotune = originalVersion == 33U;
+        byte idleAdvance[IDLE_ADV_BYTES];
+        byte iacAutotune[IAC_TUNE_BYTES];
+        byte *rawPage15 = reinterpret_cast<byte *>(&configPage15);
+
+        //Capture the old tail before the new EMP block reuses bytes 190-220.
+        if(idleBytesToPreserve > 0U) {
+            (void)memcpy(idleAdvance, rawPage15 + OLD_IDLE_ADV_TS_OFFSET - PAGE15_CONFIG_TS_OFFSET, idleBytesToPreserve);
+        }
+        if(preserveIacAutotune) {
+            (void)memcpy(iacAutotune, rawPage15 + OLD_IAC_TUNE_TS_OFFSET - PAGE15_CONFIG_TS_OFFSET, IAC_TUNE_BYTES);
+        }
+
+        setIdleAdvanceClosedLoopDefaults();
+        setIacGainAutotuneDefaults();
+        if(idleBytesToPreserve > 0U) {
+            (void)memcpy(rawPage15 + NEW_IDLE_ADV_TS_OFFSET - PAGE15_CONFIG_TS_OFFSET, idleAdvance, idleBytesToPreserve);
+        }
+        if(preserveIacAutotune) {
+            (void)memcpy(rawPage15 + NEW_IAC_TUNE_TS_OFFSET - PAGE15_CONFIG_TS_OFFSET, iacAutotune, IAC_TUNE_BYTES);
+        }
+        setEmpPumpDefaults();
+
+        saveAllPages();
+        saveEEPROMVersion(34);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    33
+  #define CURRENT_DATA_VERSION    34
+  const uint8_t versionAtBoot = loadEEPROMVersion();
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
 
@@ -1061,6 +1175,7 @@ void doUpdates(void)
   //Move this #endif to only do latest updates to safe ROM space on small devices.
   #endif
   upgradeV32toV33();
+  upgradeV33toV34(versionAtBoot);
 
   //Final check is always for 255 and 0 (Brand new arduino)
   if( (loadEEPROMVersion() == 0) || (loadEEPROMVersion() == 255) )
@@ -1069,6 +1184,7 @@ void doUpdates(void)
     configPage2.idleAdvEnabled = IDLEADVANCE_MODE_OFF;
     setIdleAdvanceClosedLoopDefaults();
     setIacGainAutotuneDefaults();
+    setEmpPumpDefaults();
 
     //Programmable outputs added. Set all to disabled
     configPage13.outputPin[0] = 0;

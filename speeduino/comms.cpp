@@ -72,7 +72,7 @@ static constexpr uint8_t SEND_OUTPUT_CHANNELS = 48U; //!< Code for the "send out
 /// @{
 static constexpr byte serialVersion[] PROGMEM = {SERIAL_RC_OK, '0', '0', '2'};
 static constexpr byte canId[] PROGMEM = {SERIAL_RC_OK, 0};
-static constexpr byte codeVersion[] PROGMEM = { SERIAL_RC_OK, 'C','a','p','o','n','o','r','d',' ','E','C','U',' ','2','0','2','6','0','2'} ; //Note no null terminator in array and status variable at the start
+static constexpr byte codeVersion[] PROGMEM = { SERIAL_RC_OK, 'C','a','p','o','n','o','r','d',' ','E','C','U',' ','2','0','2','6','0','3'} ; //Note no null terminator in array and status variable at the start
 static constexpr byte productString[] PROGMEM = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '5', '.', '0', '4', '-', 'd', 'e', 'v'};
 //static constexpr byte codeVersion[] PROGMEM = { SERIAL_RC_OK, 's','p','e','e','d','u','i','n','o',' ','2','0','2','5','0','1'} ; //Note no null terminator in array and status variable at the start
 //static constexpr byte productString[] PROGMEM = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '5', '.', '0', '1'};

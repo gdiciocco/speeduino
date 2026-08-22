@@ -658,7 +658,7 @@ void legacySerialHandler(byte cmd, Stream &targetPort, SerialStatus &targetStatu
       break;
 
     case 'Q': // send code version
-      targetPort.print(F("Caponord ECU 202602"));
+      targetPort.print(F("Caponord ECU 202603"));
       break;
 
     case 'r': //New format for the optimised OutputChannels
@@ -690,7 +690,7 @@ void legacySerialHandler(byte cmd, Stream &targetPort, SerialStatus &targetStatu
       break;
 
     case 'S': // send code version
-      targetPort.print(F("Caponord ECU 202601"));
+      targetPort.print(F("Caponord ECU 202603"));
       break;
   }
 }

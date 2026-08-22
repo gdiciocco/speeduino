@@ -943,7 +943,54 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-151 - Caponord EMP coolant pump
+  //Bytes 106-111 - Closed-loop idle ignition control
+  byte idleAdvClCenter;      //Base (feed forward) idle advance the loop works around, offset by 40 degrees
+  byte idleAdvClDeadband;    //RPM error below which the proportional term and the trim are inactive
+  byte idleAdvClRpmFilter;   //Low pass strength applied to RPM before differentiating it, %
+  byte idleAdvClTrimRate;    //Seconds to trim the center by one degree at 100 RPM of error. 0 disables the trim
+  byte idleAdvClTrimRange;   //Maximum deviation of the learned trim from the configured center, degrees
+
+  byte idleAdvClTrimRequiresIacLimit : 1; //Only trim while the IAC closed loop has run out of authority
+  byte idleAdvClGainAutotuneRequest : 1;  //One-shot request: run the relay gain autotune at the next settled warm idle. Cleared by the firmware on success
+  byte idleAdvClUnused111 : 6;
+
+  //Bytes 112-113 - Closed-loop idle ignition center autotune
+  byte idleAdvClLearnAuthority; //Maximum degrees the learned center may move from its power-on value. 0 disables learning
+  byte idleAdvClLearnMinTemp;   //Coolant temperature below which the center is not learned, offset by 40 degrees
+
+  //Bytes 114-125 - Closed-loop idle ignition gain autotune setup
+  byte idleAdvClGainTuneStep;          //Relay step either side of center, degrees
+  byte idleAdvClGainTuneSettleTime;    //Settled idle required before starting the relay, seconds
+  byte idleAdvClGainTuneSettleBand;    //Maximum absolute RPM error while settling
+  byte idleAdvClGainTuneHysteresis;    //Relay switching hysteresis, RPM. 0 uses max(idle deadband, 10 RPM)
+  byte idleAdvClGainTuneDiscard;       //Initial half cycles excluded from the measurement
+  byte idleAdvClGainTuneMeasure;       //Half cycles averaged for the result
+  byte idleAdvClGainTuneTimeout;       //Maximum time without a relay crossing, seconds
+  byte idleAdvClGainTuneRunawayDiv10;  //Absolute RPM error that aborts the test, divided by 10
+  byte idleAdvClGainTuneMinAmplitude;  //Minimum measured oscillation amplitude, RPM
+  byte idleAdvClGainTuneMinPeriod;     //Minimum accepted full period, 0.1 seconds
+  byte idleAdvClGainTuneMaxPeriod;     //Maximum accepted full period, 0.1 seconds
+  byte idleAdvClGainTuneMaxAttempts;   //Attempts allowed per request and power cycle
+
+  //Bytes 126-140 - Closed-loop IAC gain autotune setup
+  byte iacGainAutotuneRequest : 1; //One-shot request. Cleared after valid gains have been stored
+  byte iacGainAutotuneUnused126 : 7;
+  byte iacGainTuneMinTemp;          //Minimum coolant temperature, offset by 40 degrees
+  byte iacGainTuneStep;             //Relay amplitude: PWM percent or physical stepper steps
+  byte iacGainTuneSettleTime;       //Settled idle required before starting, seconds
+  byte iacGainTuneSettleBand;       //Maximum absolute RPM error while settling
+  byte iacGainTuneHysteresis;       //Relay switching hysteresis, RPM. 0 selects 10 RPM
+  byte iacGainTuneDiscard;          //Initial half cycles excluded from the measurement
+  byte iacGainTuneMeasure;          //Half cycles averaged for the result
+  byte iacGainTuneTimeout;          //Maximum time without a relay crossing, seconds
+  byte iacGainTuneRunawayDiv10;     //Absolute RPM error that aborts the test, divided by 10
+  byte iacGainTuneMinAmplitude;     //Minimum measured oscillation amplitude, RPM
+  byte iacGainTuneMinPeriod;        //Minimum accepted full period, 0.1 seconds
+  byte iacGainTuneMaxPeriod;        //Maximum accepted full period, 0.1 seconds
+  byte iacGainTuneMaxAttempts;      //Attempts allowed per request and power cycle
+  byte iacGainTuneMaxTps;           //Maximum TPS during the test, 0.5 percent
+
+  //Bytes 141-182 - Caponord EMP coolant pump
   byte empPumpFlags;
   byte empPumpControllerAddress;
   byte empPumpSourceAddress;
@@ -963,11 +1010,8 @@ struct config15 : public config_page_t {
   uint16_t empPumpManualTestRpm;
   byte empPumpManualTestSeconds;
   byte empPumpStatusTimeoutSeconds;
-  uint16_t empPumpConfigMagic;
-  byte empPumpConfigVersion;
-  byte empPumpReserved151;
 
-  //Bytes 152-189 - Caponord EMP closed-loop thermal control
+  //Bytes 183-220 - Caponord EMP closed-loop thermal control
   byte empPumpTargetTemperature;
   byte empPumpTemperatureDeadband;
   uint16_t empPumpProportionalGain;
@@ -986,55 +1030,8 @@ struct config15 : public config_page_t {
   uint16_t empPumpEngineRpmBins[4];
   uint16_t empPumpMinimumFlowRpmBins[4];
 
-  //Bytes 190-195 - Closed-loop idle ignition control
-  byte idleAdvClCenter;      //Base (feed forward) idle advance the loop works around, offset by 40 degrees
-  byte idleAdvClDeadband;    //RPM error below which the proportional term and the trim are inactive
-  byte idleAdvClRpmFilter;   //Low pass strength applied to RPM before differentiating it, %
-  byte idleAdvClTrimRate;    //Seconds to trim the center by one degree at 100 RPM of error. 0 disables the trim
-  byte idleAdvClTrimRange;   //Maximum deviation of the learned trim from the configured center, degrees
-
-  byte idleAdvClTrimRequiresIacLimit : 1; //Only trim while the IAC closed loop has run out of authority
-  byte idleAdvClGainAutotuneRequest : 1;  //One-shot request: run the relay gain autotune at the next settled warm idle. Cleared by the firmware on success
-  byte idleAdvClUnused195 : 6;
-
-  //Bytes 196-197 - Closed-loop idle ignition center autotune
-  byte idleAdvClLearnAuthority; //Maximum degrees the learned center may move from its power-on value. 0 disables learning
-  byte idleAdvClLearnMinTemp;   //Coolant temperature below which the center is not learned, offset by 40 degrees
-
-  //Bytes 198-209 - Closed-loop idle ignition gain autotune setup
-  byte idleAdvClGainTuneStep;          //Relay step either side of center, degrees
-  byte idleAdvClGainTuneSettleTime;    //Settled idle required before starting the relay, seconds
-  byte idleAdvClGainTuneSettleBand;    //Maximum absolute RPM error while settling
-  byte idleAdvClGainTuneHysteresis;    //Relay switching hysteresis, RPM. 0 uses max(idle deadband, 10 RPM)
-  byte idleAdvClGainTuneDiscard;       //Initial half cycles excluded from the measurement
-  byte idleAdvClGainTuneMeasure;       //Half cycles averaged for the result
-  byte idleAdvClGainTuneTimeout;       //Maximum time without a relay crossing, seconds
-  byte idleAdvClGainTuneRunawayDiv10;  //Absolute RPM error that aborts the test, divided by 10
-  byte idleAdvClGainTuneMinAmplitude;  //Minimum measured oscillation amplitude, RPM
-  byte idleAdvClGainTuneMinPeriod;     //Minimum accepted full period, 0.1 seconds
-  byte idleAdvClGainTuneMaxPeriod;     //Maximum accepted full period, 0.1 seconds
-  byte idleAdvClGainTuneMaxAttempts;   //Attempts allowed per request and power cycle
-
-  //Bytes 210-224 - Closed-loop IAC gain autotune setup
-  byte iacGainAutotuneRequest : 1; //One-shot request. Cleared after valid gains have been stored
-  byte iacGainAutotuneUnused210 : 7;
-  byte iacGainTuneMinTemp;          //Minimum coolant temperature, offset by 40 degrees
-  byte iacGainTuneStep;             //Relay amplitude: PWM percent or physical stepper steps
-  byte iacGainTuneSettleTime;       //Settled idle required before starting, seconds
-  byte iacGainTuneSettleBand;       //Maximum absolute RPM error while settling
-  byte iacGainTuneHysteresis;       //Relay switching hysteresis, RPM. 0 selects 10 RPM
-  byte iacGainTuneDiscard;          //Initial half cycles excluded from the measurement
-  byte iacGainTuneMeasure;          //Half cycles averaged for the result
-  byte iacGainTuneTimeout;          //Maximum time without a relay crossing, seconds
-  byte iacGainTuneRunawayDiv10;     //Absolute RPM error that aborts the test, divided by 10
-  byte iacGainTuneMinAmplitude;     //Minimum measured oscillation amplitude, RPM
-  byte iacGainTuneMinPeriod;        //Minimum accepted full period, 0.1 seconds
-  byte iacGainTuneMaxPeriod;        //Maximum accepted full period, 0.1 seconds
-  byte iacGainTuneMaxAttempts;      //Attempts allowed per request and power cycle
-  byte iacGainTuneMaxTps;           //Maximum TPS during the test, 0.5 percent
-
-  //Bytes 225-255
-  byte Unused15_225_255[31];
+  //Bytes 221-255 - Contiguous growth area for future page 15 settings
+  byte Unused15_221_255[35];
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 
