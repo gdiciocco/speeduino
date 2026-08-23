@@ -69,6 +69,7 @@ static constexpr uint16_t TS_CMD_VSS_RATIO3 = 39171U;
 static constexpr uint16_t TS_CMD_VSS_RATIO4 = 39172U;
 static constexpr uint16_t TS_CMD_VSS_RATIO5 = 39173U;
 static constexpr uint16_t TS_CMD_VSS_RATIO6 = 39174U;
+static constexpr uint16_t TS_CMD_VEHICLE_TRIP_RESET = 39175U;
 
 /* the maximum id number is 65,535 */
 bool TS_CommandButtonsHandler(uint16_t buttonCommand);

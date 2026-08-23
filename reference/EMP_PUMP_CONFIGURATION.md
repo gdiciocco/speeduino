@@ -462,7 +462,9 @@ nell'INI, ma non sono mostrati nei pannelli operativi:
 | Campo | Offset | Default | Uso |
 |---|---:|---:|---|
 | `empPumpUnusedFlags` | 141 bit 6–7 | 0 | Bit riservati per funzioni future. |
-| `Unused15_221_255` | 221–255 | tutti zero | 35 byte contigui riservati per futuri sviluppi. La compatibilità del layout è gestita dalla versione EEPROM globale 34. |
+| `vehicleDistanceSource` / `gpsSpeedAuxChannel` | 221–222 | VSS / Aux0 | Selezione sorgente del contachilometri; configurata nel pannello dedicato. |
+| `vehicleOdometerDeciKm` / `vehicleTripDeciKm` | 223–230 | 0 | Contatori persistenti in passi da 0,1 km; configurati nel pannello dedicato. |
+| `Unused15_231_255` | 231–255 | tutti zero | 25 byte contigui riservati per futuri sviluppi. La compatibilità del layout è gestita dalla versione EEPROM globale 35. |
 
 Non devono essere modificati manualmente. Le future variazioni di layout sono
 gestite dalla versione EEPROM globale e dalla relativa migrazione.

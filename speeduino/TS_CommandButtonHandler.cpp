@@ -17,6 +17,7 @@
 #endif
 #include "scheduler_fuel_controller.h"
 #include "scheduler_ignition_controller.h"
+#include "vehicle_distance.h"
 
 static bool commandRequiresStoppedEngine(uint16_t buttonCommand)
 {
@@ -335,6 +336,10 @@ bool TS_CommandButtonsHandler(uint16_t buttonCommand)
         savePage(1); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
         currentStatus.vssUiRefresh = true;
       }
+      break;
+
+    case TS_CMD_VEHICLE_TRIP_RESET:
+      resetVehicleTrip();
       break;
 // LCOV_EXCL_START
     //STM32 Commands

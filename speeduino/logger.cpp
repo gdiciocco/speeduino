@@ -16,6 +16,7 @@
 #include "scheduler_fuel_controller.h"
 #if defined(CAPONORD_BOARD)
   #include "opf_core.h"
+  #include "vehicle_distance.h"
 #endif
 #if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
   #include "src/BackupSram/BackupSramAsEEPROM.h"
@@ -220,7 +221,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 9U; break; //Custom block layout version
+    case 2: statusValue = 10U; break; //Custom block layout version
     //Backup SRAM integrity status in bits 0-3 (see buildStorageStatus). Bits 4-7 spare (dashboard inputs moved to their own byte in layout v8)
     case 3: statusValue = buildStorageStatus(); break;
     case 4: statusValue = lowByte(currentStatus.RPM); break;
@@ -301,6 +302,16 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     //Dashboard digital inputs D5-D7, see the DASH_INPUT_* masks in opf_core.h (bits 3-7 spare for future inputs)
     case 79: statusValue = currentStatus.dashInputs; break;
     case 80: statusValue = currentStatus.fuelLevel; break;
+    case 81: statusValue = (byte)(getVehicleOdometerDeciKm()); break;
+    case 82: statusValue = (byte)(getVehicleOdometerDeciKm() >> 8U); break;
+    case 83: statusValue = (byte)(getVehicleOdometerDeciKm() >> 16U); break;
+    case 84: statusValue = (byte)(getVehicleOdometerDeciKm() >> 24U); break;
+    case 85: statusValue = (byte)(getVehicleTripDeciKm()); break;
+    case 86: statusValue = (byte)(getVehicleTripDeciKm() >> 8U); break;
+    case 87: statusValue = (byte)(getVehicleTripDeciKm() >> 16U); break;
+    case 88: statusValue = (byte)(getVehicleTripDeciKm() >> 24U); break;
+    case 89: statusValue = lowByte(getVehicleDistanceSpeedKph()); break;
+    case 90: statusValue = highByte(getVehicleDistanceSpeedKph()); break;
     default: statusValue = 0; break;
   }
 

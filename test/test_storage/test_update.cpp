@@ -18,6 +18,7 @@ extern void upgradeV30toV31(void);
 extern void upgradeV31toV32(void);
 extern void upgradeV32toV33(void);
 extern void upgradeV33toV34(uint8_t originalVersion);
+extern void upgradeV34toV35(void);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -296,7 +297,11 @@ static void test_upgradeV33toV34_compacts_page15_and_preserves_idle_settings(voi
     TEST_ASSERT_EQUAL_UINT8(0U, configPage15.empPumpFlags & emp_pump::ENABLED);
     TEST_ASSERT_EQUAL_UINT16(1500U, configPage15.empPumpMinimumRunRpm);
     TEST_ASSERT_EQUAL_UINT16(6000U, configPage15.empPumpMaximumRpm);
-    TEST_ASSERT_EACH_EQUAL_UINT8(0U, configPage15.Unused15_221_255, 35U);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.vehicleDistanceSource);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.gpsSpeedAuxChannel);
+    TEST_ASSERT_EQUAL_UINT32(0U, configPage15.vehicleOdometerDeciKm);
+    TEST_ASSERT_EQUAL_UINT32(0U, configPage15.vehicleTripDeciKm);
+    TEST_ASSERT_EACH_EQUAL_UINT8(0U, configPage15.Unused15_231_255, 25U);
 }
 
 static void test_upgradeV33toV34_preserves_v32_idle_and_defaults_new_iac(void)
@@ -323,6 +328,25 @@ static void test_upgradeV33toV34_preserves_v32_idle_and_defaults_new_iac(void)
     TEST_ASSERT_EQUAL_UINT8(10U, configPage15.iacGainTuneMaxTps);
 }
 
+static void test_upgradeV34toV35_initialises_vehicle_distance(void)
+{
+    configPage15.vehicleDistanceSource = UINT8_MAX;
+    configPage15.gpsSpeedAuxChannel = UINT8_MAX;
+    configPage15.vehicleOdometerDeciKm = UINT32_MAX;
+    configPage15.vehicleTripDeciKm = UINT32_MAX;
+    (void)memset(configPage15.Unused15_231_255, UINT8_MAX,
+                 sizeof(configPage15.Unused15_231_255));
+    setStorageAPI(setupEepromReadApi(34U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV34toV35();
+
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.vehicleDistanceSource);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.gpsSpeedAuxChannel);
+    TEST_ASSERT_EQUAL_UINT32(0U, configPage15.vehicleOdometerDeciKm);
+    TEST_ASSERT_EQUAL_UINT32(0U, configPage15.vehicleTripDeciKm);
+    TEST_ASSERT_EACH_EQUAL_UINT8(0U, configPage15.Unused15_231_255, 25U);
+}
+
 void test_update(void) {
     SET_UNITY_FILENAME() {
         RUN_TEST(test_updateTableU16toU8);
@@ -337,5 +361,6 @@ void test_update(void) {
         RUN_TEST(test_upgradeV32toV33_initialises_iac_gain_autotune_setup);
         RUN_TEST(test_upgradeV33toV34_compacts_page15_and_preserves_idle_settings);
         RUN_TEST(test_upgradeV33toV34_preserves_v32_idle_and_defaults_new_iac);
+        RUN_TEST(test_upgradeV34toV35_initialises_vehicle_distance);
     }
 }

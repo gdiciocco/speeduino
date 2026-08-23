@@ -59,6 +59,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "decoder_init.h"
 #include "src/pins/pinMapping.h"
 #include "resetControl.h"
+#include "vehicle_distance.h"
 #include "scheduler_ignition_controller.h"
 #include "src/controllers/launch/launchController.h"
 #include "src/controllers/fuelPump/fuelPumpController.h"
@@ -302,6 +303,7 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
     }
     if(BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ)) //10 hertz
     {
+      updateVehicleDistance();
       checkProgrammableIO(currentStatus, configPage13);
       
       // Air conditioning control

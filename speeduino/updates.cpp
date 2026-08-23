@@ -150,6 +150,17 @@ TESTABLE_STATIC void setIacGainAutotuneDefaults(void) {
     configPage15.iacGainTuneMaxTps = 10U;          //5 percent (0.5 percent raw units)
 }
 
+/** @brief Safe defaults for the odometer and trip meter. */
+TESTABLE_STATIC void setVehicleDistanceDefaults(void) {
+    configPage15.vehicleDistanceSource = 0U; //VSS
+    configPage15.gpsSpeedAuxChannel = 0U;
+    configPage15.vehicleOdometerDeciKm = 0U;
+    configPage15.vehicleTripDeciKm = 0U;
+    for (uint8_t index = 0U; index < 25U; index++) {
+        configPage15.Unused15_231_255[index] = 0U;
+    }
+}
+
 /** @brief Complete EMP defaults for the compact page-15 layout.
  *
  * The global EEPROM data version now owns layout compatibility. EMP no longer
@@ -208,9 +219,7 @@ TESTABLE_STATIC void setEmpPumpDefaults(void) {
         configPage15.empPumpMinimumFlowRpmBins[index] = minimumFlowRpmBins[index];
     }
 
-    for (uint8_t index = 0U; index < 35U; index++) {
-        configPage15.Unused15_221_255[index] = 0U;
-    }
+    setVehicleDistanceDefaults();
 }
 
 /** @brief Defaults for the closed-loop idle ignition controller.
@@ -385,9 +394,19 @@ TESTABLE_STATIC void upgradeV33toV34(uint8_t originalVersion) {
     }
 }
 
+/** V35 adds persistent odometer/trip settings in previously unused page-15 bytes. */
+TESTABLE_STATIC void upgradeV34toV35(void) {
+    if(loadEEPROMVersion() == 34U)
+    {
+        setVehicleDistanceDefaults();
+        saveAllPages();
+        saveEEPROMVersion(35U);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    34
+  #define CURRENT_DATA_VERSION    35
   const uint8_t versionAtBoot = loadEEPROMVersion();
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
@@ -1176,6 +1195,7 @@ void doUpdates(void)
   #endif
   upgradeV32toV33();
   upgradeV33toV34(versionAtBoot);
+  upgradeV34toV35();
 
   //Final check is always for 255 and 0 (Brand new arduino)
   if( (loadEEPROMVersion() == 0) || (loadEEPROMVersion() == 255) )
@@ -1185,6 +1205,7 @@ void doUpdates(void)
     setIdleAdvanceClosedLoopDefaults();
     setIacGainAutotuneDefaults();
     setEmpPumpDefaults();
+    setVehicleDistanceDefaults();
 
     //Programmable outputs added. Set all to disabled
     configPage13.outputPin[0] = 0;

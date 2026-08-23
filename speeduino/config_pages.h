@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 #include "board_definition.h" // Needed for struct packing.
 #include "load_source.h"
@@ -1030,9 +1031,19 @@ struct config15 : public config_page_t {
   uint16_t empPumpEngineRpmBins[4];
   uint16_t empPumpMinimumFlowRpmBins[4];
 
-  //Bytes 221-255 - Contiguous growth area for future page 15 settings
-  byte Unused15_221_255[35];
+  //Bytes 221-230 - Vehicle odometer / trip meter
+  byte vehicleDistanceSource;       //0 = VSS, 1 = GPS speed supplied through an Aux input
+  byte gpsSpeedAuxChannel;          //Aux input containing GPS speed in km/h
+  uint32_t vehicleOdometerDeciKm;   //Persistent total distance, 0.1 km/count
+  uint32_t vehicleTripDeciKm;       //Persistent trip distance, 0.1 km/count
+
+  //Bytes 231-255 - Contiguous growth area for future page 15 settings
+  byte Unused15_231_255[25];
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 
 static_assert(sizeof(config15) == 176U, "Page 15 configuration layout must remain 176 bytes");
+static_assert(offsetof(config15, vehicleDistanceSource) == 141U, "Page 15 / INI odometer source offset mismatch");
+static_assert(offsetof(config15, gpsSpeedAuxChannel) == 142U, "Page 15 / INI GPS Aux offset mismatch");
+static_assert(offsetof(config15, vehicleOdometerDeciKm) == 143U, "Page 15 / INI odometer offset mismatch");
+static_assert(offsetof(config15, vehicleTripDeciKm) == 147U, "Page 15 / INI trip offset mismatch");

@@ -2,7 +2,9 @@
 #include "globals.h"
 #include "logger.h"
 #include "sensors.h"
+#include "storage.h"
 #include "TS_CommandButtonHandler.h"
+#include "vehicle_distance.h"
 #include "scheduledIO_direct_inj.h"
 #include "scheduledIO_direct_ign.h"
 
@@ -228,6 +230,19 @@ static void test_vss_60km_external(void)
     TEST_ASSERT_TRUE(TS_CommandButtonsHandler(TS_CMD_VSS_60KMH));
     TEST_ASSERT_TRUE(currentStatus.vssUiRefresh);
     TEST_ASSERT_NOT_EQUAL_UINT16(0, configPage2.vssPulsesPerKm);
+}
+
+static void test_vehicle_trip_reset_command(void)
+{
+    configPage15.vehicleOdometerDeciKm = 1234U;
+    configPage15.vehicleTripDeciKm = 56U;
+    initialiseVehicleDistance();
+    setEepromWritePending(false);
+
+    TEST_ASSERT_TRUE(TS_CommandButtonsHandler(TS_CMD_VEHICLE_TRIP_RESET));
+    TEST_ASSERT_EQUAL_UINT32(1234U, configPage15.vehicleOdometerDeciKm);
+    TEST_ASSERT_EQUAL_UINT32(0U, configPage15.vehicleTripDeciKm);
+    TEST_ASSERT_TRUE(isEepromWritePending());
 }
 
 // ============================ Per-channel INJ/IGN ===========================
@@ -525,6 +540,7 @@ void testTSCommandHandler(void)
     RUN_TEST(test_handler_vss_ratio6_no_vss_no_change);
     RUN_TEST(test_vss_60km_internal_pin);
     RUN_TEST(test_vss_60km_external);
+    RUN_TEST(test_vehicle_trip_reset_command);
 
     test_handler_inj1();
 #if INJ_CHANNELS >= 2
