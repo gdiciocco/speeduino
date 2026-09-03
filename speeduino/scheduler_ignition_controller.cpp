@@ -486,7 +486,12 @@ END_LTO_INLINE()
 TESTABLE_INLINE_STATIC void applyChannelOverDwellProtection(IgnitionSchedule &schedule, uint32_t now, uint32_t dwellLimit_uS) {
   //Check first whether each spark output is currently on. Only check it's dwell time if it is
   ATOMIC() {
-    if (isRunning(schedule) && hasIntervalElapsed(now, schedule._startTime, dwellLimit_uS)) {
+    //The signed comparison matters here: _startTime is written by the ignition compare ISR,
+    //which on some platforms preempts the caller (E.g. on STM32 the schedule timers sit at
+    //NVIC priority 7, the 1ms tick that samples now at 9). A coil that starts charging in
+    //the window between now being sampled and this check has _startTime > now, and an
+    //unsigned elapsed time would underflow to ~UINT32_MAX and cut the spark immediately.
+    if (isRunning(schedule) && hasIntervalElapsedSigned(now, schedule._startTime, dwellLimit_uS)) {
       moveToNextState(schedule); //Call the end function to disable the spark output
     }
   }

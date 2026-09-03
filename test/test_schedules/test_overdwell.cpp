@@ -141,6 +141,31 @@ static void test_applyChannelOverDwellProtection_running_timeout_rollover(void) 
   TEST_ASSERT_EQUAL(1, counter); // Dwell limit exceeded: the coil must be cut
 }
 
+static void test_applyChannelOverDwellProtection_running_startAfterNow(void) {
+  raw_counter_t counterReg = {101};
+  raw_compare_t compareReg = {100};
+  IgnitionSchedule schedule(counterReg, compareReg);
+
+  counter = 0;
+  setCallbacks(schedule, counter_callback, counter_callback);
+
+  schedule._status = RUNNING;
+  // The coil started charging *after* now was sampled: on platforms where the
+  // ignition compare ISR preempts the caller (E.g. STM32), _startTime can be a
+  // few uS ahead of now. An unsigned elapsed time underflows to ~UINT32_MAX here
+  // and cuts a coil that has just started charging, producing a dead spark.
+  schedule._startTime = 2001;
+  applyChannelOverDwellProtection(schedule, 2000, 1000);
+  TEST_ASSERT_EQUAL(0, counter); // Dwell has not even started: the coil must not be cut
+
+  // Same case straddling the micros() wrap: now has wrapped, _startTime has not
+  counter = 0;
+  schedule._status = RUNNING;
+  schedule._startTime = UINT32_MAX;
+  applyChannelOverDwellProtection(schedule, UINT32_MAX - 1U, 1000U);
+  TEST_ASSERT_EQUAL(0, counter);
+}
+
 void test_overdwell(void)
 {
   SET_UNITY_FILENAME() {
@@ -151,5 +176,6 @@ void test_overdwell(void)
     RUN_TEST_P(test_applyChannelOverDwellProtection_running_timeout);
     RUN_TEST_P(test_applyChannelOverDwellProtection_running_notimeout_rollover);
     RUN_TEST_P(test_applyChannelOverDwellProtection_running_timeout_rollover);
+    RUN_TEST_P(test_applyChannelOverDwellProtection_running_startAfterNow);
   }
 }

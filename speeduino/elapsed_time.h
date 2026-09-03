@@ -13,7 +13,7 @@
  * comparisons remain correct provided the real elapsed time is less than one
  * full counter period (I.e. the check runs at least once per counter period).
  *
- * Both functions take @c now as a parameter rather than calling micros()
+ * All functions take @c now as a parameter rather than calling micros()
  * internally so that callers can be unit tested with arbitrary counter
  * values, including values either side of the wrap point.
  */
@@ -48,4 +48,25 @@ static inline uint32_t timeElapsed(uint32_t now, uint32_t start) {
  */
 static inline bool hasIntervalElapsed(uint32_t now, uint32_t start, uint32_t interval) {
   return timeElapsed(now, start) >= interval;
+}
+
+/**
+ * @brief As hasIntervalElapsed(), but also returns false when @p start is *after* @p now.
+ *
+ * hasIntervalElapsed() assumes @p start was taken before @p now. When that does not
+ * hold - E.g. @p start is written by an ISR that preempts the code which sampled
+ * @p now - the modular subtraction underflows to a value near UINT32_MAX and every
+ * interval looks elapsed. Comparing as signed keeps the rollover safety (the
+ * subtraction is still modular) while treating a start in the future as "not yet
+ * elapsed": the usable range becomes +/-INT32_MAX ticks either side of @p start,
+ * I.e. ~35 minutes for a microsecond counter.
+ *
+ * @param now The current counter reading (E.g. micros())
+ * @param start The counter reading taken when the interval started
+ * @param interval The minimum number of ticks that must have elapsed. Must be <= INT32_MAX
+ * @return true if at least @p interval ticks have elapsed since @p start; false if
+ *         the interval has not elapsed or @p start is in the future
+ */
+static inline bool hasIntervalElapsedSigned(uint32_t now, uint32_t start, uint32_t interval) {
+  return (int32_t)timeElapsed(now, start) >= (int32_t)interval;
 }
