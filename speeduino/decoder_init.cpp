@@ -20,7 +20,7 @@ static decoder_init_func_t getDecoderInitFunc(uint8_t decoderIndex)
 #if !defined(SMALL_FLASH_DECODER) 
   // This array must be in the same order as the DECODER_ #defines (I.e. DECODER_MISSING_TOOTH etc.)
   // and therefore in the same order as the INI
-  static constexpr decoder_init_func_t initialisers[DECODER_MAX] PROGMEM = {
+  static constexpr decoder_init_func_t initialisers[DECODER_MAX] = {
     triggerSetup_missingTooth,
     triggerSetup_BasicDistributor,
     triggerSetup_DualWheel,
@@ -53,7 +53,7 @@ static decoder_init_func_t getDecoderInitFunc(uint8_t decoderIndex)
   };
   if (decoderIndex<DECODER_MAX)
   {
-    initFunc = (decoder_init_func_t)pgm_read_ptr(&initialisers[decoderIndex]);
+    initFunc = initialisers[decoderIndex];
   }
 // If SMALL_FLASH_DECODER is defined, we only compile in the decoder that is selected
 // Modify as needed, but the idea is that for a given build, only 1 decoder is compiled in to save flash space. 

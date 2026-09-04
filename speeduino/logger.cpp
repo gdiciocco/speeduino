@@ -912,21 +912,21 @@ bool is2ByteEntry(uint16_t key)
   // This array indicates which index values from the log are 2 byte values
   // This array MUST remain in ascending order
   // !!!! WARNING: If any value above 255 is required in this array, changes MUST be made to is2ByteEntry() function !!!!
-  static constexpr byte PROGMEM fsIntIndex[] = {4, 14, 17, 22, 26, 28, 33, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 76, 78, 80, 82, 86, 88, 90, 93, 95, 99, 104, 111, 121, 125, 130, 132, 134, 136, 142, 146, 148, 150, 155 };
+  static constexpr byte fsIntIndex[] = {4, 14, 17, 22, 26, 28, 33, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 76, 78, 80, 82, 86, 88, 90, 93, 95, 99, 104, 111, 121, 125, 130, 132, 134, 136, 142, 146, 148, 150, 155 };
 
   unsigned int bot = 0U;
   unsigned int mid = _countof(fsIntIndex);
   
   while (mid > 1U)
   {  
-    if (key >= pgm_read_byte( &fsIntIndex[bot + mid / 2U]) )
+    if (key >= fsIntIndex[bot + mid / 2U])
     {
       bot += mid++ / 2U;
     }
     mid /= 2U;
   }
 
-  return key == pgm_read_byte(&fsIntIndex[bot]);
+  return key == fsIntIndex[bot];
 }
 
 static inline void attachLoggerInterrupt(uint8_t pin, void (*loggerISR)(void))

@@ -2,7 +2,6 @@
 #include "globals.h"
 #include "preprocessor.h"
 #include "table3d_visitor.h"
-#include "prog_mem_support.h"
 
 // This minimizes RAM usage at no performance cost
 #pragma GCC optimize ("Os") 
@@ -290,24 +289,24 @@ struct page_map_t
 
 static page_map_t getPageMap(uint8_t pageNumber)
 {
-  static constexpr entity_t pageZeroMap[] PROGMEM = {
+  static constexpr entity_t pageZeroMap[] = {
     makeEntity(0U),
   };
-  static constexpr entity_t vePageMap[] PROGMEM = {
+  static constexpr entity_t vePageMap[] = {
     makeEntity(&fuelTable),
   };
-  static constexpr entity_t ignPageMap[] PROGMEM = {
+  static constexpr entity_t ignPageMap[] = {
     makeEntity(&ignitionTable),
   };
-  static constexpr entity_t afrPageMap[] PROGMEM = {
+  static constexpr entity_t afrPageMap[] = {
     makeEntity(&afrTable),
   };
-  static constexpr entity_t boostVvtPageMap[] PROGMEM = {
+  static constexpr entity_t boostVvtPageMap[] = {
     makeEntity(&boostTable), 
     makeEntity(&vvtTable), 
     makeEntity(&stagingTable),
   };
-  static constexpr entity_t sequentialPageMap[] PROGMEM = {
+  static constexpr entity_t sequentialPageMap[] = {
     makeEntity(&trimTables[0]), 
 #if INJ_CHANNELS >= 2
     makeEntity(&trimTables[1]), 
@@ -331,41 +330,41 @@ static page_map_t getPageMap(uint8_t pageNumber)
     makeEntity(&trimTables[7]),
 #endif
   }; 
-  static constexpr entity_t fuel2PageMap[] PROGMEM = {
+  static constexpr entity_t fuel2PageMap[] = {
     makeEntity(&fuelTable2)
   };
-  static constexpr entity_t wmiPageMap[] PROGMEM = {
+  static constexpr entity_t wmiPageMap[] = {
     makeEntity(&wmiTable),
     makeEntity(&vvt2Table),
     makeEntity(&dwellTable),
     makeEntity(8U),
   };
-  static constexpr entity_t ign2PageMap[] PROGMEM = {
+  static constexpr entity_t ign2PageMap[] = {
     makeEntity(&ignitionTable2),
   };
-  static constexpr entity_t veSetPageMap[] PROGMEM = {
+  static constexpr entity_t veSetPageMap[] = {
     makeEntity(&configPage2, sizeof(configPage2)),
   };
-  static constexpr entity_t ignSetPageMap[] PROGMEM = {
+  static constexpr entity_t ignSetPageMap[] = {
     makeEntity(&configPage4, sizeof(configPage4)),
   };
-  static constexpr entity_t afrSetPageMap[] PROGMEM = {
+  static constexpr entity_t afrSetPageMap[] = {
     makeEntity(&configPage6, sizeof(configPage6)),
   };
-  static constexpr entity_t canBusPageMap[] PROGMEM = {
+  static constexpr entity_t canBusPageMap[] = {
     makeEntity(&configPage9, sizeof(configPage9)),
   };
-  static constexpr entity_t warmUpPageMap[] PROGMEM = {
+  static constexpr entity_t warmUpPageMap[] = {
     makeEntity(&configPage10, sizeof(configPage10)),
   };
-  static constexpr entity_t progOutsPageMap[] PROGMEM = {
+  static constexpr entity_t progOutsPageMap[] = {
     makeEntity(&configPage13, sizeof(configPage13)),
   };
-  static constexpr entity_t boostVvt2PageMap[] PROGMEM = {
+  static constexpr entity_t boostVvt2PageMap[] = {
     makeEntity(&boostTableLookupDuty),
     makeEntity(&configPage15, sizeof(configPage15)),
   };
-  static constexpr entity_t wallWettingPageMap[] PROGMEM = {
+  static constexpr entity_t wallWettingPageMap[] = {
     makeEntity(&wallWettingAddTable),
     makeEntity(&wallWettingRemoveTable),
     makeEntity(&afrDelayTables[0]),
@@ -373,7 +372,7 @@ static page_map_t getPageMap(uint8_t pageNumber)
     makeEntity(&afrDelayConfig, sizeof(afrDelayConfig)),
   };
 
-  static constexpr page_map_t pageMaps[MAX_PAGE_NUM] PROGMEM = {
+  static constexpr page_map_t pageMaps[MAX_PAGE_NUM] = {
     { pageZeroMap, _countof(pageZeroMap) },
     { veSetPageMap, _countof(veSetPageMap) },
     { vePageMap, _countof(vePageMap) },
@@ -397,19 +396,19 @@ static page_map_t getPageMap(uint8_t pageNumber)
   {
     pageNumber = 0U;
   }
-  return copyObject_P(&pageMaps[pageNumber]);
+  return pageMaps[pageNumber];
 }
 
 /**
  * @brief Search for the page_iterator_t that spans pageOffset */
-static page_iterator_t mapOffsetToEntity_P(const entity_t *pEntityMap, uint8_t mapLength, uint8_t pageNumber, uint16_t pageOffset)
+static page_iterator_t mapOffsetToEntity(const entity_t *pEntityMap, uint8_t mapLength, uint8_t pageNumber, uint16_t pageOffset)
 {
   entity_page_location_t pageLocation(pageNumber, 0U);
   uint16_t entityOffset = 0U;
 
   for (uint8_t index=0; index<mapLength; ++index)
   {
-    page_entity_t mappedEntity(copyObject_P(&pEntityMap[index]), entityOffset);
+    page_entity_t mappedEntity(pEntityMap[index], entityOffset);
     if (mappedEntity.isPageAddressWithin(pageOffset))
     {
       return page_iterator_t(mappedEntity, pageLocation);
@@ -428,7 +427,7 @@ static page_iterator_t mapOffsetToEntity_P(const entity_t *pEntityMap, uint8_t m
 static page_iterator_t map_page_offset_to_entity(uint8_t pageNumber, uint16_t offset)
 {
   auto pageMap = getPageMap(pageNumber);
-  return mapOffsetToEntity_P(pageMap.searchMap, pageMap.mapSize, pageNumber, offset);
+  return mapOffsetToEntity(pageMap.searchMap, pageMap.mapSize, pageNumber, offset);
 }
 
 // ========================= Set tune to empty support  ===================

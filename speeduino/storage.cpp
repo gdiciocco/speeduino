@@ -121,8 +121,8 @@ TESTABLE_STATIC uint16_t getEntityStartAddress(page_iterator_t iter) {
       void *pEntity;
       uint16_t eepromStartAddress;
   };
-  // Store a map of entity to EEPROM address in FLASH memory.
-  static const entity_storage_map_t entityMap[] PROGMEM = {
+  // Store a map of entity to EEPROM address.
+  static const entity_storage_map_t entityMap[] = {
     { &fuelTable, EEPROM_CONFIG1_MAP },
     { &configPage2, EEPROM_CONFIG2_START },
     { &ignitionTable, EEPROM_CONFIG3_MAP },
@@ -174,12 +174,12 @@ TESTABLE_STATIC uint16_t getEntityStartAddress(page_iterator_t iter) {
 
   // Linear search of the address map.
   const entity_storage_map_t *pMapEntry = entityMap;
-  while ((pMapEntry!=entityMapEnd) && (iter.entity.pRaw!=pgm_read_ptr(&pMapEntry->pEntity))) {
+  while ((pMapEntry!=entityMapEnd) && (iter.entity.pRaw!=pMapEntry->pEntity)) {
     ++pMapEntry;
   }
   uint16_t address = 0U;
   if (pMapEntry!=entityMapEnd) {
-    address = pgm_read_word(&(pMapEntry->eepromStartAddress));
+    address = pMapEntry->eepromStartAddress;
   }
   return address;
 }

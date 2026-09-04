@@ -70,13 +70,13 @@ static constexpr uint8_t SEND_OUTPUT_CHANNELS = 48U; //!< Code for the "send out
 
 /// @defgroup group-serial-hard-coded-responses Hard coded response for some TS messages
 /// @{
-static constexpr byte serialVersion[] PROGMEM = {SERIAL_RC_OK, '0', '0', '2'};
-static constexpr byte canId[] PROGMEM = {SERIAL_RC_OK, 0};
-static constexpr byte codeVersion[] PROGMEM = { SERIAL_RC_OK, 'C','a','p','o','n','o','r','d',' ','E','C','U',' ','2','0','2','6','0','4'} ; //Note no null terminator in array and status variable at the start
-static constexpr byte productString[] PROGMEM = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '5', '.', '0', '4', '-', 'd', 'e', 'v'};
-//static constexpr byte codeVersion[] PROGMEM = { SERIAL_RC_OK, 's','p','e','e','d','u','i','n','o',' ','2','0','2','5','0','1'} ; //Note no null terminator in array and status variable at the start
-//static constexpr byte productString[] PROGMEM = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '5', '.', '0', '1'};
-static constexpr byte testCommsResponse[] PROGMEM = { SERIAL_RC_OK, 255 };
+static constexpr byte serialVersion[] = {SERIAL_RC_OK, '0', '0', '2'};
+static constexpr byte canId[] = {SERIAL_RC_OK, 0};
+static constexpr byte codeVersion[] = { SERIAL_RC_OK, 'C','a','p','o','n','o','r','d',' ','E','C','U',' ','2','0','2','6','0','4'} ; //Note no null terminator in array and status variable at the start
+static constexpr byte productString[] = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '5', '.', '0', '4', '-', 'd', 'e', 'v'};
+//static constexpr byte codeVersion[] = { SERIAL_RC_OK, 's','p','e','e','d','u','i','n','o',' ','2','0','2','5','0','1'} ; //Note no null terminator in array and status variable at the start
+//static constexpr byte productString[] = { SERIAL_RC_OK, 'S', 'p', 'e', 'e', 'd', 'u', 'i', 'n', 'o', ' ', '2', '0', '2', '5', '.', '0', '1'};
+static constexpr byte testCommsResponse[] = { SERIAL_RC_OK, 255 };
 /// @}
 
 /** 
@@ -627,7 +627,7 @@ void processSerialCommand(void)
       break;
 
     case 'C': // test communications. This is used by Tunerstudio to see whether there is an ECU on a given serial port
-      (void)memcpy_P(serialPayload, testCommsResponse, sizeof(testCommsResponse) );
+      (void)memcpy(serialPayload, testCommsResponse, sizeof(testCommsResponse) );
       sendSerialPayloadNonBlocking(sizeof(testCommsResponse));
       break;
 
@@ -658,7 +658,7 @@ void processSerialCommand(void)
       break;
 
     case 'F': // send serial protocol version
-      (void)memcpy_P(serialPayload, serialVersion, sizeof(serialVersion) );
+      (void)memcpy(serialPayload, serialVersion, sizeof(serialVersion) );
       sendSerialPayloadNonBlocking(sizeof(serialVersion));
       break;
 
@@ -673,7 +673,7 @@ void processSerialCommand(void)
       break;
 
     case 'I': // send CAN ID
-      (void)memcpy_P(serialPayload, canId, sizeof(canId) );
+      (void)memcpy(serialPayload, canId, sizeof(canId) );
       sendSerialPayloadNonBlocking(sizeof(serialVersion));
       break;
 
@@ -756,7 +756,7 @@ void processSerialCommand(void)
     }
 
     case 'Q': // send code version
-      (void)memcpy_P(serialPayload, codeVersion, sizeof(codeVersion) );
+      (void)memcpy(serialPayload, codeVersion, sizeof(codeVersion) );
       sendSerialPayloadNonBlocking(sizeof(codeVersion));
       break;
 
@@ -778,7 +778,7 @@ void processSerialCommand(void)
       else if(cmd == 0x0fU)
       {
         //Request for signature
-        (void)memcpy_P(serialPayload, codeVersion, sizeof(codeVersion) );
+        (void)memcpy(serialPayload, codeVersion, sizeof(codeVersion) );
         sendSerialPayloadNonBlocking(sizeof(codeVersion));
       }
 #ifdef COMMS_SD
@@ -896,7 +896,7 @@ void processSerialCommand(void)
     }
 
     case 'S': // send code version
-      (void)memcpy_P(serialPayload, productString, sizeof(productString) );
+      (void)memcpy(serialPayload, productString, sizeof(productString) );
       sendSerialPayloadNonBlocking(sizeof(productString));
       currentStatus.secl = 0; //This is required in TS3 due to its stricter timings
       break;
