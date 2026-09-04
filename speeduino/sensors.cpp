@@ -92,7 +92,7 @@ volatile struct oilSensorOPStPulse oilSensorOPStPulse;
 TESTABLE_INLINE_STATIC int16_t fastMap10Bit(uint16_t value, int16_t rangeMin, int16_t rangeMax) 
 {
   uint16_t range = rangeMax-rangeMin; // Must be positive (assuming rangeMax>=rangeMin)
-  uint16_t fromStartOfRange = (uint16_t)rshift<10>((uint32_t)value * range);
+  uint16_t fromStartOfRange = (uint16_t)((uint32_t)value * range >> 10);
   return rangeMin + (int16_t)fromStartOfRange;
 }
 

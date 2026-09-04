@@ -1,4 +1,3 @@
-#include <avr-fast-shift.h>
 #include "globals.h"
 #include "crankMaths.h"
 #include "preprocessor.h"
@@ -29,7 +28,7 @@ static UQ1X15_t degreesPerMicro;
 static constexpr uint8_t degreesPerMicro_Shift = UQ1X15_Shift;
 
 void setAngleConverterRevolutionTime(uint32_t revolutionTime) noexcept {
-  microsPerDegree = div360(lshift<microsPerDegree_Shift>(revolutionTime));
+  microsPerDegree = div360(revolutionTime << microsPerDegree_Shift);
   constexpr uint32_t UQ1X15_360 = UINT32_C(360) << degreesPerMicro_Shift;
   degreesPerMicro = (uint16_t)fast_div_closest(UQ1X15_360, revolutionTime);
 }
@@ -87,7 +86,7 @@ void doCrankSpeedCalcs(void)
           uint32_t toothDeltaT = toothHistory[toothHistoryIndex];
           //long timeToLastTooth = micros() - toothLastToothTime;
 
-          rpmDelta = lshift<10>(toothDeltaV) / (6 * toothDeltaT);
+          rpmDelta = (toothDeltaV << 10) / (6 * toothDeltaT);
         }
 
           timePerDegreex16 = ldiv( 2666656L, currentStatus.RPM + rpmDelta).quot; //This gives accuracy down to 0.1 of a degree and can provide noticeably better timing results on low resolution triggers

@@ -2,7 +2,6 @@
 #define MATH_H
 
 #include <stdint.h>
-#include <avr-fast-shift.h>
 #include <avr-fast-div.h>
 #include "unit_testing.h"
 
@@ -174,7 +173,7 @@ template <uint8_t b>
 static inline uint32_t rshift_round(uint32_t a) { 
     constexpr uint8_t CORRECTION_SHIFT = b-1U; // cppcheck-suppress misra-c2012-10.4
     constexpr uint32_t CORRECTION = 1UL<<CORRECTION_SHIFT;
-    return rshift<b>((uint32_t)(a+CORRECTION));
+    return ((uint32_t)(a+CORRECTION) >> b);
 }
 
 /// @cond

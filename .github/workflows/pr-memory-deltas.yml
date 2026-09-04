@@ -11,8 +11,6 @@ env:
   COMMON_LIB_DEPS: | 
     - name: SimplyAtomic
       version: "1.0"
-    - name: avr-fast-shift
-      version: "1.1.0"
     - name: FastCRC
       version: "1.41"
     - name: avr-fast-div
