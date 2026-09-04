@@ -15,256 +15,108 @@
 #include <elapsedMillis.h>
 
 //List of logger field names. This must be in the same order and length as logger_updateLogdataCSV()
-constexpr char header_0[] = "secl";
-constexpr char header_1[] = "status1";
-constexpr char header_2[] = "engine";
-constexpr char header_3[] = "Sync Loss #";
-constexpr char header_4[] = "MAP";
-constexpr char header_5[] = "IAT(C)";
-constexpr char header_6[] = "CLT(C)";
-constexpr char header_7[] = "Battery Correction";
-constexpr char header_8[] = "Battery V";
-constexpr char header_9[] = "AFR";
-constexpr char header_10[] = "EGO Correction";
-constexpr char header_11[] = "IAT Correction";
-constexpr char header_12[] = "WUE Correction";
-constexpr char header_13[] = "RPM";
-constexpr char header_14[] = "Accel. Correction";
-constexpr char header_15[] = "Gamma Correction";
-constexpr char header_16[] = "VE1";
-constexpr char header_17[] = "VE2";
-constexpr char header_18[] = "AFR Target";
-constexpr char header_19[] = "TPSdot";
-constexpr char header_20[] = "Advance Current";
-constexpr char header_21[] = "TPS";
-constexpr char header_22[] = "Loops/S";
-constexpr char header_23[] = "Free RAM";
-constexpr char header_24[] = "Boost Target";
-constexpr char header_25[] = "Boost Duty";
-constexpr char header_26[] = "status2";
-constexpr char header_27[] = "rpmDOT";
-constexpr char header_28[] = "Eth%";
-constexpr char header_29[] = "Flex Fuel Correction";
-constexpr char header_30[] = "Flex Adv Correction";
-constexpr char header_31[] = "IAC Steps/Duty";
-constexpr char header_32[] = "testoutputs";
-constexpr char header_33[] = "AFR2";
-constexpr char header_34[] = "Baro";
-constexpr char header_35[] = "AUX_IN 0";
-constexpr char header_36[] = "AUX_IN 1";
-constexpr char header_37[] = "AUX_IN 2";
-constexpr char header_38[] = "AUX_IN 3";
-constexpr char header_39[] = "AUX_IN 4";
-constexpr char header_40[] = "AUX_IN 5";
-constexpr char header_41[] = "AUX_IN 6";
-constexpr char header_42[] = "AUX_IN 7";
-constexpr char header_43[] = "AUX_IN 8";
-constexpr char header_44[] = "AUX_IN 9";
-constexpr char header_45[] = "AUX_IN 10";
-constexpr char header_46[] = "AUX_IN 11";
-constexpr char header_47[] = "AUX_IN 12";
-constexpr char header_48[] = "AUX_IN 13";
-constexpr char header_49[] = "AUX_IN 14";
-constexpr char header_50[] = "AUX_IN 15";
-constexpr char header_51[] = "TPS ADC";
-constexpr char header_52[] = "Errors";
-constexpr char header_53[] = "PW";
-constexpr char header_54[] = "PW2";
-constexpr char header_55[] = "PW3";
-constexpr char header_56[] = "PW4";
-constexpr char header_57[] = "status3";
-constexpr char header_58[] = "Engine Protect";
-constexpr char header_59[] = "";
-constexpr char header_60[] = "Fuel Load";
-constexpr char header_61[] = "Ign Load";
-constexpr char header_62[] = "Dwell Requested";
-constexpr char header_63[] = "Idle Target (RPM)";
-constexpr char header_64[] = "MAP DOT";
-constexpr char header_65[] = "VVT1 Angle";
-constexpr char header_66[] = "VVT1 Target";
-constexpr char header_67[] = "VVT1 Duty";
-constexpr char header_68[] = "Flex Boost Adj";
-constexpr char header_69[] = "Baro Correction";
-constexpr char header_70[] = "VE Current";
-constexpr char header_71[] = "ASE Correction";
-constexpr char header_72[] = "Vehicle Speed";
-constexpr char header_73[] = "Gear";
-constexpr char header_74[] = "Fuel Pressure";
-constexpr char header_75[] = "Oil Pressure";
-constexpr char header_76[] = "WMI PW";
-constexpr char header_77[] = "status4";
-constexpr char header_78[] = "VVT2 Angle";
-constexpr char header_79[] = "VVT2 Target";
-constexpr char header_80[] = "VVT2 Duty";
-constexpr char header_81[] = "outputs";
-constexpr char header_82[] = "Fuel Temp";
-constexpr char header_83[] = "Fuel Temp Correction";
-constexpr char header_84[] = "Advance 1";
-constexpr char header_85[] = "Advance 2";
-constexpr char header_86[] = "SD Status";
-constexpr char header_87[] = "EMAP";
-constexpr char header_88[] = "Fan Duty";
-constexpr char header_89[] = "AirConStatus";
-constexpr char header_90[] = "Dwell Actual";
-constexpr char header_91[] = "status5";
-constexpr char header_92[] = "Knock Count";
-constexpr char header_93[] = "Knock Retard";
-constexpr char header_94[] = "PW5";
-constexpr char header_95[] = "PW6";
-constexpr char header_96[] = "PW7";
-constexpr char header_97[] = "PW8";
-constexpr char header_98[] = "System Temp";
-/*
-constexpr char header_99[] = "";
-constexpr char header_100[] = "";
-constexpr char header_101[] = "";
-constexpr char header_102[] = "";
-constexpr char header_103[] = "";
-constexpr char header_104[] = "";
-constexpr char header_105[] = "";
-constexpr char header_106[] = "";
-constexpr char header_107[] = "";
-constexpr char header_108[] = "";
-constexpr char header_109[] = "";
-constexpr char header_110[] = "";
-constexpr char header_111[] = "";
-constexpr char header_112[] = "";
-constexpr char header_113[] = "";
-constexpr char header_114[] = "";
-constexpr char header_115[] = "";
-constexpr char header_116[] = "";
-constexpr char header_117[] = "";
-constexpr char header_118[] = "";
-constexpr char header_119[] = "";
-constexpr char header_120[] = "";
-constexpr char header_121[] = "";
-*/
-
-constexpr const char* header_table[] = {  header_0,\
-                                              header_1,\
-                                              header_2,\
-                                              header_3,\
-                                              header_4,\
-                                              header_5,\
-                                              header_6,\
-                                              header_7,\
-                                              header_8,\
-                                              header_9,\
-                                              header_10,\
-                                              header_11,\
-                                              header_12,\
-                                              header_13,\
-                                              header_14,\
-                                              header_15,\
-                                              header_16,\
-                                              header_17,\
-                                              header_18,\
-                                              header_19,\
-                                              header_20,\
-                                              header_21,\
-                                              header_22,\
-                                              header_23,\
-                                              header_24,\
-                                              header_25,\
-                                              header_26,\
-                                              header_27,\
-                                              header_28,\
-                                              header_29,\
-                                              header_30,\
-                                              header_31,\
-                                              header_32,\
-                                              header_33,\
-                                              header_34,\
-                                              header_35,\
-                                              header_36,\
-                                              header_37,\
-                                              header_38,\
-                                              header_39,\
-                                              header_40,\
-                                              header_41,\
-                                              header_42,\
-                                              header_43,\
-                                              header_44,\
-                                              header_45,\
-                                              header_46,\
-                                              header_47,\
-                                              header_48,\
-                                              header_49,\
-                                              header_50,\
-                                              header_51,\
-                                              header_52,\
-                                              header_53,\
-                                              header_54,\
-                                              header_55,\
-                                              header_56,\
-                                              header_57,\
-                                              header_58,\
-                                              header_59,\
-                                              header_60,\
-                                              header_61,\
-                                              header_62,\
-                                              header_63,\
-                                              header_64,\
-                                              header_65,\
-                                              header_66,\
-                                              header_67,\
-                                              header_68,\
-                                              header_69,\
-                                              header_70,\
-                                              header_71,\
-                                              header_72,\
-                                              header_73,\
-                                              header_74,\
-                                              header_75,\
-                                              header_76,\
-                                              header_77,\
-                                              header_78,\
-                                              header_79,\
-                                              header_80,\
-                                              header_81,\
-                                              header_82,\
-                                              header_83,\
-                                              header_84,\
-                                              header_85,\
-                                              header_86,\
-                                              header_87,\
-                                              header_88,\
-                                              header_89,\
-                                              header_90,\
-                                              header_91,\
-                                              header_92,\
-                                              header_93,\
-                                              header_94,\
-                                              header_95,\
-                                              header_96,\
-                                              header_97,\
-                                              header_98,\
-                                              /*
-                                              header_99,\
-                                              header_100,\
-                                              header_101,\
-                                              header_102,\
-                                              header_103,\
-                                              header_104,\
-                                              header_105,\
-                                              header_106,\
-                                              header_107,\
-                                              header_108,\
-                                              header_109,\
-                                              header_110,\
-                                              header_111,\
-                                              header_112,\
-                                              header_113,\
-                                              header_114,\
-                                              header_115,\
-                                              header_116,\
-                                              header_117,\
-                                              header_118,\
-                                              header_119,\
-                                              header_120,\
-                                              header_121,\
-                                              */
-                                            };
+constexpr const char* header_table[] = {
+  "secl",
+  "status1",
+  "engine",
+  "Sync Loss #",
+  "MAP",
+  "IAT(C)",
+  "CLT(C)",
+  "Battery Correction",
+  "Battery V",
+  "AFR",
+  "EGO Correction",
+  "IAT Correction",
+  "WUE Correction",
+  "RPM",
+  "Accel. Correction",
+  "Gamma Correction",
+  "VE1",
+  "VE2",
+  "AFR Target",
+  "TPSdot",
+  "Advance Current",
+  "TPS",
+  "Loops/S",
+  "Free RAM",
+  "Boost Target",
+  "Boost Duty",
+  "status2",
+  "rpmDOT",
+  "Eth%",
+  "Flex Fuel Correction",
+  "Flex Adv Correction",
+  "IAC Steps/Duty",
+  "testoutputs",
+  "AFR2",
+  "Baro",
+  "AUX_IN 0",
+  "AUX_IN 1",
+  "AUX_IN 2",
+  "AUX_IN 3",
+  "AUX_IN 4",
+  "AUX_IN 5",
+  "AUX_IN 6",
+  "AUX_IN 7",
+  "AUX_IN 8",
+  "AUX_IN 9",
+  "AUX_IN 10",
+  "AUX_IN 11",
+  "AUX_IN 12",
+  "AUX_IN 13",
+  "AUX_IN 14",
+  "AUX_IN 15",
+  "TPS ADC",
+  "Errors",
+  "PW",
+  "PW2",
+  "PW3",
+  "PW4",
+  "status3",
+  "Engine Protect",
+  "",
+  "Fuel Load",
+  "Ign Load",
+  "Dwell Requested",
+  "Idle Target (RPM)",
+  "MAP DOT",
+  "VVT1 Angle",
+  "VVT1 Target",
+  "VVT1 Duty",
+  "Flex Boost Adj",
+  "Baro Correction",
+  "VE Current",
+  "ASE Correction",
+  "Vehicle Speed",
+  "Gear",
+  "Fuel Pressure",
+  "Oil Pressure",
+  "WMI PW",
+  "status4",
+  "VVT2 Angle",
+  "VVT2 Target",
+  "VVT2 Duty",
+  "outputs",
+  "Fuel Temp",
+  "Fuel Temp Correction",
+  "Advance 1",
+  "Advance 2",
+  "SD Status",
+  "EMAP",
+  "Fan Duty",
+  "AirConStatus",
+  "Dwell Actual",
+  "status5",
+  "Knock Count",
+  "Knock Retard",
+  "PW5",
+  "PW6",
+  "PW7",
+  "PW8",
+  "System Temp",
+  // Spare slots: add the field name here and bump SD_LOG_NUM_FIELDS.
+};
 
 static_assert(sizeof(header_table) == (sizeof(char*) * SD_LOG_NUM_FIELDS), "Number of header table titles must match number of log fields");
 
