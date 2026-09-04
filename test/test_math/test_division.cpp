@@ -31,8 +31,12 @@ void test_maths_div100_U16(void)
   test_div100<uint16_t>(99);
   test_div100<uint16_t>(UINT16_MAX-100);
 
-  // We expect this to fail - the rounding doesn't do integer promotion
-  TEST_ASSERT_EQUAL_UINT16(0, div100((uint16_t)UINT16_MAX));
+  // The rounding correction is applied at 32 bits, so the top of the range is
+  // no longer a special case. This used to wrap and return 0.
+  TEST_ASSERT_EQUAL_UINT16(655, div100((uint16_t)UINT16_MAX));
+  TEST_ASSERT_EQUAL_UINT16(655, div100((uint16_t)65500U));
+  TEST_ASSERT_EQUAL_UINT16(655, div100((uint16_t)65486U)); // first input that used to wrap
+  TEST_ASSERT_EQUAL_UINT16(655, div100((uint16_t)65485U)); // last input that did not
 }
 
 void test_maths_div100_U32(void)
@@ -57,8 +61,14 @@ void test_maths_div100_S16(void)
 
   test_div100<int16_t>((int16_t)(INT16_MIN+100));
 
-  // We expect this to fail - the rounding doesn't do integer promotion
-  TEST_ASSERT_EQUAL_INT16(327, div100((int16_t)INT16_MIN));
+  // As above: the correction happens at 32 bits now. INT16_MIN used to come
+  // back as +327 because (n-50) wrapped; -32768/100 rounds away from zero to
+  // -328.
+  TEST_ASSERT_EQUAL_INT16(-328, div100((int16_t)INT16_MIN));
+  TEST_ASSERT_EQUAL_INT16(-328, div100((int16_t)-32750));
+  TEST_ASSERT_EQUAL_INT16(328, div100((int16_t)INT16_MAX));
+  TEST_ASSERT_EQUAL_INT16(327, div100((int16_t)32718));  // first positive input that used to wrap
+  TEST_ASSERT_EQUAL_INT16(327, div100((int16_t)32717));  // last one that did not
 }
 
 void test_maths_div100_S32(void)
