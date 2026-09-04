@@ -204,9 +204,9 @@ static void testGetSetPageValues(void)
     for (testPageNum = 0U; testPageNum<MAX_PAGE_NUM+1U; ++testPageNum)
     {
         snprintf(szTestName, sizeof(szTestName)-1U, "test_get_set_PageValue_%" PRIu8, testPageNum);
-        UnityDefaultTestRun(test_get_set_PageValueN, szTestName, __LINE__);
+        RUN_TEST_NAMED(test_get_set_PageValueN, szTestName, __LINE__);
         snprintf(szTestName, sizeof(szTestName)-1U, "test_get_set_PageValue_InvalidOffset_%" PRIu8, testPageNum);
-        UnityDefaultTestRun(test_get_set_PageValue_InvalidOffset_N, szTestName, __LINE__);
+        RUN_TEST_NAMED(test_get_set_PageValue_InvalidOffset_N, szTestName, __LINE__);
     }
 }
 

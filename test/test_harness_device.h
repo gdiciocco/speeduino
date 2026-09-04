@@ -5,6 +5,7 @@
 #include <unity.h>
 #include <Arduino.h>
 #include "board_definition.h"
+#include "hw_watchdog.h"
 
 /** @brief Escape sequence that puts the board back into its bootloader.
  *
@@ -70,6 +71,11 @@ void setup(void (*runAllTests)(void))
     while (!Serial) {
         ; // Wait for serial connection
     }
+
+    // Arm the watchdog before anything runs, so even a hang in a suite's own
+    // setup - before the first test feeds it - resets the board rather than
+    // taking it off the USB bus for good.
+    HW_TEST_FEED_WATCHDOG();
 
     UNITY_BEGIN();    // IMPORTANT LINE!
 

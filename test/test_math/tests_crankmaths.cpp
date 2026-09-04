@@ -59,7 +59,7 @@ void testCrankMaths()
     for (auto testdata : crankmaths_rev_testdatas) {
       crankmaths_rev_testdata_current = &testdata;
       snprintf(testName, testNameLength, "crankmaths/angletotime/revolution/%urpm/%uangle", testdata.rpm, testdata.angle);
-      UnityDefaultTestRun(test_crankmaths_angletotime_revolution_execute, testName, __LINE__);
+      RUN_TEST_NAMED(test_crankmaths_angletotime_revolution_execute, testName, __LINE__);
     }
 
   #if false
@@ -90,7 +90,7 @@ void testCrankMaths()
     for (auto testdata : crankmaths_tooth_testdatas) {
       crankmaths_tooth_testdata_current = &testdata;
       snprintf(testName, testNameLength, "crankmaths/angletotime/tooth/%urpm/%uangle/%utoothangle", testdata.rpm, testdata.angle, testdata.triggerToothAngle);
-      UnityDefaultTestRun(test_crankmaths_angletotime_tooth_execute, testName, __LINE__);
+      RUN_TEST_NAMED(test_crankmaths_angletotime_tooth_execute, testName, __LINE__);
     }
   #endif
   }

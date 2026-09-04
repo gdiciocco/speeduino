@@ -81,7 +81,7 @@ const char* GetTypeName(void)
         auto testFunc = [](void) { \
             op(axis, data, ##__VA_ARGS__); \
         }; \
-        UnityDefaultTestRun(testFunc, #op tag, __LINE__); \
+        RUN_TEST_NAMED(testFunc, #op tag, __LINE__); \
     }
 #define APPLY_TEST_TO_ALL_TYPES(op, tag, ...) \
     RUN_PARAMETRIZED_TEST(op, table2d_axis_i8_4, table2d_data_u8_4, tag "_i8_u8_4", ##__VA_ARGS__) \

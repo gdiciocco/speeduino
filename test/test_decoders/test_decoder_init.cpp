@@ -77,7 +77,7 @@ static void test_buildDecoder_all(void)
         char szName[128];
         snprintf(szName, sizeof(szName), "test_buildDecoder_%d", decoder);
         decoderIdentifier = decoder;
-        UnityDefaultTestRun(test_buildDecoder, szName, __LINE__);
+        RUN_TEST_NAMED(test_buildDecoder, szName, __LINE__);
     }
 }
 

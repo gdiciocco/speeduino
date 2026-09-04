@@ -181,10 +181,10 @@ void testApplyPwToInjectorChannels(void)
       {    
         char szName[128];
         sprintf(szName, "test_noTrim_inner_p%" PRIu8 "_s%" PRIu8, primaries, secondaries);
-        UnityDefaultTestRun(test_noTrim_inner, szName, __LINE__);
+        RUN_TEST_NAMED(test_noTrim_inner, szName, __LINE__);
 
         sprintf(szName, "test_withTrim_inner_p%" PRIu8 "_s%" PRIu8, primaries, secondaries);
-        UnityDefaultTestRun(test_withTrim_inner, szName, __LINE__);
+        RUN_TEST_NAMED(test_withTrim_inner, szName, __LINE__);
       }
     }
   }

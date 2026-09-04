@@ -136,9 +136,9 @@ static void test_start_stop_all(void)
           char szName[128];
 
           snprintf(szName, sizeof(szName), "test_start_stop_rising_%d", decoder);
-          UnityDefaultTestRun(test_start_stop_rising, szName, __LINE__);
+          RUN_TEST_NAMED(test_start_stop_rising, szName, __LINE__);
           snprintf(szName, sizeof(szName), "test_start_stop_falling_%d", decoder);
-          UnityDefaultTestRun(test_start_stop_falling, szName, __LINE__);
+          RUN_TEST_NAMED(test_start_stop_falling, szName, __LINE__);
         }
     }
 }
