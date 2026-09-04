@@ -69,16 +69,25 @@ def _jump_via_test_harness(port):
     precisely so that flashing a test build is not a one-way door.
     """
     import serial
-    with serial.Serial(port, 115200, timeout=1.0) as ser:
-        time.sleep(1.5)
-        ser.reset_input_buffer()
-        # Send it a few times: the harness only polls between blinks, and the
-        # window during the post-reset wait is short.
-        for _ in range(6):
-            ser.write(b'@BOOTLOADER')
-            ser.flush()
-            time.sleep(0.25)
-        print('[dfu] sent the test-harness escape sequence to %s' % port)
+    # Opening the port is what releases the harness's "wait for the monitor"
+    # loop, so the board then runs its whole suite and - because UNITY_END()
+    # calls Serial.end() - drops off the bus and comes back. Stream the escape
+    # for long enough to cover the run and the re-enumeration afterwards.
+    deadline = time.time() + 40.0
+    sent = 0
+    while time.time() < deadline and not in_dfu():
+        try:
+            with serial.Serial(port, 115200, timeout=0.2) as ser:
+                while time.time() < deadline and not in_dfu():
+                    ser.write(b'@BOOTLOADER')
+                    ser.flush()
+                    sent += 1
+                    ser.read(256)          # drain whatever the suite prints
+                    time.sleep(0.2)
+        except Exception:                                       # noqa: BLE001
+            # The port vanishes each time the harness tears the CDC down.
+            time.sleep(0.4)
+    print('[dfu] streamed the test-harness escape sequence to %s (%d writes)' % (port, sent))
 
 
 def enter_dfu(port, attempts=2):

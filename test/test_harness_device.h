@@ -87,6 +87,18 @@ void setup() \
 
 void loop()
 {
+    // UNITY_END() ends up in PlatformIO's unittest_uart_end(), which calls
+    // Serial.end() - on a USB CDC board that tears the device off the bus
+    // entirely. Bring it back up, once, so the escape hatch above is reachable
+    // after the run and not just during the wait before it. Without this the
+    // board is unflashable the moment the tests finish.
+    static bool serialRestarted = false;
+    if (!serialRestarted)
+    {
+        Serial.begin(115200);
+        serialRestarted = true;
+    }
+
     // Blink to indicate end of test, while staying responsive to the
     // bootloader escape sequence.
     digitalWrite(LED_BUILTIN, HIGH);
