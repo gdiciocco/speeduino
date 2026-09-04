@@ -269,15 +269,26 @@ static void print_page_entity_layout(uint8_t pageNum)
 
 static void print_all_page_entity_layout(void)
 {
+    // Diagnostic dump, not an assertion. It blocks partway through on a USB
+    // CDC board - reproduced identically on caponord-stm32-optimized, so it
+    // predates the 8-bit removal - and taking the whole suite with it means
+    // the three real tests that follow never run.
+#if !defined(NATIVE_BOARD)
+    TEST_IGNORE_MESSAGE("layout dump: blocks on a real board, native host only");
+#else
     UnityPrint("Page, Index, Type, Start, Size"); UNITY_PRINT_EOL();
     for (uint8_t pageNum=MIN_PAGE_NUM; pageNum<MAX_PAGE_NUM; ++pageNum)
     {
         print_page_entity_layout(pageNum);
     }
+#endif
 }
 
 static void print_page_layout(void)
 {
+#if !defined(NATIVE_BOARD)
+    TEST_IGNORE_MESSAGE("layout dump: native host only, see above");
+#else
     UnityPrint("Page, Size"); UNITY_PRINT_EOL();
     for (uint8_t pageNum=MIN_PAGE_NUM; pageNum<MAX_PAGE_NUM; ++pageNum)
     {
@@ -285,6 +296,7 @@ static void print_page_layout(void)
         sprintf(szMsg, "%" PRIu8 ", %" PRIu16, pageNum, getPageSize(pageNum));
         UnityPrint(szMsg); UNITY_PRINT_EOL();
     }
+#endif
 }
 
 static uint16_t assert_unique(page_iterator_t testSubject, page_iterator_t* previousEntities, uint16_t nextSlot)
