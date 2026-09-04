@@ -13,8 +13,6 @@ env:
       version: "1.0"
     - name: avr-fast-shift
       version: "1.1.0"
-    - name: libdivide
-      version: "5.2.0"
     - name: FastCRC
       version: "1.41"
     - name: avr-fast-div
@@ -58,7 +56,7 @@ jobs:
               - source-url: https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json
                 name: STMicroelectronics:stm32
                 version: 2.7.1
-            compile-flags: -DUSE_LIBDIVIDE -DUSBCON -DUSBD_USE_CDC -DHAL_PCD_MODULE_ENABLED -DHAL_CAN_MODULE_ENABLED -DSERIAL_TX_BUFFER_SIZE=128 -DSERIAL_RX_BUFFER_SIZE=128 -std=gnu++14 -UBOARD_MAX_IO_PINS
+            compile-flags: -DUSBCON -DUSBD_USE_CDC -DHAL_PCD_MODULE_ENABLED -DHAL_CAN_MODULE_ENABLED -DSERIAL_TX_BUFFER_SIZE=128 -DSERIAL_RX_BUFFER_SIZE=128 -std=gnu++14 -UBOARD_MAX_IO_PINS
             lib_deps: |
               - name: "STM32duino RTC"
                 version: 1.2.0

@@ -187,8 +187,8 @@ private:
          <br> \
          THIS IS WORTH 20% to 30% speed up<br> \
          <br> \
-         This limits us to 16x16 tables. If we need bigger and move to 16-bit \
-         operations, consider using libdivide. <br> \
+         This limits us to 16x16 tables. Cortex-M has a hardware divider, so \
+         going bigger no longer needs a software division routine. <br> \
          */ \
         table3d_value_t& value_at(table3d_dim_t linear_index) \
         { \

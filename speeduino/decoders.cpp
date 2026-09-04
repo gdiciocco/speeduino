@@ -101,10 +101,6 @@ static int16_t toothAngles[24]; //An array for storing fixed tooth angles. Curre
 
 TESTABLE_STATIC decoder_status_t decoderStatus;
 
-#ifdef USE_LIBDIVIDE
-#include <libdivide.h>
-static libdivide::libdivide_s16_t divTriggerToothAngle;
-#endif
 
 static boardInputPin_t triggerPri_pin;
 static boardInputPin_t triggerSec_pin;
@@ -848,11 +844,7 @@ static inline uint16_t clampToActualTeeth(uint16_t toothNum, uint8_t toothAdder)
 static uint16_t __attribute__((noinline)) calcEndTeeth_missingTooth(const IgnitionSchedule &schedule, uint8_t toothAdder) {
   //Temp variable used here to avoid potential issues if a trigger interrupt occurs part way through this function
   int16_t tempEndTooth;
-#ifdef USE_LIBDIVIDE  
-  tempEndTooth = libdivide::libdivide_s16_do(schedule.dischargeAngle - configPage4.triggerAngle, &divTriggerToothAngle);
-#else
   tempEndTooth = (schedule.dischargeAngle - (int16_t)configPage4.triggerAngle) / (int16_t)triggerToothAngle;
-#endif
   //For higher tooth count triggers, add a 1 tooth margin to allow for calculation time. 
   if(configPage4.triggerTeeth > 12U) { tempEndTooth = tempEndTooth - 1; }
   
@@ -922,9 +914,6 @@ decoder_t __attribute__((optimize("Os"))) triggerSetup_missingTooth(void)
                     && ( (configPage4.sparkMode == IGN_MODE_SEQUENTIAL) 
                       || (configPage2.injLayout == INJ_SEQUENTIAL) 
                       || (configPage6.vvtEnabled > 0) );
-#ifdef USE_LIBDIVIDE
-  divTriggerToothAngle = libdivide::libdivide_s16_gen(triggerToothAngle);
-#endif
 
   return decoder_builder_t()
                   .setPrimaryTrigger(triggerPri_missingTooth, getConfigPriTriggerEdge(configPage4))
@@ -1082,11 +1071,7 @@ static int16_t getCrankAngle_DualWheel(void)
 
 static uint16_t __attribute__((noinline)) calcEndTeeth_DualWheel(const IgnitionSchedule &schedule, uint8_t toothAdder) {
   int16_t tempEndTooth =
-#ifdef USE_LIBDIVIDE
-      libdivide::libdivide_s16_do(schedule.dischargeAngle - configPage4.triggerAngle, &divTriggerToothAngle);
-#else
       (schedule.dischargeAngle - (int16_t)configPage4.triggerAngle) / (int16_t)triggerToothAngle;
-#endif
   return clampToToothCount(tempEndTooth, toothAdder);
 }
 
@@ -1136,9 +1121,6 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_DualWheel(void)
   decoderStatus.toothAngleIsCorrect = true; //This is always true for this pattern
   decoderFeatures.supportsPerToothIgnition = true;
   MAX_STALL_TIME = ((MICROS_PER_DEG_1_RPM/50U) * triggerToothAngle); //Minimum 50rpm. (3333uS is the time per degree at 50rpm)
-#ifdef USE_LIBDIVIDE
-  divTriggerToothAngle = libdivide::libdivide_s16_gen(triggerToothAngle);
-#endif
 
   return decoder_builder_t()
                   .setPrimaryTrigger(triggerPri_DualWheel, getConfigPriTriggerEdge(configPage4))
@@ -4613,11 +4595,7 @@ static int16_t getCrankAngle_FordST170(void)
 
 static uint16_t __attribute__((noinline)) calcSetEndTeeth_FordST170(const IgnitionSchedule &schedule, uint8_t toothAdder) {
   int16_t tempEndTooth = schedule.dischargeAngle - configPage4.triggerAngle;
-#ifdef USE_LIBDIVIDE
-  tempEndTooth = libdivide::libdivide_s16_do(tempEndTooth, &divTriggerToothAngle);
-#else
   tempEndTooth = tempEndTooth / (int16_t)triggerToothAngle;
-#endif  
   tempEndTooth = nudge(1, 36U + toothAdder,  tempEndTooth - 1, 36U + toothAdder);
   return clampToActualTeeth((uint16_t)tempEndTooth, toothAdder);
 }
@@ -4664,9 +4642,6 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_FordST170(void)
   toothOneTime = 0;
   toothOneMinusOneTime = 0;
   MAX_STALL_TIME = ((MICROS_PER_DEG_1_RPM/50U) * triggerToothAngle * (1U + 1U)); //Minimum 50rpm. (3333uS is the time per degree at 50rpm)
-#ifdef USE_LIBDIVIDE
-  divTriggerToothAngle = libdivide::libdivide_s16_gen(triggerToothAngle);
-#endif  
 
   return decoder_builder_t()
                   .setPrimaryTrigger(triggerPri_missingTooth, getConfigPriTriggerEdge(configPage4))
@@ -4987,11 +4962,7 @@ static uint16_t __attribute__((noinline)) calcSetEndTeeth_NGC_SkipMissing(uint16
 
 static uint16_t __attribute__((noinline)) calcSetEndTeeth_NGC(IgnitionSchedule &schedule, uint8_t toothAdder) {
   int16_t tempEndTooth = schedule.dischargeAngle - configPage4.triggerAngle;
-#ifdef USE_LIBDIVIDE
-  tempEndTooth = libdivide::libdivide_s16_do(tempEndTooth, &divTriggerToothAngle);
-#else
   tempEndTooth = tempEndTooth / (int16_t)triggerToothAngle;
-#endif  
   return calcSetEndTeeth_NGC_SkipMissing(clampToToothCount(tempEndTooth - 1, toothAdder));
 }
 
@@ -5071,9 +5042,6 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_NGC(void)
     toothAngles[8] = 3;
     toothAngles[9] = 1; // Pos 9 is required to be the same as group 1 for easier math
   }
-#ifdef USE_LIBDIVIDE
-  divTriggerToothAngle = libdivide::libdivide_s16_gen(triggerToothAngle);
-#endif  
 
   return decoder_builder_t()
                   .setPrimaryTrigger(triggerPri_NGC, CHANGE)
@@ -5375,11 +5343,7 @@ static void triggerPri_Renix(void)
 
 static uint16_t __attribute__((noinline)) calcEndTeeth_Renix(const IgnitionSchedule &schedule, uint8_t toothAdder) {
   int16_t tempEndTooth = schedule.dischargeAngle - configPage4.triggerAngle;
-#ifdef USE_LIBDIVIDE
-  tempEndTooth = libdivide::libdivide_s16_do(tempEndTooth, &divTriggerToothAngle);
-#else
   tempEndTooth = tempEndTooth / (int16_t)triggerToothAngle;
-#endif  
   tempEndTooth = tempEndTooth - 1;
   // Clamp to tooth count
   return clampToActualTeeth(clampToToothCount(tempEndTooth, toothAdder), toothAdder);
@@ -5443,9 +5407,6 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_Renix(void)
 
   toothSystemCount = 1;
   toothCurrentCount = 1;
-#ifdef USE_LIBDIVIDE
-  divTriggerToothAngle = libdivide::libdivide_s16_gen(triggerToothAngle);
-#endif  
 
   return decoder_builder_t()
                   .setPrimaryTrigger(triggerPri_Renix, getConfigPriTriggerEdge(configPage4))
@@ -6434,9 +6395,6 @@ decoder_t  __attribute__((optimize("Os"))) triggerSetup_FordTFI(void)
   decoderFeatures.supportsPerToothIgnition = true;
   if(configPage2.nCylinders <= 4U) { MAX_STALL_TIME = ((MICROS_PER_DEG_1_RPM/90U) * triggerToothAngle); }//Minimum 90rpm. (1851uS is the time per degree at 90rpm). This uses 90rpm rather than 50rpm due to the potentially very high stall time on a 4 cylinder if we wait that long.
   else { MAX_STALL_TIME = ((MICROS_PER_DEG_1_RPM/50U) * triggerToothAngle); } //Minimum 50rpm. (3200uS is the time per degree at 50rpm).
-#ifdef USE_LIBDIVIDE
-  divTriggerToothAngle = libdivide::libdivide_s16_gen(triggerToothAngle);
-#endif
 
   return decoder_builder_t()
                   .setPrimaryTrigger(triggerPri_FordTFI, getConfigPriTriggerEdge(configPage4))
