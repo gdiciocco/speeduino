@@ -2,7 +2,6 @@
 #include "board_definition.h"
 
 // This minimizes RAM usage at no performance cost
-#pragma GCC optimize ("Os") 
 
 bool update(const storage_api_t &api, uint16_t address, byte value) {
   if (api.read(address)!=value) {

@@ -1,7 +1,6 @@
 #include "decoder_builder.h"
 #include "preprocessor.h"
 
-#pragma GCC optimize ("Os")
 
 static void nullTriggerHandler (void){return;} //initialisation function for triggerhandlers, does exactly nothing
 static uint16_t nullGetRPM(void){return 0;} //initialisation function for getRpm, returns safe value of 0

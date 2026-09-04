@@ -22,7 +22,6 @@
 #include <string.h>
 
 // Minimize flash usage of the non-performance critical code in this file.
-#pragma GCC optimize ("Os") 
 
 TESTABLE_STATIC void updateTableU16toU8(table2D_u16_u8_32 &targetTable, uint16_t u16EEpromBinAddress)
 {

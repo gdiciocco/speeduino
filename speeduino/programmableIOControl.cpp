@@ -13,7 +13,7 @@ TESTABLE_STATIC uint8_t pinIsValid = 0;
 TESTABLE_STATIC uint8_t currentRuleStatus = 0;
 
 //*********************************************************************************************************************************************************************************
-void __attribute__((optimize("Os"))) initialiseProgrammableIO(statuses& current, const config13& page13)
+void initialiseProgrammableIO(statuses& current, const config13& page13)
 {
   uint8_t outputPin;
   for (uint8_t y = 0; y < _countof(ioDelay); y++)

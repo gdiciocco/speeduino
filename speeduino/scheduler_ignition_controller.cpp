@@ -32,7 +32,7 @@ IgnitionSchedule ignitionSchedule8(IGN8_COUNTER, IGN8_COMPARE); //cppcheck-suppr
 
 constexpr table2D_u8_u8_8 rotarySplitTable(&configPage10.rotarySplitBins, &configPage10.rotarySplitValues);
 
-static void __attribute__((optimize("Os"))) setSequentialCallbacks(uint8_t numChannels)
+static void setSequentialCallbacks(uint8_t numChannels)
 {
   setCallbacks(ignitionSchedule1, beginCoil1Charge, endCoil1Charge);
 #if IGN_CHANNELS >= 2
@@ -79,12 +79,12 @@ static void __attribute__((optimize("Os"))) setSequentialCallbacks(uint8_t numCh
 #endif
 }
 
-static void __attribute__((optimize("Os"))) setWastedSparkCallbacks(void)
+static void setWastedSparkCallbacks(void)
 {
   setSequentialCallbacks(min((uint8_t)5U, (uint8_t)IGN_CHANNELS));
 }
 
-static void __attribute__((optimize("Os"))) setSingleChannelCallbacks(void)
+static void setSingleChannelCallbacks(void)
 {
   //Single channel mode. All ignition pulses are on channel 1
   setCallbacks(ignitionSchedule1, beginCoil1Charge, endCoil1Charge);
@@ -111,7 +111,7 @@ static void __attribute__((optimize("Os"))) setSingleChannelCallbacks(void)
 #endif
 }
 
-static void __attribute__((optimize("Os"))) setWastedCOPCallbacks(uint8_t numCylinders)
+static void setWastedCOPCallbacks(uint8_t numCylinders)
 {
   //Wasted COP mode. Note, most of the boards can only run this for 4-cyl only.
   switch (numCylinders)
@@ -159,7 +159,7 @@ static void __attribute__((optimize("Os"))) setWastedCOPCallbacks(uint8_t numCyl
   }
 }
 
-static void __attribute__((optimize("Os"))) setRotaryCallbacks(uint8_t rotaryType)
+static void setRotaryCallbacks(uint8_t rotaryType)
 {
   switch (rotaryType)
   {
@@ -205,7 +205,7 @@ static void __attribute__((optimize("Os"))) setRotaryCallbacks(uint8_t rotaryTyp
   }
 }
 
-static void __attribute__((optimize("Os"))) setCallbacks(uint8_t sparkMode, uint8_t numCylinders, uint8_t rotaryMode)
+static void setCallbacks(uint8_t sparkMode, uint8_t numCylinders, uint8_t rotaryMode)
 {
   switch(sparkMode)
   {
@@ -219,7 +219,7 @@ static void __attribute__((optimize("Os"))) setCallbacks(uint8_t sparkMode, uint
   }
 }
 
-TESTABLE_STATIC void __attribute__((optimize("Os"))) resetIgnitionSchedulers(void)
+TESTABLE_STATIC void resetIgnitionSchedulers(void)
 {
   ignitionSchedule1.reset();
 #if IGN_CHANNELS >= 2
@@ -245,7 +245,7 @@ TESTABLE_STATIC void __attribute__((optimize("Os"))) resetIgnitionSchedulers(voi
 #endif
 }
 
-void __attribute__((optimize("Os"))) stopAllCoilsCharging(void)
+void stopAllCoilsCharging(void)
 {
   for (uint8_t index=1; index<=IGN_CHANNELS; ++index)
   {
@@ -253,7 +253,7 @@ void __attribute__((optimize("Os"))) stopAllCoilsCharging(void)
   }
 }
 
-void __attribute__((optimize("Os"))) initialiseIgnitionSchedules(uint8_t sparkMode, uint8_t numCylinders, uint8_t rotaryMode)
+void initialiseIgnitionSchedules(uint8_t sparkMode, uint8_t numCylinders, uint8_t rotaryMode)
 {
   //End all coil charges to ensure no stray sparks on startup
   stopAllCoilsCharging();
@@ -536,7 +536,7 @@ void applyOverDwellProtection(const config4 &page4, const statuses &current)
 }
 // LCOV_EXCL_STOP
 
-void __attribute__((optimize("Os"))) startIgnitionSchedulers(void)
+void startIgnitionSchedulers(void)
 {
   IGN1_TIMER_ENABLE();
 #if IGN_CHANNELS >= 2
@@ -562,7 +562,7 @@ void __attribute__((optimize("Os"))) startIgnitionSchedulers(void)
 #endif  
 }
 
-void __attribute__((optimize("Os"))) stopIgnitionSchedulers(void)
+void stopIgnitionSchedulers(void)
 {
   IGN1_TIMER_DISABLE();
 #if IGN_CHANNELS >= 2

@@ -15,7 +15,7 @@ bool isResetPreventActive(void)
   return _resetPreventActive;
 }
 
-void __attribute__((optimize("Os"))) initialiseResetControl(ResetControlMode resetControlMode, uint8_t resetPin)
+void initialiseResetControl(ResetControlMode resetControlMode, uint8_t resetPin)
 {
   _resetControl = resetControlMode;
   // We are assuming the engine is not running at the point of initialisation, so reset prevent 

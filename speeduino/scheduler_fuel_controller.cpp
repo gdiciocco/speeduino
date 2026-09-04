@@ -20,7 +20,7 @@ FuelSchedule fuelSchedule8(FUEL8_COUNTER, FUEL8_COMPARE); //cppcheck-suppress mi
 #endif
 
 
-static __attribute__((optimize("Os"))) void setupSequentialCallbacks(void)
+static void setupSequentialCallbacks(void)
 {
   #define SET_CALLBACKS(index) setCallbacks(fuelSchedule ## index, openInjector ## index, closeInjector ## index);\
   
@@ -48,12 +48,12 @@ static __attribute__((optimize("Os"))) void setupSequentialCallbacks(void)
 #endif
 }
 
-static __attribute__((optimize("Os"))) void setupPairedCallbacks(void)
+static void setupPairedCallbacks(void)
 {
   setupSequentialCallbacks();
 }
 
-static __attribute__((optimize("Os"))) void setupSemiSequentialCallbacks(uint8_t nCylinders, uint8_t inj4cylPairing)
+static void setupSemiSequentialCallbacks(uint8_t nCylinders, uint8_t inj4cylPairing)
 {
   //Semi-Sequential injection. Currently possible with 4, 6 and 8 cylinders. 5 cylinder is a special case
   if( nCylinders == 4 )
@@ -95,7 +95,7 @@ static __attribute__((optimize("Os"))) void setupSemiSequentialCallbacks(uint8_t
   }
 }
 
-static __attribute__((optimize("Os"))) void setupCallbacks(uint8_t injLayout, uint8_t nCylinders, uint8_t inj4cylPairing)
+static void setupCallbacks(uint8_t injLayout, uint8_t nCylinders, uint8_t inj4cylPairing)
 {
   switch(injLayout)
   {
@@ -405,7 +405,7 @@ BEGIN_LTO_ALWAYS_INLINE(void) applyPwToInjectorChannels(const pulseWidths &pulse
 }
 END_LTO_INLINE()
 
-static void __attribute__((optimize("Os"))) resetFuelSchedules(void)
+static void resetFuelSchedules(void)
 {
   fuelSchedule1.reset();
   fuelSchedule2.reset();
@@ -425,7 +425,7 @@ static void __attribute__((optimize("Os"))) resetFuelSchedules(void)
 #endif
 }
 
-void __attribute__((optimize("Os"))) startFuelSchedulers(void)
+void startFuelSchedulers(void)
 {
   FUEL1_TIMER_ENABLE();
   FUEL2_TIMER_ENABLE();
@@ -445,7 +445,7 @@ void __attribute__((optimize("Os"))) startFuelSchedulers(void)
 #endif
 }
 
-void __attribute__((optimize("Os"))) stopFuelSchedulers(void)
+void stopFuelSchedulers(void)
 {
   FUEL1_TIMER_DISABLE();
   FUEL2_TIMER_DISABLE();
@@ -471,7 +471,7 @@ TESTABLE_CONSTEXPR table2D_u8_u8_4 PrimingPulseTable(&configPage2.primeBins, &co
  * Set these to run at an arbitrary time in the future (100us).
  * The prime pulse value is in ms*10, so need to multiple by 100 to get to uS
  */
-void __attribute__((optimize("Os"))) beginInjectorPriming(const statuses &current, const config4 &page4)
+void beginInjectorPriming(const statuses &current, const config4 &page4)
 {
   uint16_t primingValue = (uint16_t)table2D_getValue(&PrimingPulseTable, temperatureAddOffset(current.coolant));
   if( (primingValue > 0U) && (current.TPS <= page4.floodClear) )
@@ -506,7 +506,7 @@ void __attribute__((optimize("Os"))) beginInjectorPriming(const statuses &curren
   }
 }
 
-void __attribute__((optimize("Os"))) closeAllInjectors(void)
+void closeAllInjectors(void)
 {
   for (uint8_t index=1; index<=INJ_CHANNELS; ++index)
   {
@@ -514,7 +514,7 @@ void __attribute__((optimize("Os"))) closeAllInjectors(void)
   }
 }
 
-void __attribute__((optimize("Os"))) initialiseFuelSchedules(statuses &current, const config2 &page2, const config4 &page4)
+void initialiseFuelSchedules(statuses &current, const config2 &page2, const config4 &page4)
 {
   closeAllInjectors();
   resetFuelSchedules();

@@ -40,7 +40,7 @@ volatile uint16_t tachoSweepAccum;
 volatile uint8_t testInjectorPulseCount = 0;
 volatile uint8_t testIgnitionPulseCount = 0;
 
-void __attribute__((optimize("Os"))) initialiseTimers(void)
+void initialiseTimers(void)
 {
   lastRPM_100ms = 0;
   loop5ms = 0;
@@ -65,7 +65,7 @@ uint8_t getAndClearTimerMask(void)
   return 0U; // Suppress false compiler warning
 }
 
-void __attribute__((optimize("Os"))) initTacho(uint8_t tachoPin)
+void initTacho(uint8_t tachoPin)
 {
   tach_pin.setPin(tachoPin, OUTPUT);
   tachoOutputFlag = TACHO_INACTIVE;

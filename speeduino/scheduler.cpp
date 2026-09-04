@@ -62,7 +62,7 @@ void FuelSchedule::reset(void)
     channelDegrees = 0;
 }
 
-void __attribute__((optimize("Os"))) setCallbacks(Schedule &schedule, Schedule::callback pStartCallback, Schedule::callback pEndCallback) noexcept
+void setCallbacks(Schedule &schedule, Schedule::callback pStartCallback, Schedule::callback pEndCallback) noexcept
 {
   schedule._pStartCallback = pStartCallback;
   schedule._pEndCallback = pEndCallback;

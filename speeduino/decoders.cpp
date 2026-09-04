@@ -881,7 +881,7 @@ static void triggerSetEndTeeth_missingTooth(void)
 #endif
 }
 
-decoder_t __attribute__((optimize("Os"))) triggerSetup_missingTooth(void)
+decoder_t triggerSetup_missingTooth(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -1108,7 +1108,7 @@ static void triggerSetEndTeeth_DualWheel(void)
 #endif
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_DualWheel(void)
+decoder_t  triggerSetup_DualWheel(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -1317,7 +1317,7 @@ static void triggerSetEndTeeth_BasicDistributor(void)
   }
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_BasicDistributor(void)
+decoder_t  triggerSetup_BasicDistributor(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -1471,7 +1471,7 @@ static void triggerSetEndTeeth_GM7X(void)
   }
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_GM7X(void)
+decoder_t  triggerSetup_GM7X(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -1859,7 +1859,7 @@ static void triggerSetEndTeeth_4G63(void)
   }
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_4G63(void)
+decoder_t  triggerSetup_4G63(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -2006,7 +2006,7 @@ static int16_t getCrankAngle_24X(void)
     return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_24X(void)
+decoder_t  triggerSetup_24X(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -2133,7 +2133,7 @@ static int16_t getCrankAngle_Jeep2000(void)
     return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Jeep2000(void)
+decoder_t  triggerSetup_Jeep2000(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -2269,7 +2269,7 @@ static int16_t getCrankAngle_Audi135(void)
     return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Audi135(void)
+decoder_t  triggerSetup_Audi135(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -2379,7 +2379,7 @@ static int16_t getCrankAngle_HondaD17(void)
     return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_HondaD17(void)
+decoder_t  triggerSetup_HondaD17(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -2513,7 +2513,7 @@ static int16_t getCrankAngle_HondaJ32(void)
   return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_HondaJ32(void)
+decoder_t  triggerSetup_HondaJ32(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -2771,7 +2771,7 @@ static void triggerSetEndTeeth_Miata9905(void)
   }
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Miata9905(void)
+decoder_t  triggerSetup_Miata9905(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -2948,7 +2948,7 @@ static int16_t getCrankAngle_MazdaAU(void)
     return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_MazdaAU(void)
+decoder_t  triggerSetup_MazdaAU(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -3025,7 +3025,7 @@ static int16_t getCrankAngle_non360(void)
     return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_non360(void)
+decoder_t  triggerSetup_non360(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -3272,7 +3272,7 @@ void triggerSetEndTeeth_Nissan360(void)
 #endif
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Nissan360(void)
+decoder_t  triggerSetup_Nissan360(void)
 {
 	sharedDecoderReset();
   decoderFeatures = decoder_features_t();
@@ -3541,7 +3541,7 @@ static void triggerSetEndTeeth_Subaru67(void)
   }
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Subaru67(void)
+decoder_t  triggerSetup_Subaru67(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -3709,7 +3709,7 @@ static int16_t getCrankAngle_Daihatsu(void)
     return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Daihatsu(void)
+decoder_t  triggerSetup_Daihatsu(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -3863,7 +3863,7 @@ static int16_t getCrankAngle_Harley(void)
   return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Harley(void)
+decoder_t  triggerSetup_Harley(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -4040,7 +4040,7 @@ static void triggerSetEndTeeth_ThirtySixMinus222(void)
   } 
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_ThirtySixMinus222(void)
+decoder_t  triggerSetup_ThirtySixMinus222(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -4166,7 +4166,7 @@ static void triggerSetEndTeeth_ThirtySixMinus21(void)
   ignitionEndTeeth[1] = 28; // Arbitrarily picked  at 180°.
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_ThirtySixMinus21(void)
+decoder_t  triggerSetup_ThirtySixMinus21(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -4346,7 +4346,7 @@ static void triggerSetEndTeeth_420a(void)
   }
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_420a(void)
+decoder_t  triggerSetup_420a(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -4485,7 +4485,7 @@ static void triggerSec_Webber(void)
   } //Trigger filter
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Webber(void)
+decoder_t  triggerSetup_Webber(void)
 {
   return decoder_builder_t(triggerSetup_DualWheel())
                   .setPrimaryTrigger(triggerPri_Webber, getConfigPriTriggerEdge(configPage4))
@@ -4619,7 +4619,7 @@ static void triggerSetEndTeeth_FordST170(void)
   // Removed ign channels >4 as an ST170 engine is a 4 cylinder
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_FordST170(void)
+decoder_t  triggerSetup_FordST170(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -4683,7 +4683,7 @@ static void triggerSec_DRZ400(void)
   triggerSecFilterTime = (toothOneTime - toothOneMinusOneTime) >> 1; //Set filter at 50% of the current crank speed. 
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_DRZ400(void)
+decoder_t  triggerSetup_DRZ400(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -4992,7 +4992,7 @@ static void triggerSetEndTeeth_NGC(void)
   #endif
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_NGC(void)
+decoder_t  triggerSetup_NGC(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -5222,7 +5222,7 @@ static int16_t getCrankAngle_Vmax(void)
   return crankAngle;
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Vmax(void)
+decoder_t  triggerSetup_Vmax(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -5381,7 +5381,7 @@ static void triggerSetEndTeeth_Renix(void)
 #endif
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_Renix(void)
+decoder_t  triggerSetup_Renix(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -5758,7 +5758,7 @@ static void triggerSetEndTeeth_RoverMEMS(void)
   ignitionEndTeeth[3] = tempIgnitionEndTooth[4];
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_RoverMEMS(void)
+decoder_t  triggerSetup_RoverMEMS(void)
 {
   decoderFeatures = decoder_features_t();
   for(toothOneTime = 0; toothOneTime < 10; toothOneTime++)   // repurpose variable temporarily to help clear ToothAngles.
@@ -6070,7 +6070,7 @@ static void triggerSetEndTeeth_SuzukiK6A(void)
 #endif
 }
 
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_SuzukiK6A(void)
+decoder_t  triggerSetup_SuzukiK6A(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();
@@ -6378,7 +6378,7 @@ static void triggerSetEndTeeth_FordTFI(void)
 /** Ford TFI Setup.
  * 
  * */
-decoder_t  __attribute__((optimize("Os"))) triggerSetup_FordTFI(void)
+decoder_t  triggerSetup_FordTFI(void)
 {
   decoderFeatures = decoder_features_t();
 	sharedDecoderReset();

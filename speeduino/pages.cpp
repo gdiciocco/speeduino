@@ -4,7 +4,6 @@
 #include "table3d_visitor.h"
 
 // This minimizes RAM usage at no performance cost
-#pragma GCC optimize ("Os") 
 
 // Maps from virtual page "addresses" to addresses/bytes of real in memory entities
 //

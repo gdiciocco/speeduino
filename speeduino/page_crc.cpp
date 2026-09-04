@@ -2,7 +2,7 @@
 #include "page_crc.h"
 #include "pages.h"
 
-uint32_t __attribute__((optimize("Os"))) calculatePageCRC32(uint8_t pageNum)
+uint32_t calculatePageCRC32(uint8_t pageNum)
 {
     crc32ByteStream_t crcStream;
     crcStream.begin();

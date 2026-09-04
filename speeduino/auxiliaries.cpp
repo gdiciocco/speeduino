@@ -42,7 +42,7 @@ static byte vvtCounter;
 
 static fastInputPin_t n2o_arming_pin;
 
-static __attribute__((optimize("Os"))) uint8_t getN2oArmPinPolarity(const config10 &page10)
+static uint8_t getN2oArmPinPolarity(const config10 &page10)
 {
   if(page10.n2o_pin_polarity == 1U) 
   { 
@@ -50,7 +50,7 @@ static __attribute__((optimize("Os"))) uint8_t getN2oArmPinPolarity(const config
   }
   return INPUT;
 }
-static __attribute__((optimize("Os"))) void initialiseN2oArmPin(const config10 &page10)
+static void initialiseN2oArmPin(const config10 &page10)
 {
   if(configPage10.n2o_enable!=0U && !pinIsReserved(page10.n2o_arming_pin))
   {
@@ -62,7 +62,7 @@ static __attribute__((optimize("Os"))) void initialiseN2oArmPin(const config10 &
 
 static fastInputPin_t aircon_req_pin;
 
-static __attribute__((optimize("Os"))) uint8_t getAirConRequestPinMode(const config15 &page15)
+static uint8_t getAirConRequestPinMode(const config15 &page15)
 {
   if(page15.airConReqPol)
   {
@@ -84,7 +84,7 @@ static boardOutputPin_t n2o_stage2_pin;
 static boardOutputPin_t aircon_comp_pin;
 static boardOutputPin_t aircon_fan_pin;
 
-static __attribute__((optimize("Os"))) void initialiseN2oPins(const config10 &page10)
+static void initialiseN2oPins(const config10 &page10)
 {
   n2o_stage1_pin.setPin(page10.n2o_stage1_pin, OUTPUT);
   n2o_stage2_pin.setPin(page10.n2o_stage2_pin, OUTPUT);
@@ -197,7 +197,7 @@ static inline void checkAirConRPMLockout(void);
 /*
 Air Conditioning Control
 */
-void __attribute__((optimize("Os"))) initialiseAirCon(void)
+void initialiseAirCon(void)
 {
   if( (configPage15.airConEnable) &&
       !pinIsReserved(pinAirConRequest) &&
@@ -435,7 +435,7 @@ void fanOff(void)
   }
 }
 
-void __attribute__((optimize("Os"))) initialiseFan(uint8_t fanPin)
+void initialiseFan(uint8_t fanPin)
 {
   fan_pin.setPin(fanPin, OUTPUT);
   fanOff();  //Initialise program with the fan in the off state
@@ -570,13 +570,13 @@ void fanControl(void)
 static boardOutputPin_t vvt1_pin;
 static boardOutputPin_t vvt2_pin;
 
-static __attribute__((optimize("Os"))) void initialiseVvtPins(uint8_t pin1, uint8_t pin2) 
+static void initialiseVvtPins(uint8_t pin1, uint8_t pin2) 
 { 
   vvt1_pin.setPin(pin1, OUTPUT);
   vvt2_pin.setPin(pin2, OUTPUT);
 }
 
-void __attribute__((optimize("Os"))) initialiseAuxPWM(void)
+void initialiseAuxPWM(void)
 {
   boost_pin.setPin(pinBoost, OUTPUT);
   initialiseVvtPins(pinVVT_1, pinVVT_2);

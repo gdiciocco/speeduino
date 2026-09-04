@@ -90,7 +90,7 @@ using channelFunc = void(*)(uint8_t);
 static channelFunc coilChargingFn = coilHigh;
 static channelFunc coilDischargingFn = coilLow;
 
-void __attribute__((optimize("Os"))) initMC33810(const config4 &page4,
+void initMC33810(const config4 &page4,
                                                  uint8_t pinMC33810_1, uint8_t pinMC33810_2,
                                                  const uint8_t (&injBits)[8], const uint8_t (&ignBits)[8])
 {
