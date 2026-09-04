@@ -4,9 +4,6 @@
 
 #include <unity.h>
 #include <Arduino.h>
-#if defined(SIMULATOR)
-#include <avr/sleep.h>
-#endif
 
 void setup(void (*runAllTests)(void))
 {
@@ -14,9 +11,7 @@ void setup(void (*runAllTests)(void))
 
     // Wait for Serial Monitor connection
     // Note: waiting on !Serial doesn't work on STM32
-#if !defined(SIMULATOR)
     delay(5000);
-#endif
     while (!Serial) {
         ; // Wait for serial connection
     }
@@ -26,17 +21,10 @@ void setup(void (*runAllTests)(void))
     runAllTests();
 
     // A small delay here helps STM32
-#if !defined(SIMULATOR)
     delay(500);
-#endif
 
     UNITY_END(); // stop unit testing
 
-#if defined(SIMULATOR)       // Tell SimAVR we are done
-    cli();
-    sleep_enable();
-    sleep_cpu();
-#endif     
 }
 
 #define TEST_HARNESS(testRunner) \

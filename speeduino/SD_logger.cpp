@@ -572,14 +572,7 @@ void writeSDLogHeader()
   //WRite remaining fields based on log definitions
   for(byte x=0; x<SD_LOG_NUM_FIELDS; x++)
   {
-    #ifdef CORE_AVR
-      //This will probably never be used
-      char buffer[30];
-      strcpy_P(buffer, (char *)pgm_read_word(&(header_table[x])));
-      rb.print(buffer);
-    #else
-      rb.print(header_table[x]);
-    #endif
+    rb.print(header_table[x]);
     if(x < (SD_LOG_NUM_FIELDS - 1)) { rb.print(","); }
   }
   rb.println("");

@@ -112,12 +112,6 @@ static uint32_t deferEEPROMWritesStart = 0; //!< Time (µS) at which the current
 static uint32_t deferEEPROMWritesDelay = 0; //!< How long (µS) after deferEEPROMWritesStart before page writing can resume
 static constexpr uint32_t EEPROM_DEFER_DELAY = MICROS_PER_SEC; //1.0 second pause after large comms before writing to EEPROM
 
-#if defined(CORE_AVR)
-#pragma GCC push_options
-// This minimizes RAM usage at no performance cost
-#pragma GCC optimize ("Os") 
-#endif
-
 /** @brief Has the current receive operation timed out? */
 bool isRxTimeout(void) 
 {
@@ -1244,8 +1238,5 @@ bool storageWriteTimeoutExpired(void) {
   return hasIntervalElapsed(micros(), deferEEPROMWritesStart, deferEEPROMWritesDelay);
 }
 
-#if defined(CORE_AVR)
-#pragma GCC pop_options
-#endif
 
 ///@}

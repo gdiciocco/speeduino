@@ -30,16 +30,6 @@ jobs:
       matrix:
         board:
           # Each element in the sequence produces a matrix job:
-          - fqbn: arduino:avr:mega
-            # This suffix will be used to define a unique name for the sketches report artifact.
-            artifact-name-suffix: arduino-avr-mega
-            family-name: arduino:avr
-            platform: |
-              - name: arduino:avr
-            compile-flags: -DPLATFORMIO -DUSE_LIBDIVIDE -DCRC_BIGTABLES=0 -DAFD_INLINE=0 -O3 -ffast-math -fshort-enums -funroll-loops -Wall -Wextra -std=c++14
-            lib_deps: |
-              - name: Time
-
           - fqbn: teensy:avr:teensy35
             artifact-name-suffix: teensy-avr-teensy35
             platform: |

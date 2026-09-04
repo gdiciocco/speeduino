@@ -3,7 +3,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-#if defined(__AVR__)
+#if !defined(NATIVE_BOARD) // Embedded target: use Arduino micros()
 #include <Arduino.h>
 #else
 #include <sys/time.h>
@@ -21,7 +21,7 @@
 
 class timer {
 private:
-#if defined(__AVR__)
+#if !defined(NATIVE_BOARD) // Embedded target: use Arduino micros()
     uint32_t start_time;
     uint32_t end_time;
 #else
@@ -35,7 +35,7 @@ public:
     }
 
     void start() {
-#if defined(__AVR__)
+#if !defined(NATIVE_BOARD) // Embedded target: use Arduino micros()
         start_time = micros();
 #else 
         gettimeofday(&start_time, NULL);
@@ -43,7 +43,7 @@ public:
     }
 
     void stop() {
-#if defined(__AVR__)
+#if !defined(NATIVE_BOARD) // Embedded target: use Arduino micros()
         end_time = micros();
 #else 
         gettimeofday(&end_time, NULL);
@@ -51,7 +51,7 @@ public:
     }
 
     uint32_t duration_micros() {
-#if defined(__AVR__)
+#if !defined(NATIVE_BOARD) // Embedded target: use Arduino micros()
         return end_time-start_time;
 #else 
         return (uint32_t)(((end_time.tv_sec - start_time.tv_sec) * MICROS_PER_SEC) + (end_time.tv_usec - start_time.tv_usec));

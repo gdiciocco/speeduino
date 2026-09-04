@@ -37,9 +37,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install --upgrade platformio
 
-    - name: Build test atmel
-      run: platformio run -e megaatmega2560 -e megaatmega2560-6-3 -e megaatmega2560-8-1
-
     - name: Build test teensy
       run: platformio run -e teensy35 -e teensy36 -e teensy41
 
@@ -52,7 +49,6 @@ jobs:
         WEB_PWD: ${{ secrets.WEB_PWD }}
       run: |
         curl -v https://webdisk.speeduino.com:2078 || true
-        curl -vk --tlsv1.2 --ipv4 --user "speeduino_firmware@speeduino.com:$WEB_PWD" --basic -T "./.pio/build/megaatmega2560/firmware.hex" "https://webdisk.speeduino.com:2078/bin/master.hex"
         curl -vk --tlsv1.2 --ipv4 --user "speeduino_firmware@speeduino.com:$WEB_PWD" --basic -T "./.pio/build/teensy35/firmware.hex"       "https://webdisk.speeduino.com:2078/teensy35/master-teensy35.hex"
         curl -vk --tlsv1.2 --ipv4 --user "speeduino_firmware@speeduino.com:$WEB_PWD" --basic -T "./.pio/build/teensy36/firmware.hex"       "https://webdisk.speeduino.com:2078/teensy36/master-teensy36.hex"
         curl -vk --tlsv1.2 --ipv4 --user "speeduino_firmware@speeduino.com:$WEB_PWD" --basic -T "./.pio/build/teensy41/firmware.hex"       "https://webdisk.speeduino.com:2078/teensy41/master-teensy41.hex"

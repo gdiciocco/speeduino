@@ -15,12 +15,13 @@
  * the values from config are copied from config* structs to table2D (table3D destined configurations are not stored in config* structures).
  * 
  * ### Board choice
- * There's a C-preprocessor based "#if defined" logic present in this header file based on the Arduino IDE compiler set CPU
- * (+board?) type, e.g. `__AVR_ATmega2560__`. This respectively drives (withi it's "#if defined ..." block):
+ * There's a C-preprocessor based "#if defined" logic present in board_definition.h based on the compiler set CPU
+ * (+board?) type, e.g. `STM32F407xx`. This respectively drives (within its "#if defined ..." block):
  * - The setting of various BOARD_* C-preprocessor variables (e.g. BOARD_MAX_ADC_PINS)
- * - Setting of BOARD_H (Board header) file (e.g. "board_avr2560.h"), which is later used to include the header file
- *   - Seems Arduino ide implicitly compiles and links respective .ino file (by it's internal build/compilation rules) (?)
- * - Setting of CPU (?) CORE_* variables (e.g. CORE_AVR), that is used across codebase to distinguish CPU.
+ * - Inclusion of the board header file (e.g. "board_stm32_official.h")
+ * - Setting of CPU CORE_* variables (e.g. CORE_STM32), that is used across codebase to distinguish CPU.
+ *
+ * @note 8-bit (AVR / ATmega2560) support was removed from this fork; only 32-bit targets are supported.
  */
 #ifndef GLOBALS_H
 #define GLOBALS_H

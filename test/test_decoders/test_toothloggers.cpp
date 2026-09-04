@@ -107,10 +107,6 @@ static uint8_t decoderToTest;
 
 static void test_start_stop_rising(void)
 {
-#if !defined(SIMULATOR) && defined(CORE_AVR)
-  TEST_IGNORE_MESSAGE("Cannot run interrupt based tests on AVRboard");
-#endif
-
     pinTrigger = 19; // Example pin number
     configPage4.TrigEdge = 0;
     currentStatus.initialisationComplete = false;
@@ -121,10 +117,6 @@ static void test_start_stop_rising(void)
 
 static void test_start_stop_falling(void)
 {
-#if !defined(SIMULATOR) && defined(CORE_AVR)
-  TEST_IGNORE_MESSAGE("Cannot run interrupt based tests on AVRboard");
-#endif
-
     pinTrigger = 19; // Example pin number
     configPage4.TrigEdge = 1;
     auto decoder = buildDecoder(decoderToTest);
@@ -153,9 +145,6 @@ static void test_start_stop_all(void)
 
 static void test_start_stop_ngc(void)
 {
-#if !defined(SIMULATOR) && defined(CORE_AVR)
-  TEST_IGNORE_MESSAGE("Cannot run interrupt based tests on AVRboard");
-#endif
   pinTrigger = 19; // Example pin number
   auto decoder = buildDecoder(DECODER_NGC);
 

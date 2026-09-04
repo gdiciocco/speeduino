@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  Simulator-Unit-Test:
+  Native-Unit-Test:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,6 +29,6 @@ jobs:
         platformio upgrade
         platformio pkg update
 
-    - name: Run Simulator Unit Tests
+    - name: Run Native Unit Tests
       run: | 
-        platformio test -v -e megaatmega2560_sim_unittest
+        platformio test -v -e native_base

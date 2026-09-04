@@ -15,12 +15,6 @@ A full copy of the license may be found in the projects root directory
 #include "unit_testing.h"
 #include "scheduler.h"
 
-#if defined(CORE_AVR)
-#pragma GCC push_options
-// This minimizes RAM usage at no performance cost
-#pragma GCC optimize ("Os") 
-#endif
-
 // LCOV_EXCL_START
 // Exclude from coverage: these are only here for completeness
 // and will be replaced during normal firmware startup
@@ -684,6 +678,3 @@ void saveEEPROMVersion(uint8_t newVersion)
 }
 // LCOV_EXCL_STOP
 
-#if defined(CORE_AVR)
-#pragma GCC pop_options
-#endif

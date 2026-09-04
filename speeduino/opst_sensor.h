@@ -8,11 +8,7 @@
 
 #define PIN_OPST PF3
 
-#if defined(CORE_AVR)
-#define READ_OPST_TRIGGER() ((*oilSensorOPSt_pin_port & oilSensorOPSt_pin_mask) ? true : false)
-#else
 #define READ_OPST_TRIGGER() digitalRead(PIN_OPST)
-#endif
 
 void readOPSt();
 

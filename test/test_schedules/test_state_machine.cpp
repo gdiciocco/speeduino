@@ -27,16 +27,10 @@ static void test_defaultPendingToRunning(void) {
     endCount = 0;
 
     schedule._duration = uS_TO_TIMER_COMPARE(2048); 
-#if defined(CORE_AVR)        
-    raw_counter_t counterPreAction = schedule._counter;
-#endif
     
     defaultPendingToRunning(&schedule);
 
     TEST_ASSERT_EQUAL(RUNNING, schedule._status);
-#if defined(CORE_AVR)        
-    TEST_ASSERT_UINT32_WITHIN(TIMER_VARIANCE, counterPreAction+schedule._duration, schedule._compare);
-#endif
     TEST_ASSERT_EQUAL(1, startCount);
     TEST_ASSERT_EQUAL(0, endCount);
 }
@@ -82,9 +76,6 @@ static void test_defaultRunningToPending(void) {
     defaultRunningToPending(&schedule);
 
     TEST_ASSERT_EQUAL(PENDING, schedule._status);
-#if defined(CORE_AVR)        
-    TEST_ASSERT_UINT32_WITHIN(TIMER_VARIANCE, schedule._nextStartCompare, schedule._compare);
-#endif
     TEST_ASSERT_EQUAL(0, startCount);
     TEST_ASSERT_EQUAL(1, endCount);
 }

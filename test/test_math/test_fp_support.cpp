@@ -3,35 +3,18 @@
 #include "test_fp_support.h"
 #include <inttypes.h>
 
-#if defined(ARDUINO_ARCH_AVR)
-#include <fp64lib.h>
-using test_float_t = float64_t;
-#else
 using test_float_t = double;
-#endif
 
 test_float_t floatDivision(int32_t a, int32_t b) {
-#if defined(ARDUINO_ARCH_AVR)
-  return fp64_div(fp64_int32_to_float64(a), fp64_int32_to_float64(b));
-#else
   return (double)a/(double)b;
-#endif
 }
 
 test_float_t floatDivision(uint32_t a, uint32_t b) {
-#if defined(ARDUINO_ARCH_AVR)
-  return fp64_div(fp64_uint32_to_float64(a), fp64_uint32_to_float64(b));
-#else
   return (double)a/(double)b;
-#endif
 }
 
 int32_t round_float(test_float_t f) {
-#if defined(ARDUINO_ARCH_AVR)
-  return fp64_lround(f);
-#else
   return round(f);
-#endif
 }
 
 template <typename T>

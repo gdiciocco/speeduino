@@ -242,50 +242,17 @@ void test_initialisation_outputs_VVT(void)
 
 void test_initialisation_outputs_reset_control_use_board_default(void)
 {
-#if !defined(ARDUINO_ARCH_AVR)
-  TEST_IGNORE_MESSAGE("Test only works for Mega2560");
-#else
-  prepareForInitialiseAll(9);
-  configPage4.resetControlConfig = (byte)ResetControlMode::PreventWhenRunning;
-  configPage4.resetControlPin = 0; // Flags to use board default
-  initialiseAll(); //Run the main initialise function
-
-  TEST_ASSERT_NOT_EQUAL(0, pinResetControl); 
-  TEST_ASSERT_EQUAL(ResetControlMode::PreventWhenRunning, getResetControlMode());
-  TEST_ASSERT_EQUAL(OUTPUT, getPinMode(pinResetControl));  
-#endif
+  TEST_IGNORE_MESSAGE("Board-specific pin assertions targeted the Mega2560; 8-bit support removed");
 }
 
 void test_initialisation_outputs_reset_control_override_board_default(void)
 {
-#if !defined(ARDUINO_ARCH_AVR)
-  TEST_IGNORE_MESSAGE("Test only works for Mega2560");
-#else
-  prepareForInitialiseAll(9);
-  configPage4.resetControlConfig = (byte)ResetControlMode::PreventWhenRunning;
-  configPage4.resetControlPin = 45; // Use a different pin
-  initialiseAll(); //Run the main initialise function
-
-  TEST_ASSERT_EQUAL(45, pinResetControl);  
-  TEST_ASSERT_EQUAL(ResetControlMode::PreventWhenRunning, getResetControlMode());
-  TEST_ASSERT_EQUAL(OUTPUT, getPinMode(pinResetControl));
-#endif
+  TEST_IGNORE_MESSAGE("Board-specific pin assertions targeted the Mega2560; 8-bit support removed");
 }
 
 void test_initialisation_user_pin_override_board_default(void)
 {
-#if !defined(ARDUINO_ARCH_AVR)
-  TEST_IGNORE_MESSAGE("Test only works for Mega2560");
-#else
-  prepareForInitialiseAll(3);
-  // We do not test all pins, too many & too fragile. So fingers crossed the 
-  // same pattern is used for all.
-  configPage2.tachoPin = 15;
-  initialiseAll(); //Run the main initialise function
-
-  TEST_ASSERT_EQUAL(15, pinTachOut);  
-  TEST_ASSERT_EQUAL(OUTPUT, getPinMode(pinTachOut));
-#endif
+  TEST_IGNORE_MESSAGE("Board-specific pin assertions targeted the Mega2560; 8-bit support removed");
 }
 
 // All config user pin fields are <= 6 *bits*. So too small to
@@ -306,17 +273,7 @@ void test_initialisation_user_pin_not_valid_no_override(void)
 
 void test_initialisation_input_user_pin_does_not_override_outputpin(void)
 {
-#if !defined(ARDUINO_ARCH_AVR)
-  TEST_IGNORE_MESSAGE("Test only works for Mega2560");;
-#else
-  // A user defineable input pin should not overwrite any output pins.
-  prepareForInitialiseAll(3);
-  configPage6.launchPin = 49; // 49 is the default tacho output
-  initialiseAll(); //Run the main initialise function
-
-  TEST_ASSERT_EQUAL(49, pinTachOut);  
-  TEST_ASSERT_EQUAL(OUTPUT, getPinMode(pinTachOut));
-#endif
+  TEST_IGNORE_MESSAGE("Board-specific pin assertions targeted the Mega2560; 8-bit support removed");
 }
 
 void testInitialisation()

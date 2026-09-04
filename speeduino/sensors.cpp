@@ -278,99 +278,18 @@ void refreshADCConfiguration(void)
 }
 
 
-#if defined(ANALOG_ISR)
-static volatile uint16_t AnChannel[16];
-static inline uint16_t readAnalogSensor(uint8_t pin) {
-  return AnChannel[pin-A0];
-}
-static inline uint16_t readMAPSensor(uint8_t pin) {
-#if defined(ANALOG_ISR_MAP)
-  return AnChannel[pin-A0];
-#else
-  return readAnalogPin(pin);
-#endif
-}
-#define ADMUX_DEFAULT_CONFIG  0x40 //AVCC reference, ADC0 input, right adjusted, ADC enabled
-
-ISR(ADC_vect)
-{
-  byte nChannel = (ADMUX & 0x07);
-
-  byte result_low = ADCL;
-  byte result_high = ADCH;
-
-  #if defined(__AVR_ATmega1281__) || defined(__AVR_ATmega2561__)
-    if (nChannel == 7U) { ADMUX = 0x40; }
-  #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    if( BIT_CHECK(ADCSRB, MUX5) ) { nChannel += 8; }  //8 to 15
-    if(nChannel == 15U)
-    {
-      ADMUX = ADMUX_DEFAULT_CONFIG; //channel 0
-      ADCSRB = 0x00; //clear MUX5 bit
-
-      BIT_CLEAR(ADCSRA,ADIE); //Disable interrupt as we're at the end of a full ADC cycle. This will be re-enabled in the main loop
-    }
-    else if (nChannel == 7U) //channel 7
-    {
-      ADMUX = ADMUX_DEFAULT_CONFIG;
-      ADCSRB = 0x08; //Set MUX5 bit
-    }
-  #endif
-    else { ADMUX++; }
-
-  //ADMUX always appears to be one ahead of the actual channel value that is in ADCL/ADCH. Subtract 1 from it to get the correct channel number
-  if(nChannel == 0U) { nChannel = 16;} 
-  AnChannel[nChannel-1] = (result_high << 8) | result_low;
-}
-#else
 static inline uint16_t readAnalogSensor(uint8_t pin) {
   return readAnalogPin(pin);
 }
 static inline uint16_t readMAPSensor(uint8_t pin) {
   return readAnalogPin(pin);
 }
-#endif
 
 /** Init all ADC conversions by setting resolutions, etc.
  */
 void initialiseADC(void)
 {
-#ifdef CORE_AVR
-
-  #if defined(ANALOG_ISR)
-    noInterrupts(); //Interrupts should be turned off when playing with any of these registers
-
-    ADCSRB = 0x00; //ADC Auto Trigger Source is in Free Running mode
-
-    ADMUX = ADMUX_DEFAULT_CONFIG;  //Select AVCC as reference, ADC Right Adjust Result, Starting at channel 0
-
-    //All of the below is the longhand version of: ADCSRA = 0xEE;
-    #ifndef ADFR
-      #define ADFR 5 //Looks like this is now defined. Retain this for compatibility with earlier versions of Arduino IDE that did not have this.
-    #endif
-    BIT_SET(ADCSRA,ADFR); //Set free running mode
-    BIT_SET(ADCSRA,ADIE); //Set ADC interrupt enabled
-    BIT_CLEAR(ADCSRA,ADIF); //Clear interrupt flag
-
-    // Set ADC clock to 125KHz (Prescaler = 128)
-    BIT_SET(ADCSRA,ADPS2);
-    BIT_SET(ADCSRA,ADPS1);
-    BIT_SET(ADCSRA,ADPS0);
-
-    BIT_SET(ADCSRA,ADEN); //Enable ADC
-
-    interrupts();
-    BIT_SET(ADCSRA,ADSC); //Start conversion
-
-  #else
-    //This sets the ADC (Analog to Digital Converter) to run at 1Mhz, greatly reducing analog read times (MAP/TPS) when using the standard analogRead() function
-    //1Mhz is the fastest speed permitted by the CPU without affecting accuracy
-    //Please see chapter 11 of 'Practical Arduino' (books.google.com.au/books?id=HsTxON1L6D4C&printsec=frontcover#v=onepage&q&f=false) for more detail
-     BIT_SET(ADCSRA,ADPS2);
-     BIT_CLEAR(ADCSRA,ADPS1);
-     BIT_CLEAR(ADCSRA,ADPS0);
-  #endif
-#elif defined(ARDUINO_ARCH_STM32) //STM32GENERIC core and ST STM32duino core, change analog read to 12 bit
+#if defined(ARDUINO_ARCH_STM32) //ST STM32duino core, change analog read resolution
   analogReadResolution(10); //use 10bits for analog reading on STM32 boards
 #endif
 
@@ -891,14 +810,6 @@ static inline void readBat(void)
       (int16_t)UINT8_MAX);
 }
 
-#if defined(ANALOG_ISR)
-static inline void enableAnalogIsr(void)
-{
-  //ADC in free running mode does 1 complete conversion of all 16 channels and then the interrupt is disabled. Every 200Hz we re-enable the interrupt to get another conversion cycle
-  BIT_SET(ADCSRA,ADIE); //Enable ADC interrupt
-}
-#endif
-
 /**
  * @brief Returns the VSS pulse gap for a given history point
  * 
@@ -1092,9 +1003,6 @@ BEGIN_LTO_ALWAYS_INLINE(void) readPolledSensors(byte loopTimer)
     {BAT_READ_TIMER_BIT, readBat},
     {BARO_READ_TIMER_BIT, readBaro},
     {MAP_READ_TIMER_BIT, readMAP},
-#if defined(ANALOG_ISR)
-    {BIT_TIMER_200HZ, enableAnalogIsr},
-#endif
     {BIT_TIMER_10HZ, readSpeed},
     {BIT_TIMER_10HZ, readGear},
     {BIT_TIMER_4HZ, updateFuelPressure},

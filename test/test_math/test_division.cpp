@@ -124,9 +124,6 @@ void test_maths_div100_s16_perf(void)
     // here to force the compiler to run the loops above
     TEST_ASSERT_INT32_WITHIN(UINT32_MAX/2, comparison.timeA.result, comparison.timeB.result);
 
-#if defined(__AVR__) // Speed up only noticeable on AVR
-    TEST_ASSERT_LESS_THAN(comparison.timeA.durationMicros, comparison.timeB.durationMicros);
-#endif
 }
 
 void test_maths_div10_s16_perf(void)
@@ -145,9 +142,6 @@ void test_maths_div10_s16_perf(void)
   // here to force the compiler to run the loops above
   TEST_ASSERT_INT32_WITHIN(UINT32_MAX/2, comparison.timeA.result, comparison.timeB.result);
 
-#if defined(__AVR__) // Speed up only noticeable on AVR
-  TEST_ASSERT_LESS_THAN(comparison.timeA.durationMicros, comparison.timeB.durationMicros);
-#endif
 }
 
 void test_maths_div100_s32_perf(void)
@@ -165,9 +159,6 @@ void test_maths_div100_s32_perf(void)
     // here to force the compiler to run the loops above
     TEST_ASSERT_INT32_WITHIN(UINT32_MAX/2, comparison.timeA.result, comparison.timeB.result);
 
-#if defined(__AVR__) // Speed up only noticeable on AVR
-    TEST_ASSERT_LESS_THAN(comparison.timeA.durationMicros, comparison.timeB.durationMicros);
-#endif
 }
 
 template<uint16_t divisor>

@@ -49,12 +49,6 @@ static bool isMap(void) {
   return (currentPage == veMapPage) || (currentPage == ignMapPage) || (currentPage == afrMapPage) || (currentPage == fuelMap2Page) || (currentPage == ignMap2Page);
 }
 
-#if defined(CORE_AVR)
-#pragma GCC push_options
-// This minimizes RAM usage at no performance cost
-#pragma GCC optimize ("Os") 
-#endif
-
 template <typename axis_t, typename value_t, uint8_t sizeT>
 static void print2dTable(Stream &serial, axis_t (&axis)[sizeT], value_t (&values)[sizeT]) {
   for (uint8_t x = 0U; x < sizeT; ++x)
@@ -1258,6 +1252,3 @@ void testComm(void)
   return;
 }
 
-#if defined(CORE_AVR)
-#pragma GCC pop_options
-#endif

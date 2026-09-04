@@ -36,7 +36,7 @@ jobs:
         pip install --upgrade platformio
 
     - name: Build Firmware
-      run: platformio run -e megaatmega2560 -e teensy35 -e teensy36 -e teensy41 -e black_F407VE
+      run: platformio run -e teensy35 -e teensy36 -e teensy41 -e black_F407VE
 
     - name: Upload to Speeduino server
       if: startsWith(github.ref, 'refs/tags/')
@@ -45,7 +45,6 @@ jobs:
         TAG_NAME: ${{ github.ref_name }}
       run: |
         curl https://webdisk.speeduino.com:2078 || true
-        curl -k --tlsv1.2 --ipv4 --user "speeduino_firmware@speeduino.com:$WEB_PWD" --basic -T "./.pio/build/megaatmega2560/firmware.hex" "https://webdisk.speeduino.com:2078/bin/$TAG_NAME.hex"
         curl -k --tlsv1.2 --ipv4 --user "speeduino_firmware@speeduino.com:$WEB_PWD" --basic -T "./.pio/build/teensy35/firmware.hex"       "https://webdisk.speeduino.com:2078/teensy35/$TAG_NAME-teensy35.hex"
         curl -k --tlsv1.2 --ipv4 --user "speeduino_firmware@speeduino.com:$WEB_PWD" --basic -T "./.pio/build/teensy36/firmware.hex"       "https://webdisk.speeduino.com:2078/teensy36/$TAG_NAME-teensy36.hex"
         curl -k --tlsv1.2 --ipv4 --user "speeduino_firmware@speeduino.com:$WEB_PWD" --basic -T "./.pio/build/teensy41/firmware.hex"       "https://webdisk.speeduino.com:2078/teensy41/$TAG_NAME-teensy41.hex"

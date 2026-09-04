@@ -595,9 +595,7 @@ void __attribute__((optimize("Os"))) initialiseAuxPWM(void)
     currentStatus.vvt1Angle = 0;
     currentStatus.vvt2Angle = 0;
 
-    #if defined(CORE_AVR)
-      vvt_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (16U * configPage6.vvtFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
-    #elif defined(CORE_TEENSY35)
+    #if defined(CORE_TEENSY35)
       vvt_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (32U * configPage6.vvtFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
     #elif defined(CORE_TEENSY41)
       vvt_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (2U * configPage6.vvtFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 2uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
@@ -630,9 +628,7 @@ void __attribute__((optimize("Os"))) initialiseAuxPWM(void)
   if( (configPage6.vvtEnabled == 0) && (configPage10.wmiEnabled >= 1) )
   {
     // config wmi pwm output to use vvt output
-    #if defined(CORE_AVR)
-      vvt_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (16U * configPage6.vvtFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
-    #elif defined(CORE_TEENSY35)
+    #if defined(CORE_TEENSY35)
       vvt_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (32U * configPage6.vvtFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 16uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz
     #elif defined(CORE_TEENSY41)
       vvt_pwm_max_count = (uint16_t)(MICROS_PER_SEC / (2U * configPage6.vvtFreq * 2U)); //Converts the frequency in Hz to the number of ticks (at 2uS) it takes to complete 1 cycle. Note that the frequency is divided by 2 coming from TS to allow for up to 512hz

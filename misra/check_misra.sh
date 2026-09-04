@@ -64,17 +64,15 @@ cppcheck_parameters=( --inline-suppr
                       --suppress=missingIncludeSystem:*
                       --suppress=unmatchedSuppression:*
                       --suppress=cstyleCast:*
-                      --platform=avr8
+                      --platform=unix32
                       --cppcheck-build-dir="$out_folder"
                       -j "$num_cores"
-                      -DCORE_AVR=1
-                      -D__AVR_ATmega2560__
-                      -DARDUINO_AVR_MEGA2560 
-                      -DF_CPU=16000000L 
-                      -DARDUINO_ARCH_AVR 
-                      -DARDUINO=10808 
-                      -DAVR=1
-                      # This is defined in the AVR headers, which aren't included.
+                      -DCORE_STM32=1
+                      -DSTM32F4
+                      -DSTM32F407xx
+                      -DARDUINO_ARCH_STM32
+                      -DARDUINO=10808
+                      # This is defined in the Arduino core headers, which aren't included.
                       # cppcheck will not do type checking on unknown types.
                       # It's used a lot and it's unsigned, which can trigger a lot
                       # of type mismatch violations.

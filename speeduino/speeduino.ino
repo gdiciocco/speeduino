@@ -276,14 +276,6 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
         if(configPage13.onboard_log_file_rate == SD_LOGGER_RATE_30HZ) { writeSDLogEntry(); }
       #endif
 
-      //AVR units process secondary serial requests at a fixed 30Hz
-      #ifdef CORE_AVR
-      if( (configPage9.enable_secondarySerial == 1) && (secondarySerial.available() > 0) ) //secondary serial interface enabled
-      {
-        secondserial_Command();
-      }
-      #endif
-
       //Check for any outstanding EEPROM writes.
       if( (isEepromWritePending() == true) && (serialStatusFlag == SERIAL_INACTIVE) && storageWriteTimeoutExpired()) { saveAllPages(); }
 

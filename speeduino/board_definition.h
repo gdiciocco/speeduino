@@ -51,9 +51,7 @@ storage_api_t getBoardStorageApi(void);
 ///@endcond 
 
 // Include a specific header for a board.
-#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
-  #include "board_avr2560.h"
-#elif defined(CORE_TEENSY)
+#if defined(CORE_TEENSY)
   #if defined(__MK64FX512__) || defined(__MK66FX1M0__)
     #include "board_teensy35.h"
   #elif defined(__IMXRT1062__)
@@ -67,7 +65,7 @@ storage_api_t getBoardStorageApi(void);
 #elif defined(EXTERNAL_BOARD_H)
   #include EXTERNAL_BOARD_H
 #else
-  #error Incorrect board selected. Please select the correct board (Usually Mega 2560) and upload again
+  #error Incorrect board selected. Please select a supported 32-bit board (STM32/Teensy) and upload again
 #endif
 
 #if defined(RTC_ENABLED)

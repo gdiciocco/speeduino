@@ -17,33 +17,6 @@
 #include "table3d_interpolate.h"
 #include "units.h"
 
-#if defined(CORE_AVR) && !defined(UNIT_TEST)
-
-// The dense learner state needs 1.4 kB with eight injector channels. That is
-// safe on the supported 32-bit targets, but would make existing ATmega2560
-// eight-channel builds exceed their entire 8 kB SRAM budget. Keep the schema
-// portable while failing closed on AVR instead of destabilising the ECU.
-namespace {
-SeqTrimAutotuneDiagnostics unsupportedDiag;
-}
-
-void seqTrimAutotuneInit(void)
-{
-  unsupportedDiag = SeqTrimAutotuneDiagnostics();
-  unsupportedDiag.gateBits = SEQ_TRIM_GATE_DISABLED | SEQ_TRIM_GATE_CONFIG;
-}
-
-void seqTrimAutotuneUpdate(void)
-{
-}
-
-const SeqTrimAutotuneDiagnostics& seqTrimAutotuneDiag(void)
-{
-  return unsupportedDiag;
-}
-
-#else
-
 namespace {
 
 constexpr uint8_t TABLE_DIM = 6U;
@@ -560,4 +533,3 @@ int32_t seqTrimAutotuneCellAccumulator(uint8_t trim, uint8_t cell)
 }
 #endif
 
-#endif //CORE_AVR production stub / full learner

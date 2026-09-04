@@ -43,12 +43,6 @@
 #include "seq_trim_autotune.h"
 #include "vehicle_distance.h"
 
-#if defined(CORE_AVR)
-#pragma GCC push_options
-// This minimizes RAM usage at no performance cost
-#pragma GCC optimize ("Os") 
-#endif
-
 ///
 /// @brief Allow the user to reset the firmware storage (aka EPROM).
 ///
@@ -1465,42 +1459,6 @@ void setPinMapping(byte boardID)
     #endif
       break;
 
-    case 20:
-    #if defined(CORE_AVR) && !defined(SMALL_FLASH_MODE) //No support for bluepill here anyway
-      //Pin mappings as per the Plazomat In/Out shields Rev 0.1
-      pinInjector1 = 8; //Output pin injector 1 is on
-      pinInjector2 = 9; //Output pin injector 2 is on
-      pinInjector3 = 10; //Output pin injector 3 is on
-      pinInjector4 = 11; //Output pin injector 4 is on
-      pinInjector5 = 12; //Output pin injector 5 is on
-      pinCoil1 = 28; //Pin for coil 1
-      pinCoil2 = 24; //Pin for coil 2
-      pinCoil3 = 40; //Pin for coil 3
-      pinCoil4 = 36; //Pin for coil 4
-      pinCoil5 = 34; //Pin for coil 5 PLACEHOLDER value for now
-      pinSpareOut1 = 4; //Spare LSD Output 1(PWM)
-      pinSpareOut2 = 5; //Spare LSD Output 2(PWM)
-      pinSpareOut3 = 6; //Spare LSD Output 3(PWM)
-      pinSpareOut4 = 7; //Spare LSD Output 4(PWM)
-      pinSpareOut5 = 50; //Spare LSD Output 5(digital)
-      pinSpareOut6 = 52; //Spare LSD Output 6(digital)
-      pinTrigger = 20; //The CAS pin
-      pinTrigger2 = 21; //The Cam Sensor pin
-      pinSpareTemp2 = A15; //spare Analog input 2
-      pinSpareTemp1 = A14; //spare Analog input 1
-      pinO2 = A8; //O2 Sensor pin
-      pinBat = A4; //Battery reference voltage pin
-      pinMAP = A3; //MAP sensor pin
-      pinTPS = A2;//TPS input pin
-      pinCLT = A1; //CLS sensor pin
-      pinIAT = A0; //IAT sensor pin
-      pinFan = 47; //Pin for the fan output
-      pinFuelPump = 4; //Fuel pump output
-      pinTachOut = 49; //Tacho output pin
-      pinResetControl = 26; //Reset control output
-    #endif
-      break;
-
     case 30:
     #ifndef SMALL_FLASH_MODE //No support for bluepill here anyway
       //Pin mappings as per the dazv6 shield
@@ -1544,59 +1502,7 @@ void setPinMapping(byte boardID)
 
    case 31:
       //Pin mappings for the BMW PnP PCBs by pazi88.
-      #if defined(CORE_AVR)
-      //This is the regular MEGA2560 pin mapping
-      pinInjector1 = 8; //Output pin injector 1
-      pinInjector2 = 9; //Output pin injector 2
-      pinInjector3 = 10; //Output pin injector 3
-      pinInjector4 = 11; //Output pin injector 4
-      pinInjector5 = 12; //Output pin injector 5
-      pinInjector6 = 50; //Output pin injector 6
-      pinInjector7 = 39; //Output pin injector 7
-      pinInjector8 = 42; //Output pin injector 8
-      pinCoil1 = 40; //Pin for coil 1
-      pinCoil2 = 38; //Pin for coil 2
-      pinCoil3 = 52; //Pin for coil 3
-      pinCoil4 = 48; //Pin for coil 4
-      pinCoil5 = 36; //Pin for coil 5
-      pinCoil6 = 34; //Pin for coil 6
-      pinCoil7 = 46; //Pin for coil 7
-      pinCoil8 = 53; //Pin for coil 8
-      pinTrigger = 19; //The CAS pin
-      pinTrigger2 = 18; //The Cam Sensor pin
-      pinTrigger3 = 20; //The Cam sensor 2 pin
-      pinTPS = A2;//TPS input pin
-      pinMAP = A3; //MAP sensor pin
-      pinEMAP = A15; //EMAP sensor pin
-      pinIAT = A0; //IAT sensor pin
-      pinCLT = A1; //CLT sensor pin
-      pinO2 = A8; //O2 Sensor pin
-      pinO2_2 = A12; //O2 Sensor pin
-      pinBat = A4; //Battery reference voltage pin
-      pinBaro = A5; //Baro sensor pin
-      pinDisplayReset = 41; // OLED reset pin
-      pinTachOut = 49; //Tacho output pin  (Goes to ULN2003)
-      pinIdle1 = 5; //ICV pin1
-      pinIdle2 = 6; //ICV pin3
-      pinBoost = 7; //Boost control
-      pinVVT_1 = 4; //VVT1 output (intake vanos)
-      pinVVT_2 = 26; //VVT2 output (exhaust vanos)
-      pinFuelPump = 45; //Fuel pump output  (Goes to ULN2003)
-      pinStepperDir = 16; //Stepper valve isn't used with these
-      pinStepperStep = 17; //Stepper valve isn't used with these
-      pinStepperEnable = 24; //Stepper valve isn't used with these
-      pinFan = 47; //Pin for the fan output (Goes to ULN2003)
-      pinLaunch = 51; //Launch control pin
-      pinFlex = 2; // Flex sensor
-      pinResetControl = 43; //Reset control output
-      pinVSS = 3; //VSS input pin
-      pinWMIEmpty = 31; //(placeholder)
-      pinWMIIndicator = 33; //(placeholder)
-      pinWMIEnabled = 35; //(placeholder)
-      pinIdleUp = 37; //(placeholder)
-      pinIdleUpOutput = 41; //(placeholder)
-      pinCTPS = A6; //(placeholder)
-     #elif defined(STM32F407xx)
+     #if defined(STM32F407xx)
       pinInjector1 = PB15; //Output pin injector 1
       pinInjector2 = PB14; //Output pin injector 2
       pinInjector3 = PB12; //Output pin injector 3
@@ -1779,55 +1685,6 @@ void setPinMapping(byte boardID)
       pinResetControl = 46; //Reset control output PLACEHOLDER value for now
     break;
     
-    case 45:
-    #ifndef SMALL_FLASH_MODE //No support for bluepill here anyway
-      //Pin mappings for the DIY-EFI CORE4 Module. This is an AVR only module
-      #if defined(CORE_AVR)
-      pinInjector1 = 10; //Output pin injector 1 is on
-      pinInjector2 = 11; //Output pin injector 2 is on
-      pinInjector3 = 12; //Output pin injector 3 is on
-      pinInjector4 = 9; //Output pin injector 4 is on
-      pinCoil1 = 39; //Pin for coil 1
-      pinCoil2 = 29; //Pin for coil 2
-      pinCoil3 = 28; //Pin for coil 3
-      pinCoil4 = 27; //Pin for coil 4
-      pinCoil5 = 26; //Placeholder  for coil 5
-      pinTrigger = 19; //The CAS pin
-      pinTrigger2 = 18; //The Cam Sensor pin
-      pinTrigger3 = 21;// The Cam sensor 2 pin
-      pinFlex = 20; // Flex sensor
-      pinTPS = A3; //TPS input pin
-      pinMAP = A2; //MAP sensor pin
-      pinBaro = A15; //Baro sensor pin
-      pinIAT = A11; //IAT sensor pin
-      pinCLT = A4; //CLS sensor pin
-      pinO2 = A12; //O2 Sensor pin
-      pinO2_2 = A5; //O2 sensor pin (second sensor)
-      pinBat = A1; //Battery reference voltage pin
-      pinSpareTemp1 = A14; //spare Analog input 1
-      pinLaunch = 24; //Can be overwritten below
-      pinDisplayReset = 48; // OLED reset pin PLACEHOLDER value for now
-      pinTachOut = 38; //Tacho output pin
-      pinIdle1 = 42; //Single wire idle control
-      pinIdle2 = 43; //2 wire idle control
-      pinFuelPump = 41; //Fuel pump output
-      pinVVT_1 = 44; //Default VVT output
-      pinVVT_2 = 48; //Default VVT2 output
-      pinStepperDir = 32; //Direction pin  for DRV8825 driver
-      pinStepperStep = 31; //Step pin for DRV8825 driver
-      pinStepperEnable = 30; //Enable pin for DRV8825 driver
-      pinBoost = 45; //Boost control
-      pinSpareLOut1 = 37; //low current output spare1
-      pinSpareLOut2 = 36; //low current output spare2
-      pinSpareLOut3 = 35; //low current output spare3
-      pinInjector5 = 33; //Output pin injector 5 is on
-      pinInjector6 = 34; //Output pin injector 6 is on
-      pinFan = 40; //Pin for the fan output
-      pinResetControl = 46; //Reset control output PLACEHOLDER value for now
-      #endif
-    #endif
-      break;
-
     #if defined(CORE_TEENSY35)
     case 50:
       //Pin mappings as per the teensy rev A shield
@@ -2440,7 +2297,7 @@ void setPinMapping(byte boardID)
         pinMAP = A3; //MAP sensor pin
         pinIAT = A0; //IAT sensor pin
         pinCLT = A1; //CLS sensor pin
-        #ifdef A8 //Bit hacky, but needed for the atmega2561
+        #ifdef A8 //Bit hacky, but needed for variants that don't expose A8
         pinO2 = A8; //O2 Sensor pin
         #endif
         pinBat = A4; //Battery reference voltage pin
@@ -2702,6 +2559,3 @@ void setPinMapping(byte boardID)
  * @todo Explain why triggerSetup_*() alone cannot do all the setup, but there's ~10+ lines worth of extra init for each of decoders.
  */
 
-#if defined(CORE_AVR)
-#pragma GCC pop_options
-#endif
