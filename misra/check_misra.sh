@@ -50,6 +50,19 @@ let num_cores--
 
 mkdir -p "$out_folder"
 
+# misra.json points at the rule texts with a path relative to the *current*
+# directory, so the addon reports "rule-texts-file not found" against every
+# finding unless the script happens to be run from misra/. Generate a copy with
+# an absolute path instead - and a Windows-shaped one where cygpath exists,
+# since cppcheck and its Python addon are native Windows binaries that cannot
+# open a /c/... MSYS path.
+rule_texts="$script_folder/misra_2012_text.txt"
+if command -v cygpath > /dev/null 2>&1 ; then
+  rule_texts=$(cygpath -m "$rule_texts")
+fi
+addon_config="$out_folder/misra.json"
+echo "{\"script\": \"misra.py\",\"args\": [\"--rule-texts=$rule_texts\"]}" > "$addon_config"
+
 cppcheck_parameters=( --inline-suppr
                       --language=c++
                       --enable=warning
@@ -57,7 +70,7 @@ cppcheck_parameters=( --inline-suppr
                       --enable=performance
                       --enable=portability
                       --enable=style
-                      --addon="$script_folder/misra.json"
+                      --addon="$addon_config"
                       --suppressions-list="$script_folder/suppressions.txt"
                       --suppress=unusedFunction:*
                       --suppress=missingInclude:*
@@ -72,6 +85,12 @@ cppcheck_parameters=( --inline-suppr
                       -DSTM32F407xx
                       -DARDUINO_ARCH_STM32
                       -DARDUINO=10808
+                      # board_stm32_official.h #errors out without the first three,
+                      # atomic.h without the fourth.
+                      -DPLATFORMIO
+                      -DUSBCON
+                      -DUSBD_USE_CDC
+                      -D__arm__
                       # This is defined in the Arduino core headers, which aren't included.
                       # cppcheck will not do type checking on unknown types.
                       # It's used a lot and it's unsigned, which can trigger a lot
@@ -88,8 +107,23 @@ if [ $output_xml -eq 1 ]; then
 fi
 
 "$cppcheck_bin" ${cppcheck_parameters[@]} 2> $cppcheck_out_file
+cppcheck_status=$?
 
-# Count lines for Mandatory or Required rules
+# A crashed or aborted run leaves a partial results file, and the count below
+# would then report a reassuring zero. Say so instead.
+if [ $cppcheck_status -ne 0 ]; then
+  echo "cppcheck exited $cppcheck_status - results are incomplete" >&2
+  if [ $quiet -eq 0 ]; then
+    cat "$cppcheck_out_file"
+  fi
+  exit $cppcheck_status
+fi
+
+# Count lines for Mandatory or Required rules.
+# NOTE: this depends on the rule categories coming from misra_2012_text.txt, and
+# the copy in this repo is a placeholder that says "No text specified" for nearly
+# every rule (the real text is copyrighted). Until a real one is supplied this
+# count is structurally zero - use the misra-c2012-* tags in results.txt instead.
 error_count=`grep -i "Mandatory - \|Required - " < "$cppcheck_out_file" | wc -l`
 
 if [ $quiet -eq 0 ]; then
