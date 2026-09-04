@@ -49,9 +49,9 @@ static void setup_clt_advance_table(void) {
   initialiseCorrections();
   currentStatus.LOOP_TIMER = 0;
   BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_4HZ);
-  TEST_DATA_P uint8_t bins[] = { 60, 70, 80, 90, 100, 110 };
-  TEST_DATA_P uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
-  populate_2dtable_P(&CLTAdvanceTable, values, bins);
+  TEST_DATA uint8_t bins[] = { 60, 70, 80, 90, 100, 110 };
+  TEST_DATA uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
+  populate_2dtable(&CLTAdvanceTable, values, bins);
 }
 
 static void test_correctionCLTadvance_lookup(void) {
@@ -114,9 +114,9 @@ extern table2D_u8_u8_6 flexAdvTable;   ///< 6 bin flex fuel correction table for
 
 static void setup_flexAdv(void) {
   initialiseCorrections();
-  TEST_DATA_P uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
-  TEST_DATA_P uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
-  populate_2dtable_P(&flexAdvTable, values, bins);
+  TEST_DATA uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
+  TEST_DATA uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
+  populate_2dtable(&flexAdvTable, values, bins);
 
   configPage2.flexEnabled = 1;
   currentStatus.ethanolPct = 55;
@@ -164,9 +164,9 @@ static void setup_WMIAdv(void) {
     configPage10.wmiIAT = 155;
     currentStatus.IAT = temperatureRemoveOffset(configPage10.wmiIAT) + 1;
 
-    TEST_DATA_P uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
-    TEST_DATA_P uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
-    populate_2dtable_P(&wmiAdvTable, values, bins);
+    TEST_DATA uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
+    TEST_DATA uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
+    populate_2dtable(&wmiAdvTable, values, bins);
 }
 
 static void test_correctionWMITiming_table_lookup(void) {
@@ -255,9 +255,9 @@ static void setup_IATRetard(void) {
   initialiseCorrections();
   currentStatus.LOOP_TIMER = 0;
   BIT_SET(currentStatus.LOOP_TIMER, IAT_READ_TIMER_BIT);
-  TEST_DATA_P uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
-  TEST_DATA_P uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
-  populate_2dtable_P(&IATRetardTable, values, bins);
+  TEST_DATA uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
+  TEST_DATA uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
+  populate_2dtable(&IATRetardTable, values, bins);
 
   currentStatus.IAT = 75;
 }
@@ -300,9 +300,9 @@ extern table2D_u8_u8_6 idleAdvanceTable; ///< 6 bin idle advance adjustment tabl
 static void setup_correctionIdleAdvance(void) {
     initialiseCorrections();
 
-    TEST_DATA_P uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
-    TEST_DATA_P uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
-    populate_2dtable_P(&idleAdvanceTable, values, bins);
+    TEST_DATA uint8_t bins[] = { 30, 40, 50, 60, 70, 80 };
+    TEST_DATA uint8_t values[] = { 30, 25, 20, 15, 10, 5 };
+    populate_2dtable(&idleAdvanceTable, values, bins);
   
     configPage2.idleAdvEnabled = IDLEADVANCE_MODE_ADDED;
     configPage2.idleAdvDelay = 5;
@@ -1199,13 +1199,13 @@ static void setup_correctionKnock(void) {
     configPage10.knock_count = 5U;
     configPage10.knock_firstStep = 3U;
     // knockCounter = configPage10.knock_count + 1;
-//   TEST_DATA_P uint8_t startBins[] = { 30, 40, 50, 60, 70, 80 };
-//   TEST_DATA_P uint8_t startValues[] = { 30, 25, 20, 15, 10, 5 };
-//   populate_2dtable_P(&knockWindowStartTable, startValues, startBins);
+//   TEST_DATA uint8_t startBins[] = { 30, 40, 50, 60, 70, 80 };
+//   TEST_DATA uint8_t startValues[] = { 30, 25, 20, 15, 10, 5 };
+//   populate_2dtable(&knockWindowStartTable, startValues, startBins);
 
-//   TEST_DATA_P uint8_t durationBins[] = { 30, 40, 50, 60, 70, 80 };
-//   TEST_DATA_P uint8_t durationValues[] = { 30, 25, 20, 15, 10, 5 };
-//   populate_2dtable_P(&knockWindowDurationTable, durationValues, durationBins);
+//   TEST_DATA uint8_t durationBins[] = { 30, 40, 50, 60, 70, 80 };
+//   TEST_DATA uint8_t durationValues[] = { 30, 25, 20, 15, 10, 5 };
+//   populate_2dtable(&knockWindowDurationTable, durationValues, durationBins);
 }
 
 static void test_correctionKnock_firstStep(void) {
@@ -1252,9 +1252,9 @@ static void setup_correctionsDwell(void) {
 
     currentStatus.revolutionTime = 666;
 
-    TEST_DATA_P uint8_t bins[] = { 60,  70,  80,  90,  100, 110 };
-    TEST_DATA_P uint8_t values[] = { 130, 125, 120, 115, 110, 90 };
-    populate_2dtable_P(&dwellVCorrectionTable, values, bins);   
+    TEST_DATA uint8_t bins[] = { 60,  70,  80,  90,  100, 110 };
+    TEST_DATA uint8_t values[] = { 130, 125, 120, 115, 110, 90 };
+    populate_2dtable(&dwellVCorrectionTable, values, bins);   
 }
 
 extern uint16_t correctDwellClosedLoop(uint16_t computedDwell, uint16_t actualDwell);

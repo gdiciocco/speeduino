@@ -54,29 +54,17 @@ void test_initialisation_outputs_V03(void)
   prepareForInitialiseAll(2);
   initialiseAll(); //Run the main initialise function
 
-  char msg[32];
-  strcpy_P(msg, PSTR("Coil1"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil1), msg);
-  strcpy_P(msg, PSTR("Coil2"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil2), msg);
-  strcpy_P(msg, PSTR("Coil3"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil3), msg);
-  strcpy_P(msg, PSTR("Coil4"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil4), msg);
-  strcpy_P(msg, PSTR("Injector 1"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector1), msg);
-  strcpy_P(msg, PSTR("Injector 2"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector2), msg);
-  strcpy_P(msg, PSTR("Injector 3"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector3), msg);
-  strcpy_P(msg, PSTR("Injector 4"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector4), msg);
-  strcpy_P(msg, PSTR("Tacho Out"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinTachOut), msg);
-  strcpy_P(msg, PSTR("Fuel Pump"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFuelPump), msg);
-  strcpy_P(msg, PSTR("Fan"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFan), msg);
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil1), "Coil1");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil2), "Coil2");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil3), "Coil3");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil4), "Coil4");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector1), "Injector 1");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector2), "Injector 2");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector3), "Injector 3");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector4), "Injector 4");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinTachOut), "Tacho Out");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFuelPump), "Fuel Pump");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFan), "Fan");
 #endif
 }
 
@@ -89,29 +77,17 @@ void test_initialisation_outputs_V04(void)
   prepareForInitialiseAll(3);
   initialiseAll(); //Run the main initialise function
 
-  char msg[32];
-  strcpy_P(msg, PSTR("Coil1"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil1), msg);
-  strcpy_P(msg, PSTR("Coil2"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil2), msg);
-  strcpy_P(msg, PSTR("Coil3"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil3), msg);
-  strcpy_P(msg, PSTR("Coil4"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil4), msg);
-  strcpy_P(msg, PSTR("Injector 1"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector1), msg);
-  strcpy_P(msg, PSTR("Injector 2"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector2), msg);
-  strcpy_P(msg, PSTR("Injector 3"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector3), msg);
-  strcpy_P(msg, PSTR("Injector 4"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector4), msg);
-  strcpy_P(msg, PSTR("Tacho Out"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinTachOut), msg);
-  strcpy_P(msg, PSTR("Fuel Pump"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFuelPump), msg);
-  strcpy_P(msg, PSTR("Fan"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFan), msg);
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil1), "Coil1");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil2), "Coil2");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil3), "Coil3");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil4), "Coil4");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector1), "Injector 1");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector2), "Injector 2");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector3), "Injector 3");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector4), "Injector 4");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinTachOut), "Tacho Out");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFuelPump), "Fuel Pump");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFan), "Fan");
   /*
   if(isIdlePWM) 
   {
@@ -142,29 +118,17 @@ void test_initialisation_outputs_MX5_8995(void)
   prepareForInitialiseAll(9);
   initialiseAll(); //Run the main initialise function
 
-  char msg[32];
-  strcpy_P(msg, PSTR("Coil1"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil1), msg);
-  strcpy_P(msg, PSTR("Coil2"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil2), msg);
-  strcpy_P(msg, PSTR("Coil3"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil3), msg);
-  strcpy_P(msg, PSTR("Coil4"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil4), msg);
-  strcpy_P(msg, PSTR("Injector 1"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector1), msg);
-  strcpy_P(msg, PSTR("Injector 2"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector2), msg);
-  strcpy_P(msg, PSTR("Injector 3"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector3), msg);
-  strcpy_P(msg, PSTR("Injector 4"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector4), msg);
-  strcpy_P(msg, PSTR("Tacho Out"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinTachOut), msg);
-  strcpy_P(msg, PSTR("Fuel Pump"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFuelPump), msg);
-  strcpy_P(msg, PSTR("Fan"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFan), msg);
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil1), "Coil1");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil2), "Coil2");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil3), "Coil3");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinCoil4), "Coil4");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector1), "Injector 1");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector2), "Injector 2");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector3), "Injector 3");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinInjector4), "Injector 4");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinTachOut), "Tacho Out");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFuelPump), "Fuel Pump");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinFan), "Fan");
 #endif
 }
 
@@ -183,13 +147,9 @@ void test_initialisation_outputs_PWM_idle(void)
 
   bool isIdlePWM = (configPage6.iacAlgorithm > 0) && ((configPage6.iacAlgorithm <= 3) || (configPage6.iacAlgorithm == 6));
 
-  char msg[32];
-  strcpy_P(msg, PSTR("Is PWM Idle"));
-  TEST_ASSERT_TRUE_MESSAGE(isPwmIac(configPage6), msg);
-  strcpy_P(msg, PSTR("Idle 1"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinIdle1), msg);
-  strcpy_P(msg, PSTR("Idle 2"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinIdle2), msg);
+  TEST_ASSERT_TRUE_MESSAGE(isPwmIac(configPage6), "Is PWM Idle");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinIdle1), "Idle 1");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinIdle2), "Idle 2");
 #endif
 }
 
@@ -199,15 +159,10 @@ void test_initialisation_outputs_stepper_idle(void)
   bool isIdleStepper = (configPage6.iacAlgorithm > 3) && (configPage6.iacAlgorithm != 6);
   initialiseAll(); //Run the main initialise function
 
-  char msg[32];
-  strcpy_P(msg, PSTR("Is Stepper Idle"));
-  TEST_ASSERT_TRUE_MESSAGE(isIdleStepper, msg);
-  strcpy_P(msg, PSTR("Stepper Dir"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinStepperDir), msg);
-  strcpy_P(msg, PSTR("Stepper Step"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinStepperStep), msg);
-  strcpy_P(msg, PSTR("Stepper Enable"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinStepperEnable), msg);
+  TEST_ASSERT_TRUE_MESSAGE(isIdleStepper, "Is Stepper Idle");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinStepperDir), "Stepper Dir");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinStepperStep), "Stepper Step");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinStepperEnable), "Stepper Enable");
 }
 
 void test_initialisation_outputs_boost(void)
@@ -218,9 +173,7 @@ void test_initialisation_outputs_boost(void)
   prepareForInitialiseAll(9);
   initialiseAll(); //Run the main initialise function
 
-  char msg[32];
-  strcpy_P(msg, PSTR("Boost"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinBoost), msg);
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinBoost), "Boost");
 #endif
 }
 
@@ -232,11 +185,8 @@ void test_initialisation_outputs_VVT(void)
   prepareForInitialiseAll(9);
   initialiseAll(); //Run the main initialise function
 
-  char msg[32];
-  strcpy_P(msg, PSTR("VVT1"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinVVT_1), msg);
-  strcpy_P(msg, PSTR("VVT2"));
-  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinVVT_2), msg);
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinVVT_1), "VVT1");
+  TEST_ASSERT_EQUAL_MESSAGE(OUTPUT, getPinMode(pinVVT_2), "VVT2");
 #endif
 }
 

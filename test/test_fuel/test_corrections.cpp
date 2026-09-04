@@ -17,15 +17,15 @@ static void setup_wue_table(void) {
   BIT_SET(currentStatus.LOOP_TIMER, CLT_READ_TIMER_BIT) ;
 
   //Set some fake values in the table axis. Target value will fall between points 6 and 7
-  TEST_DATA_P uint8_t bins[] = { 
+  TEST_DATA uint8_t bins[] = { 
     0, 0, 0, 0, 0, 0,
     temperatureAddOffset(70),
     temperatureAddOffset(90),
     temperatureAddOffset(100),
     temperatureAddOffset(120)
   };
-  TEST_DATA_P uint8_t values[] = { 0, 0, 0, 0, 0, 0, 120, 130, 130, 130 };
-  populate_2dtable_P(&WUETable, values, bins);
+  TEST_DATA uint8_t values[] = { 0, 0, 0, 0, 0, 0, 120, 130, 130, 130 };
+  populate_2dtable(&WUETable, values, bins);
 }
 
 static void test_corrections_WUE_active(void)
@@ -94,14 +94,14 @@ static void setup_correctionCranking(void) {
   constexpr int16_t COOLANT_INITIAL = temperatureRemoveOffset(150); 
   currentStatus.coolant = COOLANT_INITIAL;
 
-  TEST_DATA_P uint8_t values[] = { 120U / 5U, 130U / 5U, 140U / 5U, 150U / 5U };
-  TEST_DATA_P uint8_t bins[] = { 
+  TEST_DATA uint8_t values[] = { 120U / 5U, 130U / 5U, 140U / 5U, 150U / 5U };
+  TEST_DATA uint8_t bins[] = { 
     (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) - 10U),
     (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) + 10U),
     (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) + 20U),
     (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) + 30U)
   };
-  populate_2dtable_P(&crankingEnrichTable, values, bins);
+  populate_2dtable(&crankingEnrichTable, values, bins);
 }
 
 static void test_corrections_cranking_inactive(void) {
@@ -222,25 +222,25 @@ static inline void setup_correctionASE(void) {
   currentStatus.runSecs = 3;
 
   {
-    TEST_DATA_P uint8_t values[] = { 10, 8, 6, 4 };
-    TEST_DATA_P uint8_t bins[] = { 
+    TEST_DATA uint8_t values[] = { 10, 8, 6, 4 };
+    TEST_DATA uint8_t bins[] = { 
       (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) - 10U),
       (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) + 10U),
       (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) + 20U),
       (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) + 30U)
     };
-    populate_2dtable_P(&ASECountTable, values, bins);
+    populate_2dtable(&ASECountTable, values, bins);
   }
 
   {
-    TEST_DATA_P uint8_t values[] = { 20, 30, 40, 50 };
-    TEST_DATA_P uint8_t bins[] = { 
+    TEST_DATA uint8_t values[] = { 20, 30, 40, 50 };
+    TEST_DATA uint8_t bins[] = { 
       (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) - 10U),
       (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) + 10U),
       (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) + 20U),
       (uint8_t)(temperatureAddOffset(COOLANT_INITIAL) + 30U)
     };
-    populate_2dtable_P(&ASETable, values, bins);
+    populate_2dtable(&ASETable, values, bins);
   } 
 }
 
@@ -621,9 +621,9 @@ extern table2D_u8_u8_6 flexFuelTable;  ///< 6 bin flex fuel correction table for
 static void setupFlexFuelTable(void) {
   initialiseCorrections();
 
-  TEST_DATA_P uint8_t bins[] = { 0, 10, 30, 50, 60, 70 };
-  TEST_DATA_P uint8_t values[] = { 0, 20, 40, 80, 120, 150 };
-  populate_2dtable_P(&flexFuelTable, values, bins);  
+  TEST_DATA uint8_t bins[] = { 0, 10, 30, 50, 60, 70 };
+  TEST_DATA uint8_t values[] = { 0, 20, 40, 80, 120, 150 };
+  populate_2dtable(&flexFuelTable, values, bins);  
 }
 
 static void test_corrections_flex_flex_off(void) {
@@ -646,9 +646,9 @@ extern table2D_u8_u8_6 fuelTempTable;  ///< 6 bin flex fuel correction table for
 static void setupFuelTempTable(void) {
   initialiseCorrections();
 
-  TEST_DATA_P uint8_t bins[] = { 0, 10, 30, 50, 60, 70 };
-  TEST_DATA_P uint8_t values[] = { 0, 20, 40, 80, 120, 150 };
-  populate_2dtable_P(&fuelTempTable, values, bins);   
+  TEST_DATA uint8_t bins[] = { 0, 10, 30, 50, 60, 70 };
+  TEST_DATA uint8_t values[] = { 0, 20, 40, 80, 120, 150 };
+  populate_2dtable(&fuelTempTable, values, bins);   
 }
 
 static void test_corrections_fueltemp_off(void) {
@@ -682,9 +682,9 @@ static void setup_battery_correction(void) {
   currentStatus.LOOP_TIMER = 0;
   BIT_SET(currentStatus.LOOP_TIMER, BAT_READ_TIMER_BIT);
 
-  TEST_DATA_P uint8_t bins[] = { 60, 70, 80, 90, 100, 110 };
-  TEST_DATA_P uint8_t values[] = { 115, 110, 105, 100, 95, 90 };
-  populate_2dtable_P(&injectorVCorrectionTable, values, bins);   
+  TEST_DATA uint8_t bins[] = { 60, 70, 80, 90, 100, 110 };
+  TEST_DATA uint8_t values[] = { 115, 110, 105, 100, 95, 90 };
+  populate_2dtable(&injectorVCorrectionTable, values, bins);   
 }
 
 static void test_corrections_bat_normal(void) {
@@ -991,9 +991,9 @@ static void setup_TAE()
   BIT_SET(currentStatus.LOOP_TIMER, TPS_READ_TIMER_BIT);
   configPage2.aeBlendPct = 100; //Pure TPS blend
 
-  TEST_DATA_P uint8_t bins[] = { 0, 8, 22, 97 };
-  TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
-  populate_2dtable_P(&taeTable, values, bins); 
+  TEST_DATA uint8_t bins[] = { 0, 8, 22, 97 };
+  TEST_DATA uint8_t values[] = { 70, 103, 124, 136 };
+  populate_2dtable(&taeTable, values, bins); 
   
   configPage2.taeThresh = 0;
   configPage2.taeMinChange = 0;
@@ -1212,9 +1212,9 @@ static void setup_MAE(void)
   currentStatus.LOOP_TIMER = 0;
   BIT_SET(currentStatus.LOOP_TIMER, MAP_READ_TIMER_BIT);
 
-  TEST_DATA_P uint8_t bins[] = { 0, 15, 19, 50 };
-  TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
-  populate_2dtable_P(&maeTable, values, bins); 
+  TEST_DATA uint8_t bins[] = { 0, 15, 19, 50 };
+  TEST_DATA uint8_t values[] = { 70, 103, 124, 136 };
+  populate_2dtable(&maeTable, values, bins); 
 
   configPage2.maeThresh = 0;
   configPage2.maeMinChange = 0;
@@ -1436,7 +1436,7 @@ static void setup_afrtarget(table3d16RpmLoad &afrLookUpTable,
                             statuses &current,
                             config2 &page2,
                             config6 &page6) {
-  TEST_DATA_P table3d_value_t values[] = {
+  TEST_DATA table3d_value_t values[] = {
     //0    1    2   3     4    5    6    7    8    9   10   11   12   13    14   15
     34,  34,  34,  34,  34,  34,  34,  34,  34,  35,  35,  35,  35,  35,  35,  35, 
     34,  35,  36,  37,  39,  41,  42,  43,  43,  44,  44,  44,  44,  44,  44,  44, 
@@ -1455,9 +1455,9 @@ static void setup_afrtarget(table3d16RpmLoad &afrLookUpTable,
     104, 106, 107, 108, 109, 109, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 
     109, 111, 112, 113, 114, 114, 114, 115, 115, 115, 114, 114, 114, 114, 114, 114, 
     };
-  TEST_DATA_P table3d_axis_t xAxis[] = {500U/100U, 700U/100U, 900U/100U, 1200U/100U, 1600U/100U, 2000U/100U, 2500U/100U, 3100U/100U, 3500U/100U, 4100U/100U, 4700U/100U, 5300U/100U, 5900U/100U, 6500U/100U, 6750U/100U, 7000U/100U};
-  TEST_DATA_P table3d_axis_t yAxis[] = { 16U/2U, 26U/2U, 30U/2U, 36U/2U, 40U/2U, 46U/2U, 50U/2U, 56U/2U, 60U/2U, 66U/2U, 70U/2U, 76U/2U, 86U/2U, 90U/2U, 96U/2U, 100U/2U};  
-  populate_table_P(afrLookUpTable, xAxis, yAxis, values);
+  TEST_DATA table3d_axis_t xAxis[] = {500U/100U, 700U/100U, 900U/100U, 1200U/100U, 1600U/100U, 2000U/100U, 2500U/100U, 3100U/100U, 3500U/100U, 4100U/100U, 4700U/100U, 5300U/100U, 5900U/100U, 6500U/100U, 6750U/100U, 7000U/100U};
+  TEST_DATA table3d_axis_t yAxis[] = { 16U/2U, 26U/2U, 30U/2U, 36U/2U, 40U/2U, 46U/2U, 50U/2U, 56U/2U, 60U/2U, 66U/2U, 70U/2U, 76U/2U, 86U/2U, 90U/2U, 96U/2U, 100U/2U};  
+  populate_table(afrLookUpTable, xAxis, yAxis, values);
 
   memset(&page2, 0, sizeof(page2));
   page2.incorporateAFR = true;
@@ -1551,9 +1551,9 @@ static void setup_baro_correction(void) {
   currentStatus.LOOP_TIMER = 0;
   BIT_SET(currentStatus.LOOP_TIMER, BARO_READ_TIMER_BIT);
 
-  TEST_DATA_P uint8_t bins[] = { 60, 70, 80, 90, 100, 110, 120, 130 };
-  TEST_DATA_P uint8_t values[] = { 120, 110, 100, 90, 80, 70, 70, 70 };
-  populate_2dtable_P(&baroFuelTable, values, bins);
+  TEST_DATA uint8_t bins[] = { 60, 70, 80, 90, 100, 110, 120, 130 };
+  TEST_DATA uint8_t values[] = { 120, 110, 100, 90, 80, 70, 70, 70 };
+  populate_2dtable(&baroFuelTable, values, bins);
 }
 
 // Battery correction will recalculates at 10Hz, otherwise it will re-use cached values. 
@@ -1731,16 +1731,16 @@ static void setup_BLENDED_AE(void)
 
   // Set up TAE table
   {
-    TEST_DATA_P uint8_t bins[] = { 0, 8, 22, 97 };
-    TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
-    populate_2dtable_P(&taeTable, values, bins);
+    TEST_DATA uint8_t bins[] = { 0, 8, 22, 97 };
+    TEST_DATA uint8_t values[] = { 70, 103, 124, 136 };
+    populate_2dtable(&taeTable, values, bins);
   }
 
   // Set up MAE table
   {
-    TEST_DATA_P uint8_t bins[] = { 0, 15, 19, 50 };
-    TEST_DATA_P uint8_t values[] = { 70, 103, 124, 136 };
-    populate_2dtable_P(&maeTable, values, bins);
+    TEST_DATA uint8_t bins[] = { 0, 15, 19, 50 };
+    TEST_DATA uint8_t values[] = { 70, 103, 124, 136 };
+    populate_2dtable(&maeTable, values, bins);
   }
 
   configPage2.taeThresh = 0;

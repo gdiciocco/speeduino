@@ -262,14 +262,14 @@ static uint16_t findWriteAddressIndex(uint16_t address) {
 static void assert_moveBlock_read_before_write(int16_t distanceMoved) {
     for (uint8_t index=0; index<_countof(moveBlockReadAddresses); index+=2) {
         char szMsg[64];
-        sprintf_P(szMsg, PSTR("Index %" PRIu8 ", Distance %" PRIi16), index, distanceMoved);
+        sprintf(szMsg, "Index %" PRIu8 ", Distance %" PRIi16, index, distanceMoved);
         // Confirm the source was read, then the destination
         TEST_ASSERT_EQUAL_MESSAGE((int16_t)moveBlockReadAddresses[index]+distanceMoved, moveBlockReadAddresses[index+1], szMsg);
         // Confirm the 2nd read address matches the write address 
         TEST_ASSERT_EQUAL_MESSAGE((int16_t)moveBlockReadAddresses[index]+distanceMoved, moveBlockWriteAddresses[index/2], szMsg);
 
         // Confirm there was no earlier write to the source read address
-        sprintf_P(szMsg, PSTR("Address written to before read. Index %" PRIu8 ", Distance %" PRIi16), index, distanceMoved);
+        sprintf(szMsg, "Address written to before read. Index %" PRIu8 ", Distance %" PRIi16, index, distanceMoved);
         TEST_ASSERT_GREATER_OR_EQUAL_MESSAGE(index/2, findWriteAddressIndex(moveBlockReadAddresses[index]), szMsg);
     }
 }

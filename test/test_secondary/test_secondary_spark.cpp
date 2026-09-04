@@ -6,8 +6,8 @@
 #include "maths.h"
 #include "units.h"
 
-TEST_DATA_P table3d_axis_t tempXAxis[] = {500U/100U, 700U/100U, 900U/100U, 1200U/100U, 1600U/100U, 2000U/100U, 2500U/100U, 3100U/100U, 3500U/100U, 4100U/100U, 4700U/100U, 5300U/100U, 5900U/100U, 6500U/100U, 6750U/100U, 7000U/100U};
-TEST_DATA_P table3d_axis_t tempYAxis[] = {16U/2U, 26U/2U, 30U/2U, 36U/2U, 40U/2U, 46U/2U, 50U/2U, 56U/2U, 60U/2U, 66U/2U, 70U/2U, 76U/2U, 86U/2U, 90U/2U, 96U/2U, 100U/2U};
+TEST_DATA table3d_axis_t tempXAxis[] = {500U/100U, 700U/100U, 900U/100U, 1200U/100U, 1600U/100U, 2000U/100U, 2500U/100U, 3100U/100U, 3500U/100U, 4100U/100U, 4700U/100U, 5300U/100U, 5900U/100U, 6500U/100U, 6750U/100U, 7000U/100U};
+TEST_DATA table3d_axis_t tempYAxis[] = {16U/2U, 26U/2U, 30U/2U, 36U/2U, 40U/2U, 46U/2U, 50U/2U, 56U/2U, 60U/2U, 66U/2U, 70U/2U, 76U/2U, 86U/2U, 90U/2U, 96U/2U, 100U/2U};
 
 static void __attribute__((noinline)) assert_2nd_spark_is_off(const statuses &current, int8_t expectedAdvance) {
     TEST_ASSERT_FALSE(current.secondSparkTableActive);
@@ -51,8 +51,8 @@ static void __attribute__((noinline)) setup_test_mode_cap_INT8_MAX(config2 &, co
     current.MAP = tempYAxis[0];
     current.setRpm( tempXAxis[0]);
     fill_table_values(lookupTable, CAP_LOAD_LOOKUP_RESULT);
-    populate_table_axis_P(lookupTable.axisX.begin(), tempXAxis);
-    populate_table_axis_P(lookupTable.axisY.begin(), tempYAxis);
+    populate_table_axis(lookupTable.axisX.begin(), tempXAxis);
+    populate_table_axis(lookupTable.axisY.begin(), tempYAxis);
 }
 
 static void __attribute__((noinline)) test_mode_cap_INT8_MAX(uint8_t mode, int8_t expectedAdvance2) {
@@ -80,8 +80,8 @@ static void __attribute__((noinline)) setup_test_mode_simple(config2 &, config10
     current.MAP = tempYAxis[0];
     current.setRpm( tempXAxis[0]);
     fill_table_values(lookupTable, SIMPLE_LOAD_LOOKUP_RESULT);
-    populate_table_axis_P(lookupTable.axisX.begin(), tempXAxis);
-    populate_table_axis_P(lookupTable.axisY.begin(), tempYAxis);
+    populate_table_axis(lookupTable.axisX.begin(), tempXAxis);
+    populate_table_axis(lookupTable.axisY.begin(), tempYAxis);
 }
 
 static void __attribute__((noinline)) test_mode_simple(uint8_t mode, int8_t expectedAdvance, int8_t expectedAdvance2) {

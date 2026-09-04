@@ -76,24 +76,24 @@ static void resetInternalState(void)
 
 static void setup_oil_protect_table(void) {
     // Simple axis: 0..3 mapped to same min value
-    TEST_DATA_P uint8_t bins[] = { 0, 100, 200, 255 };
-    TEST_DATA_P uint8_t values[] = { 50, 50, 50, 50 };
-    populate_2dtable_P(&oilPressureProtectTable, values, bins);
+    TEST_DATA uint8_t bins[] = { 0, 100, 200, 255 };
+    TEST_DATA uint8_t values[] = { 50, 50, 50, 50 };
+    populate_2dtable(&oilPressureProtectTable, values, bins);
 }
 
 static void populateCoolantProtectTable(void)
 {
     // Populate coolant protection table with a constant limit (e.g., 40)
-    TEST_DATA_P uint8_t bins[] = { 0, 50, 100, 150, 200, 255 };
-    TEST_DATA_P uint8_t values[] = { 40, 40, 40, 40, 40, 40 };
-    populate_2dtable_P(&coolantProtectTable, values, bins);
+    TEST_DATA uint8_t bins[] = { 0, 50, 100, 150, 200, 255 };
+    TEST_DATA uint8_t values[] = { 40, 40, 40, 40, 40, 40 };
+    populate_2dtable(&coolantProtectTable, values, bins);
 }
 
 static void populateRollingCutTable(void)
 {
-    TEST_DATA_P int8_t bins[] = { -20, -15, -10, -1 };
-    TEST_DATA_P uint8_t values[] = { 0, 25, 50, 100 };
-    populate_2dtable_P(&rollingCutTable, values, bins);
+    TEST_DATA int8_t bins[] = { -20, -15, -10, -1 };
+    TEST_DATA uint8_t values[] = { 0, 25, 50, 100 };
+    populate_2dtable(&rollingCutTable, values, bins);
 }
 
 struct engineProtection_test_context_t
@@ -1586,7 +1586,7 @@ static void test_RollingCut_masks_unused(void)
 
     RUN_TEST_P(test_checkOilPressureLimit_basic);
     RUN_TEST_P(test_checkOilPressureLimit_activate_when_time_expires);
-    RUN_TEST_P(test_checkOilPressureLimit_timer_and_activation)
+    RUN_TEST_P(test_checkOilPressureLimit_timer_and_activation);
     RUN_TEST_P(test_checkOilPressureLimit_existing_engineProtect_forces_cut);
     RUN_TEST_P(test_checkOilPressureLimit_timer_resets_when_pressure_recovers);
     RUN_TEST_P(test_checkOilPressureLimit_timer_reset_on_recovery);

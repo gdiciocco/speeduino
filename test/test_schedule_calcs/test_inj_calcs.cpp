@@ -31,11 +31,11 @@ static void test_calc_inj_timeout(const inj_test_parameters &parameters)
 
     schedule._status = PENDING;
     uint16_t openAngle = _calculateOpenAngle(schedule, timeToAngleDegPerMicroSec(parameters.pw), injAngle);
-    sprintf_P(msg, PSTR("PENDING channelAngle: %" PRIu16 ", pw: %" PRIu16 ", crankAngle: %" PRIu16 ", openAngle: %" PRIu16), parameters.channelAngle, parameters.pw, parameters.crankAngle, openAngle);
+    sprintf(msg, "PENDING channelAngle: %" PRIu16 ", pw: %" PRIu16 ", crankAngle: %" PRIu16 ", openAngle: %" PRIu16, parameters.channelAngle, parameters.pw, parameters.crankAngle, openAngle);
     TEST_ASSERT_INT32_WITHIN_MESSAGE(1, parameters.pending, calculateInjectorTimeout(schedule, parameters.crankAngle, openAngle), msg);
     
     schedule._status = RUNNING;
-    sprintf_P(msg, PSTR("RUNNING channelAngle: %" PRIu16 ", pw: %" PRIu16 ", crankAngle: %" PRIu16 ", openAngle: %" PRIu16), parameters.channelAngle, parameters.pw, parameters.crankAngle, openAngle);
+    sprintf(msg, "RUNNING channelAngle: %" PRIu16 ", pw: %" PRIu16 ", crankAngle: %" PRIu16 ", openAngle: %" PRIu16, parameters.channelAngle, parameters.pw, parameters.crankAngle, openAngle);
     TEST_ASSERT_INT32_WITHIN_MESSAGE(1, parameters.running, calculateInjectorTimeout(schedule, parameters.crankAngle, openAngle), msg);
 }
 
@@ -44,7 +44,7 @@ static void test_calc_inj_timeout(const inj_test_parameters *pStart, const inj_t
     inj_test_parameters local;
     while (pStart!=pEnd)
     {
-        memcpy_P(&local, pStart, sizeof(local));
+        memcpy(&local, pStart, sizeof(local));
         test_calc_inj_timeout(local);
         ++pStart;
     }
@@ -56,7 +56,7 @@ static void test_calc_inj_timeout_360()
 
   // Expected test values were generated using floating point calculations (in Excel)
   
-  static const inj_test_parameters test_data[] PROGMEM = {
+  static const inj_test_parameters test_data[] = {
     // ChannelAngle (deg), PW (uS), Crank (deg), Expected Pending (uS), Expected Running (uS)
     { 0                  , 3000   , 0          , 11792                , 11792 },
     { 0                  , 3000   , 45         , 9917                 , 9917 },
@@ -149,7 +149,7 @@ static void test_calc_inj_timeout_720()
   setEngineSpeed(4000, 720);
   
   // Expected test values were generated using floating point calculations (in Excel)
-  static const inj_test_parameters test_data[] PROGMEM = {
+  static const inj_test_parameters test_data[] = {
     // ChannelAngle (deg), PW (uS), Crank (deg), Expected Pending (uS), Expected Running (uS)
     { 0                  , 3000   , 0          , 11792                , 11792 },
     { 0                  , 3000   , 45         , 9917                 , 9917 },

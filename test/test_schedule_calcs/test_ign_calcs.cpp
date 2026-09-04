@@ -45,11 +45,11 @@ void test_calc_ign_timeout(const ign_test_parameters &test_params)
     TEST_ASSERT_EQUAL_MESSAGE(test_params.expectedStartAngle, schedule.chargeAngle, "startAngle");
     TEST_ASSERT_EQUAL_MESSAGE(test_params.expectedEndAngle, schedule.dischargeAngle, "dischargeAngle");
     
-    sprintf_P(msg, PSTR("PENDING advanceAngle: %" PRIi8 ", channelAngle: %" PRIu16 ", crankAngle: %" PRIu16 ", dischargeAngle: %" PRIi16), test_params.advanceAngle, test_params.channelAngle, test_params.crankAngle, schedule.dischargeAngle);
+    sprintf(msg, "PENDING advanceAngle: %" PRIi8 ", channelAngle: %" PRIu16 ", crankAngle: %" PRIu16 ", dischargeAngle: %" PRIi16, test_params.advanceAngle, test_params.channelAngle, test_params.crankAngle, schedule.dischargeAngle);
     schedule._status = PENDING;
     TEST_ASSERT_INT32_WITHIN_MESSAGE(1, test_params.pending, _calculateIgnitionTimeout(schedule, test_params.crankAngle), msg);
     
-    sprintf_P(msg, PSTR("RUNNING advanceAngle: %" PRIi8 ", channelAngle: %" PRIu16 ", crankAngle: %" PRIu16 ", dischargeAngle: %" PRIi16), test_params.advanceAngle, test_params.channelAngle, test_params.crankAngle, schedule.dischargeAngle);
+    sprintf(msg, "RUNNING advanceAngle: %" PRIi8 ", channelAngle: %" PRIu16 ", crankAngle: %" PRIu16 ", dischargeAngle: %" PRIi16, test_params.advanceAngle, test_params.channelAngle, test_params.crankAngle, schedule.dischargeAngle);
     schedule._status = RUNNING;
     TEST_ASSERT_INT32_WITHIN_MESSAGE(1, test_params.running, _calculateIgnitionTimeout(schedule, test_params.crankAngle), msg);
 }
@@ -59,7 +59,7 @@ void test_calc_ign_timeout(const ign_test_parameters *pStart, const ign_test_par
   ign_test_parameters local;
   while (pStart!=pEnd)
   {
-      memcpy_P(&local, pStart, sizeof(local));
+      memcpy(&local, pStart, sizeof(local));
       test_calc_ign_timeout(local);
       ++pStart;
   }
@@ -73,7 +73,7 @@ void test_calc_ign_timeout_360()
     TEST_ASSERT_EQUAL(96, dwellAngle);
 
   // Expected test values were generated using floating point calculations (in Excel)
-  static const ign_test_parameters test_data[] PROGMEM = {
+  static const ign_test_parameters test_data[] = {
     // ChannelAngle (deg), Advance, Crank, Expected Pending, Expected Running, Expected StartAngle, Expected EndAngle
     { 0                  , -40    , 0    , 12667           , 12667           , 304                , 40 },
     { 0                  , -40    , 45   , 10792           , 10792           , 304                , 40 },
@@ -276,7 +276,7 @@ void test_calc_ign_timeout_720()
   setEngineSpeed(4000, 720);
 
   // Expected test values were generated using floating point calculations (in Excel)
-  static const ign_test_parameters test_data[] PROGMEM = {
+  static const ign_test_parameters test_data[] = {
     // ChannelAngle (deg), Advance, Crank, Expected Pending, Expected Running, Expected StartAngle, Expected EndAngle
     { 0                  , -40    , 0    , 27667           , 27667           , 664                , 40 },
     { 0                  , -40    , 45   , 25792           , 25792           , 664                , 40 },
@@ -557,7 +557,7 @@ void test_rotary_channel_calcs(void)
 {
     setEngineSpeed(4000, 360);
 
-    static const int test_data[][5] PROGMEM = {
+    static const int test_data[][5] = {
         // End Angle (deg), Dwell Angle, rotary split degrees, expected end angle, expected start angle
         { 320, 5, 0, 320, 315 },
         { 320, 95, 0, 320, 225 },
@@ -599,7 +599,7 @@ void test_rotary_channel_calcs(void)
     int local[5];
     while (pStart!=pEnd)
     {
-        memcpy_P(local, pStart, sizeof(local));
+        memcpy(local, pStart, sizeof(local));
         leading.dischargeAngle = local[0];
         calculateIgnitionTrailingRotary(leading, local[1], local[2], trailing);
         TEST_ASSERT_EQUAL_MESSAGE(local[3], trailing.dischargeAngle, "dischargeAngle");

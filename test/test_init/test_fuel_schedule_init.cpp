@@ -19,15 +19,15 @@ static void __attribute__((noinline)) assert_fuel_channel(bool enabled, uint16_t
   {
     char msg[64];
 
-    sprintf_P(msg, PSTR("channel%" PRIu8 ".InjChannelIsEnabled. Max:%" PRIu8), cmdBit+1, getTotalInjChannelCount(currentStatus));
+    sprintf(msg, "channel%" PRIu8 ".InjChannelIsEnabled. Max:%" PRIu8, cmdBit+1, getTotalInjChannelCount(currentStatus));
     UNITY_TEST_ASSERT_SMALLER_OR_EQUAL_UINT8(getTotalInjChannelCount(currentStatus), cmdBit+1U, assertLineNum, msg);
-    sprintf_P(msg, PSTR("channel%" PRIu8 ".InjDegrees"), cmdBit+1);
+    sprintf(msg, "channel%" PRIu8 ".InjDegrees", cmdBit+1);
     UNITY_TEST_ASSERT_EQUAL_INT(angle, schedule.channelDegrees, assertLineNum, msg);
-    sprintf_P(msg, PSTR("inj%" PRIu8 ".StartFunction"), cmdBit+1);
+    sprintf(msg, "inj%" PRIu8 ".StartFunction", cmdBit+1);
     UNITY_TEST_ASSERT(schedule._pStartCallback!=nullCallback, assertLineNum, msg);
-    sprintf_P(msg, PSTR("inj%" PRIu8 ".EndFunction"), cmdBit+1);
+    sprintf(msg, "inj%" PRIu8 ".EndFunction", cmdBit+1);
     UNITY_TEST_ASSERT(schedule._pEndCallback!=nullCallback, assertLineNum, msg);
-    sprintf_P(msg, PSTR("injAngle"));
+    sprintf(msg, "injAngle");
     UNITY_TEST_ASSERT_SMALLER_OR_EQUAL_UINT16(CRANK_ANGLE_MAX_INJ, angle, assertLineNum, msg);
   }
 }
@@ -47,8 +47,7 @@ static void __attribute__((noinline)) assert_fuel_schedules(uint16_t crankAngle,
 {
   char msg[32];
 
-  strcpy_P(msg, PSTR("CRANK_ANGLE_MAX_INJ"));
-  UNITY_TEST_ASSERT_EQUAL_INT16(crankAngle, CRANK_ANGLE_MAX_INJ, assertLineNum, msg);
+  UNITY_TEST_ASSERT_EQUAL_INT16(crankAngle, CRANK_ANGLE_MAX_INJ, assertLineNum, "CRANK_ANGLE_MAX_INJ");
 
   assert_num_inj_channels(enabled, assertLineNum);
 

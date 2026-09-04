@@ -20,23 +20,14 @@ constexpr void STR_LEN_CHECK(char const (&)[N])
 #define _countof(x) (sizeof(x) / sizeof (x[0]))
 #endif
 
-// Unity macro to reduce memory usage (RAM, .bss)
+// This used to copy the test name out of flash into a 128 byte stack buffer,
+// because on AVR a string literal handed straight to UnityDefaultTestRun()
+// lands in the data segment and eats SRAM. On ARM literals live in .rodata,
+// so the copy - and the buffer, and its length check - bought nothing.
 //
-// Unity supplied RUN_TEST captures the function name
-// using #func directly in the call to UnityDefaultTestRun.
-// This is a raw string that is placed in the data segment,
-// which consumes RAM.
-//
-// So instead, place the function name in flash memory and
-// load it at run time.
-#define RUN_TEST_P(func) \
-  { \
-    char funcName[128]; \
-    constexpr size_t bufferLen = _countof(funcName); \
-    STR_LEN_CHECK<bufferLen>(#func); \
-    strcpy_P(funcName, PSTR(#func)); \
-    UnityDefaultTestRun(func, funcName, __LINE__); \
-  }
+// The _P in the name is now vestigial. Renaming the ~500 call sites to
+// Unity's own RUN_TEST() is a separate mechanical change.
+#define RUN_TEST_P(func) UnityDefaultTestRun(func, #func, __LINE__)
 
 // ============================ SET_UNITY_FILENAME ============================ 
 
@@ -62,12 +53,9 @@ for ( UNITY_FILENAME_RESTORE, _ufname_done = ufname_set(__FILE__);              
 
 // ============================ end SET_UNITY_FILENAME ============================ 
 
-// Store test data in flash, if feasible.
-#if defined(PROGMEM)
-#define TEST_DATA_P static constexpr PROGMEM
-#else
-#define TEST_DATA_P static constexpr
-#endif
+// Test data. Was pushed into flash with PROGMEM on AVR; with a single
+// address space a constexpr array is already read-only data.
+#define TEST_DATA static constexpr
 
 template <typename table3d_t>
 static inline void fill_table_values(table3d_t &table, table3d_value_t value) {
@@ -97,30 +85,25 @@ static inline void populate_table_axis(table_axis_iterator it,
   }
 }
 
-static inline void populate_table_axis_P(table_axis_iterator it, 
-                                         const table3d_axis_t *pXValues) {   // PROGMEM if available
+static inline void populate_table_axis(table_axis_iterator it, 
+                                       const table3d_axis_t *pXValues) {
   while (!it.at_end())
   {
-#if defined(PROGMEM)
-    *it = (table3d_axis_t)pgm_read_word(pXValues);
-#else
     *it = *pXValues;
-#endif      
     ++pXValues;
     ++it;
   }
 }
 
-// Populate a 3d table (from PROGMEM if available)
-// You wuld typically declare the 3 source arrays usin TEST_DATA_P
+// Populate a 3d table. The 3 source arrays are typically declared TEST_DATA.
 template <typename table3d_t>
-static inline void populate_table_P(table3d_t &table, 
-                                  const table3d_axis_t *pXValues,   // PROGMEM if available
-                                  const table3d_axis_t *pYValues,   // PROGMEM if available
-                                  const table3d_value_t *pZValues)  // PROGMEM if available
+static inline void populate_table(table3d_t &table, 
+                                  const table3d_axis_t *pXValues,
+                                  const table3d_axis_t *pYValues,
+                                  const table3d_value_t *pZValues)
 {
-  populate_table_axis_P(table.axisX.begin(), pXValues);
-  populate_table_axis_P(table.axisY.begin(), pYValues);
+  populate_table_axis(table.axisX.begin(), pXValues);
+  populate_table_axis(table.axisY.begin(), pYValues);
   {
     table_value_iterator itZ = table.values.begin();
     while (!itZ.at_end())
@@ -128,11 +111,7 @@ static inline void populate_table_P(table3d_t &table,
       table_row_iterator itRow = *itZ;
       while (!itRow.at_end())
       {
-#if defined(PROGMEM)
-        *itRow = pgm_read_byte(pZValues);
-#else
         *itRow = *pZValues;
-#endif
         ++pZValues;
         ++itRow;
       }
@@ -158,18 +137,6 @@ static inline void populate_2dtable(table2D<axis_t, value_t, sizeT> *pTable, con
   pTable->cache.cacheTime = UINT8_MAX;
 }
 
-// Populate a 2d table (from PROGMEM if available)
-// You would typically declare the 2 source arrays using TEST_DATA_P
-template <typename axis_t, typename value_t, uint8_t sizeT>
-static inline void populate_2dtable_P(table2D<axis_t, value_t, sizeT> *pTable, const value_t (&values)[sizeT], const axis_t (&bins)[sizeT]) {
-#if defined(PROGMEM)
-  memcpy_P((void*)pTable->axis, bins, sizeT * sizeof(axis_t));
-  memcpy_P((void*)pTable->values, values, sizeT * sizeof(value_t));
-  pTable->cache.cacheTime = UINT8_MAX;
-#else
-  populate_2dtable(pTable, values, bins)
-#endif
-}
 
 template <typename T>
 T intermediate(T const& min, T const& max, uint8_t const& frac)

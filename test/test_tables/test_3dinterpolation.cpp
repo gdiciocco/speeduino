@@ -220,7 +220,7 @@ static void test_bilinear_interpolation(void) {
 }
 
 static void test_tableLookup_NoInterp(void)
-{TEST_DATA_P table3d_value_t values[] = {
+{TEST_DATA table3d_value_t values[] = {
   //0     1      2    3 
     11,		11,		11,		11, // 0
     11,		11,		11,		11, // 1
@@ -228,13 +228,13 @@ static void test_tableLookup_NoInterp(void)
     11,		11,		11,		11, // 3
   };
   constexpr table3d_axis_t XAXIS_FACTOR = 100U;
-  TEST_DATA_P table3d_axis_t tempXAxis[] = { 900U/XAXIS_FACTOR, 1600U/XAXIS_FACTOR, 2500U/XAXIS_FACTOR, 3500U/XAXIS_FACTOR, };
+  TEST_DATA table3d_axis_t tempXAxis[] = { 900U/XAXIS_FACTOR, 1600U/XAXIS_FACTOR, 2500U/XAXIS_FACTOR, 3500U/XAXIS_FACTOR, };
 
   constexpr table3d_axis_t YAXIS_FACTOR = 2U;
-  TEST_DATA_P table3d_axis_t tempYAxis[] = { 16U/YAXIS_FACTOR, 30U/YAXIS_FACTOR, 40U/YAXIS_FACTOR, 50U/YAXIS_FACTOR, };
+  TEST_DATA table3d_axis_t tempYAxis[] = { 16U/YAXIS_FACTOR, 30U/YAXIS_FACTOR, 40U/YAXIS_FACTOR, 50U/YAXIS_FACTOR, };
 
   table3d4RpmLoad testSubject;
-  populate_table_P(testSubject, tempXAxis, tempYAxis, values);
+  populate_table(testSubject, tempXAxis, tempYAxis, values);
 
   uint16_t tempVE = get3DTableValue(&testSubject, 53, 2250); //Perform lookup into fuel map for RPM vs MAP value
   TEST_ASSERT_EQUAL(11U, tempVE);
