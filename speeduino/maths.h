@@ -175,72 +175,6 @@ static inline uint32_t rshift_round(uint32_t a) {
     return ((uint32_t)(a+CORRECTION) >> b);
 }
 
-/// @cond
-
-/**
- * @brief Computes value * (percent/100) using bitsPrecision
- * Helper function, private to percentageApprox - do not use directly.
- */
-template <uint8_t bitsPrecision>
-static inline uint32_t _percentageApprox(uint16_t percent, uint32_t value) {
-  uint16_t iPercent = div100((uint16_t)(percent << bitsPrecision));
-  return rshift_round<bitsPrecision>(value * (uint32_t)iPercent);
-}
-
-/// @endcond
-
-/**
- * @brief Integer based percentage calculation: faster, but less accurate, than percentage()
- * 
- * Recommended use case is when dealing with percentages >50%.
- * 
- * @param percent The percent to apply to value
- * @param value The value to operate on
- *
- * @note Performance unit test shows a 33% speed improvement over percentage(). 
- * However, accuracy decreases as the percentage decreases, compared to percentage():
- * Percent | Maximum Error | Example
- * ------- | :-----------: | :----------------------------------
- * 1%-6%   | 9%            | <c>percentage(4, 563)</c>         -> 23
- * ^       | ^             | <c>percentageApprox(4, 563)</c>   -> 21
- * 7%-40%  | 1%            | <c>percentage(10, 1806)</c>       -> 181
- * ^       | ^             | <c>percentageApprox(10, 1806)</c> -> 179
- * 41%+    | <0.3%         | <c>percentage(79, 2371)</c>       -> 1873
- * ^       | ^             | <c>percentageApprox(79, 2371)</c> -> 1870
- */
-static inline uint32_t percentageApprox(uint16_t percent, uint32_t value) {
-    // To keep the percentage within 16-bits (for performance), we have to scale the precision based on the percentage.
-    // I.e. the larger the percentage, the smaller the precision has to be (and vice-versa).
-    //
-    // We could use __builtin_clz() and use the leading zero count as the precision, but that is slow:
-    //  * AVR doesn't have a clz ASM instruction, so __builtin_clz() is implemented in software
-    //  * It would require removing some compile time optimizations
-    #define TEST_AND_APPLY(precision) \
-        if (percent<(UINT16_C(1)<<(UINT16_C(16)-(precision)))) { \
-            return _percentageApprox<(precision)>(percent, value); \
-        }
-    
-    TEST_AND_APPLY(9)   // Percent<128
-    TEST_AND_APPLY(8)   // Percent<256
-    TEST_AND_APPLY(7)   // Percent<512
-    TEST_AND_APPLY(6)   // Percent<1024
-    
-    #undef TEST_AND_APPLY
-
-    // Percent<2048
-    return _percentageApprox<5U>(percent, value);
-}
-
-/**
- * @brief Slightly faster version of percentageApprox(uint16_t, uint32_t), since we know percent<256.
- */
-static inline uint32_t percentageApprox(uint8_t percent, uint32_t value) noexcept {
-    if (percent<(UINT8_C(1)<<UINT8_C(7))) {
-        return _percentageApprox<9U>(percent, value);
-    }
-    return _percentageApprox<8U>(percent, value);
-}
-
 /** @brief This is only here to eliminate magic numbers
  * 
  * DO NOT USE UNLESS YOU REALLY ARE WORKING IN PERCENTAGES - it will be very
@@ -249,14 +183,22 @@ static inline uint32_t percentageApprox(uint8_t percent, uint32_t value) noexcep
 static constexpr uint8_t ONE_HUNDRED_PCT = 100U;
 
 /**
- * @brief Integer based percentage calculation.
+ * @brief Integer based percentage calculation. I.e. value * (percent/100)
+ * 
+ * Rounds to nearest, per @ref DIV_ROUND_BEHAVIOR.
+ * 
+ * The intermediate product is 64-bit, so this is exact across the whole
+ * uint32 x uint16 domain. A Cortex-M multiplies 32x32->64 in one instruction
+ * and the compiler turns the constant /100 into a multiply-high, so the
+ * 8-bit-era games (fixed-point approximation, 32-bit intermediates that wrap
+ * once value*percent reaches 2^32) buy nothing here.
  * 
  * @param percent The percent to apply to value
  * @param value The value to operate on
  */
 static inline uint32_t percentage(uint16_t percent, uint32_t value) 
 {
-    return (uint32_t)div100((uint32_t)value * (uint32_t)percent);
+    return (uint32_t)(((uint64_t)value * (uint64_t)percent + UINT64_C(50)) / UINT64_C(100));
 }
 
 

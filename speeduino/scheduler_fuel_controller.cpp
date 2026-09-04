@@ -270,7 +270,7 @@ static inline uint16_t applyFuelTrim(const table3d6RpmLoad &trimTable, uint16_t 
     int8_t trimPct = FUEL_TRIM.toUser(get3DTableValue(&trimTable, current.fuelLoad, current.RPM));
     if (trimPct != 0) 
     { 
-      pw = percentageApprox((uint8_t)(100+trimPct), pw); 
+      pw = percentage((uint8_t)(100+trimPct), pw); 
     }
   }
 

@@ -76,46 +76,46 @@ void test_maths_halfpercent_U16(void)
   test_halfPercentage(125, percentOf); 
 }
 
-static void test_percentApprox_u16(uint16_t percent, uint32_t value, uint32_t delta) {
+static void test_percent_u16(uint16_t percent, uint32_t value, uint32_t delta) {
   uint32_t expected = ((uint32_t)percent*value)/100;
-  uint32_t actual = percentageApprox(percent, value);
+  uint32_t actual = percentage(percent, value);
   char msg[64];
   sprintf(msg, "pct:%" PRIu16 ", v:%" PRIu32 " Expected:%" PRIu32, percent, value, expected);
   TEST_ASSERT_UINT32_WITHIN_MESSAGE(delta, expected, actual, msg);
 }
 
-static void test_percentApprox_u8(uint8_t percent, uint32_t value, uint32_t delta) {
+static void test_percent_u8(uint8_t percent, uint32_t value, uint32_t delta) {
   uint32_t expected = ((uint32_t)percent*value)/100;
-  uint32_t actual = percentageApprox(percent, value);
+  uint32_t actual = percentage(percent, value);
   char msg[64];
   sprintf(msg, "pct:%" PRIu8 ", v:%" PRIu32 " Expected:%" PRIu32, percent, value, expected);
   TEST_ASSERT_UINT32_WITHIN_MESSAGE(delta, expected, actual, msg);
 }
 
-static void test_maths_percentApprox(void)
+static void test_maths_percent_wide(void)
 {
   uint16_t percentOf = 33333;
-  test_percentApprox_u16(0, percentOf, 1);
-  test_percentApprox_u16(33, percentOf, 5);
-  test_percentApprox_u16(50, percentOf, 1);
-  test_percentApprox_u16(66, percentOf, 6);
-  test_percentApprox_u16(75, percentOf, 1);
-  test_percentApprox_u16(100, percentOf, 1);
-  test_percentApprox_u16(125, percentOf, 1);
-  test_percentApprox_u16(255, percentOf, 55);
-  test_percentApprox_u16(511, percentOf, 25);
-  test_percentApprox_u16(1023, percentOf, 150);
-  test_percentApprox_u16(2046, percentOf, 300);
+  test_percent_u16(0, percentOf, 1);
+  test_percent_u16(33, percentOf, 5);
+  test_percent_u16(50, percentOf, 1);
+  test_percent_u16(66, percentOf, 6);
+  test_percent_u16(75, percentOf, 1);
+  test_percent_u16(100, percentOf, 1);
+  test_percent_u16(125, percentOf, 1);
+  test_percent_u16(255, percentOf, 55);
+  test_percent_u16(511, percentOf, 25);
+  test_percent_u16(1023, percentOf, 150);
+  test_percent_u16(2046, percentOf, 300);
 
-  test_percentApprox_u8(0, percentOf, 1);
-  test_percentApprox_u8(33, percentOf, 5);
-  test_percentApprox_u8(50, percentOf, 1);
-  test_percentApprox_u8(66, percentOf, 6);
-  test_percentApprox_u8(75, percentOf, 1);
-  test_percentApprox_u8(100, percentOf, 1);
-  test_percentApprox_u8(125, percentOf, 1);
-  test_percentApprox_u8(INT8_MAX, percentOf, 15);
-  test_percentApprox_u8(UINT8_MAX, percentOf, 26);
+  test_percent_u8(0, percentOf, 1);
+  test_percent_u8(33, percentOf, 5);
+  test_percent_u8(50, percentOf, 1);
+  test_percent_u8(66, percentOf, 6);
+  test_percent_u8(75, percentOf, 1);
+  test_percent_u8(100, percentOf, 1);
+  test_percent_u8(125, percentOf, 1);
+  test_percent_u8(INT8_MAX, percentOf, 15);
+  test_percent_u8(UINT8_MAX, percentOf, 26);
 }
 
 // These are shared by all percentage perf tests for consistency
@@ -153,22 +153,6 @@ void test_maths_percentage_perf(void)
 }
 
 
-void test_maths_percentageApprox_perf(void)
-{
-    auto nativeTest = [] (uint16_t index, uint32_t &checkSum) { checkSum += ((uint32_t)percentOf * index) / 100U; };
-    auto optimizedTest = [] (uint16_t index, uint32_t &checkSum) { checkSum += percentageApprox(index, percentOf); };
-    auto comparison = compare_executiontime<uint16_t, uint32_t>(iters, start_percent, end_percent, percent_step, nativeTest, optimizedTest);
-    
-    // The checksums will be different due to rounding. This is only
-    // here to force the compiler to run the loops above
-    TEST_ASSERT_INT32_WITHIN(UINT32_MAX/2, comparison.timeA.result, comparison.timeB.result);
-
-    auto nativeTest2 = [] (uint16_t index, uint32_t &checkSum) { checkSum += percentage(index, percentOf); };
-    auto comparison2 = compare_executiontime<uint16_t, uint32_t>(iters, start_percent, end_percent, percent_step, nativeTest2, optimizedTest);
-    TEST_ASSERT_INT32_WITHIN(UINT32_MAX/2, comparison2.timeA.result, comparison2.timeB.result);
-
-}
-
 void testPercent()
 {
   SET_UNITY_FILENAME() {
@@ -180,7 +164,6 @@ void testPercent()
   RUN_TEST(test_maths_halfpercent_U16);
   RUN_TEST(test_maths_halfPercentage_perf);
   RUN_TEST(test_maths_percentage_perf);
-  RUN_TEST(test_maths_percentageApprox_perf);
-  RUN_TEST(test_maths_percentApprox);
+  RUN_TEST(test_maths_percent_wide);
   }
 }

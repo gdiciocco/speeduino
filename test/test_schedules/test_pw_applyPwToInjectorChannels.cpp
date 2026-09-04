@@ -104,7 +104,7 @@ static void zeroTrimTables(void)
 static inline uint16_t getExpectedChannelPw(const statuses &current, const pulseWidths &widths, uint8_t channel, uint8_t trimPct)
 {
   if (channel<=current.numPrimaryInjOutputs) {
-    return percentageApprox((uint8_t)(100U+trimPct), widths.primary);
+    return percentage((uint8_t)(100U+trimPct), widths.primary);
   }
   if (channel<=getTotalInjChannelCount(current)) {
     // Secondary channels do NOT have trims applied
