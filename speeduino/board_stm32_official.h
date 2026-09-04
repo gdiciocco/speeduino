@@ -62,8 +62,12 @@ static constexpr uint32_t ticksToMicros(COMPARE_TYPE ticks)
 
 #define TS_SERIAL_BUFFER_SIZE 517 //Size of the serial buffer used by new comms protocol. For SD transfers this must be at least 512 + 1 (flag) + 4 (sector)
 #define FPU_MAX_SIZE 32 //Size of the FPU buffer. 0 means no FPU.
-constexpr uint16_t BLOCKING_FACTOR = 121;
-constexpr uint16_t TABLE_BLOCKING_FACTOR = 64;
+// TunerStudio transfer chunk sizes. 121/64 were the ATmega values, carried over
+// unchanged; Teensy runs the same comms code with the same 517-byte buffer at
+// 251/256. These are advertised to TS - the firmware itself does not chunk by
+// them - and must match the mcu_stm32 branch in reference/speeduino.ini.
+constexpr uint16_t BLOCKING_FACTOR = 251;
+constexpr uint16_t TABLE_BLOCKING_FACTOR = 256;
 
 #ifndef word
   #define word(h, l) (((h) << 8) | (l)) //word() function not defined for this platform in the main library
