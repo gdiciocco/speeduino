@@ -15,6 +15,7 @@ void runAllFuelTests(void)
     extern void testCalcPrimaryPulseWidth(void);
     extern void testFuelPump(void);
     extern void testWwAutotune(void);
+    extern void testSeqTrimAutotune(void);
 
     testCorrections();
     testComputePulseWidths();
@@ -27,6 +28,7 @@ void runAllFuelTests(void)
     testCalcPrimaryPulseWidth();
     testFuelPump();
     testWwAutotune();
+    testSeqTrimAutotune();
 }
 
 TEST_HARNESS(runAllFuelTests)

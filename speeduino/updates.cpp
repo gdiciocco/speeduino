@@ -156,9 +156,32 @@ TESTABLE_STATIC void setVehicleDistanceDefaults(void) {
     configPage15.gpsSpeedAuxChannel = 0U;
     configPage15.vehicleOdometerDeciKm = 0U;
     configPage15.vehicleTripDeciKm = 0U;
-    for (uint8_t index = 0U; index < 25U; index++) {
-        configPage15.Unused15_231_255[index] = 0U;
+}
+
+/** @brief Conservative defaults for sequential fuel-trim autotune.
+ *
+ * Every channel starts disabled. Channel assignments alternate AFR1/AFR2 so
+ * a two-cylinder sequential installation is ready to inspect without enabling
+ * a closed loop accidentally. The default objective is cylinder balance and
+ * learned maps are stored when the engine stops.
+ */
+TESTABLE_STATIC void setSequentialTrimAutotuneDefaults(void) {
+    constexpr uint8_t DEFAULT_RESISTANCE_PRESET = 4U; //64 s per 1 percent error
+    for (uint8_t index = 0U; index < 8U; index++) {
+        const uint8_t afr2 = ((index & 1U) != 0U) ? (1U << 2U) : 0U;
+        configPage15.seqTrimAutotuneConfig[index] = (uint8_t)((DEFAULT_RESISTANCE_PRESET << 3U) | afr2);
+        configPage15.seqTrimAutotuneAuthority[index] = 10U;
     }
+
+    configPage15.seqTrimAutotuneFlags = (1U << 1U); //Balance objective, save at engine stop
+    configPage15.seqTrimAutotuneDeadband = 10U;      //1.0 percent lambda
+    configPage15.seqTrimAutotuneStableTime = 30U;    //3.0 seconds
+    configPage15.seqTrimAutotuneMinClt = temperatureAddOffset(70);
+    configPage15.seqTrimAutotuneMinRpmDiv100 = 12U;
+    configPage15.seqTrimAutotuneMaxRpmDiv100 = 80U;
+    configPage15.seqTrimAutotuneMinLoadDiv2 = 20U;
+    configPage15.seqTrimAutotuneMaxLoadDiv2 = 50U;
+    configPage15.seqTrimAutotuneSavePeriod = 10U;
 }
 
 /** @brief Complete EMP defaults for the compact page-15 layout.
@@ -404,9 +427,19 @@ TESTABLE_STATIC void upgradeV34toV35(void) {
     }
 }
 
+/** V36 assigns the former page-15 growth area to sequential trim autotune. */
+TESTABLE_STATIC void upgradeV35toV36(void) {
+    if(loadEEPROMVersion() == 35U)
+    {
+        setSequentialTrimAutotuneDefaults();
+        saveAllPages();
+        saveEEPROMVersion(36U);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    35
+  #define CURRENT_DATA_VERSION    36
   const uint8_t versionAtBoot = loadEEPROMVersion();
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
@@ -1196,6 +1229,7 @@ void doUpdates(void)
   upgradeV32toV33();
   upgradeV33toV34(versionAtBoot);
   upgradeV34toV35();
+  upgradeV35toV36();
 
   //Final check is always for 255 and 0 (Brand new arduino)
   if( (loadEEPROMVersion() == 0) || (loadEEPROMVersion() == 255) )
@@ -1206,6 +1240,7 @@ void doUpdates(void)
     setIacGainAutotuneDefaults();
     setEmpPumpDefaults();
     setVehicleDistanceDefaults();
+    setSequentialTrimAutotuneDefaults();
 
     //Programmable outputs added. Set all to disabled
     configPage13.outputPin[0] = 0;

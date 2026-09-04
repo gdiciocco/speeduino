@@ -19,6 +19,7 @@ extern void upgradeV31toV32(void);
 extern void upgradeV32toV33(void);
 extern void upgradeV33toV34(uint8_t originalVersion);
 extern void upgradeV34toV35(void);
+extern void upgradeV35toV36(void);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -301,7 +302,6 @@ static void test_upgradeV33toV34_compacts_page15_and_preserves_idle_settings(voi
     TEST_ASSERT_EQUAL_UINT8(0U, configPage15.gpsSpeedAuxChannel);
     TEST_ASSERT_EQUAL_UINT32(0U, configPage15.vehicleOdometerDeciKm);
     TEST_ASSERT_EQUAL_UINT32(0U, configPage15.vehicleTripDeciKm);
-    TEST_ASSERT_EACH_EQUAL_UINT8(0U, configPage15.Unused15_231_255, 25U);
 }
 
 static void test_upgradeV33toV34_preserves_v32_idle_and_defaults_new_iac(void)
@@ -334,8 +334,6 @@ static void test_upgradeV34toV35_initialises_vehicle_distance(void)
     configPage15.gpsSpeedAuxChannel = UINT8_MAX;
     configPage15.vehicleOdometerDeciKm = UINT32_MAX;
     configPage15.vehicleTripDeciKm = UINT32_MAX;
-    (void)memset(configPage15.Unused15_231_255, UINT8_MAX,
-                 sizeof(configPage15.Unused15_231_255));
     setStorageAPI(setupEepromReadApi(34U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
 
     upgradeV34toV35();
@@ -344,7 +342,35 @@ static void test_upgradeV34toV35_initialises_vehicle_distance(void)
     TEST_ASSERT_EQUAL_UINT8(0U, configPage15.gpsSpeedAuxChannel);
     TEST_ASSERT_EQUAL_UINT32(0U, configPage15.vehicleOdometerDeciKm);
     TEST_ASSERT_EQUAL_UINT32(0U, configPage15.vehicleTripDeciKm);
-    TEST_ASSERT_EACH_EQUAL_UINT8(0U, configPage15.Unused15_231_255, 25U);
+}
+
+static void test_upgradeV35toV36_initialises_sequential_trim_autotune(void)
+{
+    (void)memset(configPage15.seqTrimAutotuneConfig, UINT8_MAX,
+                 sizeof(configPage15.seqTrimAutotuneConfig));
+    (void)memset(configPage15.seqTrimAutotuneAuthority, UINT8_MAX,
+                 sizeof(configPage15.seqTrimAutotuneAuthority));
+    configPage15.seqTrimAutotuneFlags = UINT8_MAX;
+    configPage15.seqTrimAutotuneDeadband = UINT8_MAX;
+    setStorageAPI(setupEepromReadApi(35U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV35toV36();
+
+    for (uint8_t index = 0U; index < 8U; index++) {
+        TEST_ASSERT_EQUAL_UINT8(0U, configPage15.seqTrimAutotuneConfig[index] & 0x03U);
+        TEST_ASSERT_EQUAL_UINT8((index & 1U) != 0U, (configPage15.seqTrimAutotuneConfig[index] & 0x04U) != 0U);
+        TEST_ASSERT_EQUAL_UINT8(4U, (configPage15.seqTrimAutotuneConfig[index] >> 3U) & 0x07U);
+        TEST_ASSERT_EQUAL_UINT8(10U, configPage15.seqTrimAutotuneAuthority[index]);
+    }
+    TEST_ASSERT_EQUAL_UINT8(2U, configPage15.seqTrimAutotuneFlags);
+    TEST_ASSERT_EQUAL_UINT8(10U, configPage15.seqTrimAutotuneDeadband);
+    TEST_ASSERT_EQUAL_UINT8(30U, configPage15.seqTrimAutotuneStableTime);
+    TEST_ASSERT_EQUAL_UINT8(temperatureAddOffset(70), configPage15.seqTrimAutotuneMinClt);
+    TEST_ASSERT_EQUAL_UINT8(12U, configPage15.seqTrimAutotuneMinRpmDiv100);
+    TEST_ASSERT_EQUAL_UINT8(80U, configPage15.seqTrimAutotuneMaxRpmDiv100);
+    TEST_ASSERT_EQUAL_UINT8(20U, configPage15.seqTrimAutotuneMinLoadDiv2);
+    TEST_ASSERT_EQUAL_UINT8(50U, configPage15.seqTrimAutotuneMaxLoadDiv2);
+    TEST_ASSERT_EQUAL_UINT8(10U, configPage15.seqTrimAutotuneSavePeriod);
 }
 
 void test_update(void) {
@@ -362,5 +388,6 @@ void test_update(void) {
         RUN_TEST(test_upgradeV33toV34_compacts_page15_and_preserves_idle_settings);
         RUN_TEST(test_upgradeV33toV34_preserves_v32_idle_and_defaults_new_iac);
         RUN_TEST(test_upgradeV34toV35_initialises_vehicle_distance);
+        RUN_TEST(test_upgradeV35toV36_initialises_sequential_trim_autotune);
     }
 }

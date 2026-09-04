@@ -1037,8 +1037,22 @@ struct config15 : public config_page_t {
   uint32_t vehicleOdometerDeciKm;   //Persistent total distance, 0.1 km/count
   uint32_t vehicleTripDeciKm;       //Persistent trip distance, 0.1 km/count
 
-  //Bytes 231-255 - Contiguous growth area for future page 15 settings
-  byte Unused15_231_255[25];
+  //Bytes 231-246 - Sequential fuel-trim autotune, one byte pair per trim.
+  //Config byte: bits 0-1 mode, bit 2 AFR channel, bits 3-5 cell resistance.
+  byte seqTrimAutotuneConfig[8];
+  byte seqTrimAutotuneAuthority[8]; //Maximum movement from the drive-cycle baseline, percent
+
+  //Bytes 247-255 - Settings shared by all sequential fuel-trim learners.
+  //Flags: bit 0 objective (0=balance, 1=target), bits 1-2 persistence policy.
+  byte seqTrimAutotuneFlags;
+  byte seqTrimAutotuneDeadband;     //Lambda error deadband, 0.1 percent
+  byte seqTrimAutotuneStableTime;   //Required stable operating time, 0.1 seconds
+  byte seqTrimAutotuneMinClt;       //Minimum coolant temperature, offset by 40 degrees
+  byte seqTrimAutotuneMinRpmDiv100;
+  byte seqTrimAutotuneMaxRpmDiv100;
+  byte seqTrimAutotuneMinLoadDiv2;
+  byte seqTrimAutotuneMaxLoadDiv2;
+  byte seqTrimAutotuneSavePeriod;   //Periodic persistence interval, minutes
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 
 
@@ -1047,3 +1061,5 @@ static_assert(offsetof(config15, vehicleDistanceSource) == 141U, "Page 15 / INI 
 static_assert(offsetof(config15, gpsSpeedAuxChannel) == 142U, "Page 15 / INI GPS Aux offset mismatch");
 static_assert(offsetof(config15, vehicleOdometerDeciKm) == 143U, "Page 15 / INI odometer offset mismatch");
 static_assert(offsetof(config15, vehicleTripDeciKm) == 147U, "Page 15 / INI trip offset mismatch");
+static_assert(offsetof(config15, seqTrimAutotuneConfig) == 151U, "Page 15 / INI sequential trim autotune offset mismatch");
+static_assert(offsetof(config15, seqTrimAutotuneSavePeriod) == 175U, "Page 15 sequential trim autotune tail mismatch");

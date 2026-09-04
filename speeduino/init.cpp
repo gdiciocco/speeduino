@@ -40,6 +40,7 @@
 #include "opf_core.h"
 #endif
 #include "ww_autotune.h"
+#include "seq_trim_autotune.h"
 #include "vehicle_distance.h"
 
 #if defined(CORE_AVR)
@@ -215,6 +216,7 @@ void initialiseAll(void)
     initialiseAuxPWM();
     initialiseCorrections();
     wwAutotuneInit();
+    seqTrimAutotuneInit();
     initialiseVehicleDistance();
     currentStatus.ioError = false; //Clear the I/O error bit. The bit will be set in initialiseADC() if there is problem in there.
     initialiseADC();

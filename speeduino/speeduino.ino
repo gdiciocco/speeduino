@@ -65,6 +65,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "src/controllers/fuelPump/fuelPumpController.h"
 #include "scheduler_fuel_controller.h"
 #include "ww_autotune.h"
+#include "seq_trim_autotune.h"
 
 #define CRANK_RUN_HYSTER    15
 
@@ -264,6 +265,8 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
       wmiControl();
       //Wall wetting autotune (only acts when aeMode is wall wetting and learning is enabled)
       wwAutotuneUpdate();
+      //Slow, de-lagged learning of the sequential per-injector fuel trims
+      seqTrimAutotuneUpdate();
       
       #if defined(NATIVE_CAN_AVAILABLE)
       sendCANBroadcast(30);

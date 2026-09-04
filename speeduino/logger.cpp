@@ -1,6 +1,7 @@
 #include "globals.h"
 #include "logger.h"
 #include "ww_autotune.h"
+#include "seq_trim_autotune.h"
 #include "idle.h"
 #include "corrections.h"
 #include "decoders.h"
@@ -221,7 +222,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 10U; break; //Custom block layout version
+    case 2: statusValue = 11U; break; //Custom block layout version
     //Backup SRAM integrity status in bits 0-3 (see buildStorageStatus). Bits 4-7 spare (dashboard inputs moved to their own byte in layout v8)
     case 3: statusValue = buildStorageStatus(); break;
     case 4: statusValue = lowByte(currentStatus.RPM); break;
@@ -312,6 +313,24 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     case 88: statusValue = (byte)(getVehicleTripDeciKm() >> 24U); break;
     case 89: statusValue = lowByte(getVehicleDistanceSpeedKph()); break;
     case 90: statusValue = highByte(getVehicleDistanceSpeedKph()); break;
+    //Sequential fuel-trim autotune diagnostics (absolute offsets 267-283)
+    case 91: statusValue = seqTrimAutotuneDiag().state; break;
+    case 92: statusValue = lowByte(seqTrimAutotuneDiag().gateBits); break;
+    case 93: statusValue = highByte(seqTrimAutotuneDiag().gateBits); break;
+    case 94: statusValue = seqTrimAutotuneDiag().activeMask; break;
+    case 95: statusValue = seqTrimAutotuneDiag().learnMask; break;
+    case 96: statusValue = seqTrimAutotuneDiag().authorityMask; break;
+    case 97: statusValue = lowByte(seqTrimAutotuneDiag().acceptedSamples); break;
+    case 98: statusValue = highByte(seqTrimAutotuneDiag().acceptedSamples); break;
+    case 99: statusValue = lowByte(seqTrimAutotuneDiag().cellUpdates); break;
+    case 100: statusValue = highByte(seqTrimAutotuneDiag().cellUpdates); break;
+    case 101: statusValue = (seqTrimAutotuneDiag().lastTrim == UINT8_MAX) ? 0U : (uint8_t)(seqTrimAutotuneDiag().lastTrim + 1U); break;
+    case 102: statusValue = seqTrimAutotuneDiag().lastCell; break;
+    case 103: statusValue = (uint8_t)seqTrimAutotuneDiag().lastDelta; break;
+    case 104: statusValue = lowByte((uint16_t)seqTrimAutotuneDiag().lastErrorTenthsPercent); break;
+    case 105: statusValue = highByte((uint16_t)seqTrimAutotuneDiag().lastErrorTenthsPercent); break;
+    case 106: statusValue = lowByte(seqTrimAutotuneDiag().secondsToNextSave); break;
+    case 107: statusValue = highByte(seqTrimAutotuneDiag().secondsToNextSave); break;
     default: statusValue = 0; break;
   }
 
