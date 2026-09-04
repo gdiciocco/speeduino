@@ -20,6 +20,9 @@
  */
 static const char HW_TEST_BOOT_MAGIC[] = "@BOOTLOADER";
 
+/** @brief How long after the tests finish before the board parks itself in DFU */
+static const uint32_t HW_TEST_PARK_IN_DFU_MS = 4000U;
+
 static inline void hwTestPollForBootloader(void)
 {
     static uint8_t matched = 0U;
@@ -88,23 +91,30 @@ void setup() \
 void loop()
 {
     // UNITY_END() ends up in PlatformIO's unittest_uart_end(), which calls
-    // Serial.end() - on a USB CDC board that tears the device off the bus
-    // entirely. Bring it back up, once, so the escape hatch above is reachable
-    // after the run and not just during the wait before it. Without this the
-    // board is unflashable the moment the tests finish.
-    static bool serialRestarted = false;
-    if (!serialRestarted)
+    // Serial.end(). On a USB CDC board that does not merely stop printing: it
+    // takes the device off the bus, and on stm32duino it does not come back.
+    // So once the tests are over there is no serial left to ask anything of,
+    // and the escape sequence above can never be delivered.
+    //
+    // Park in the bootloader instead. The board ends every test run sitting in
+    // DFU, which is exactly where the next upload wants it - no handshake, no
+    // race, nothing to get wrong. dfu_upload.py checks for that first and goes
+    // straight to flashing.
+    //
+    // The delay is to let the runner finish reading the results off the port
+    // before the device disappears for good.
+    static uint32_t testsFinishedAt = millis();
+    if ((millis() - testsFinishedAt) > HW_TEST_PARK_IN_DFU_MS)
     {
-        Serial.begin(115200);
-        serialRestarted = true;
+        jumpToBootloader();
     }
 
-    // Blink to indicate end of test, while staying responsive to the
-    // bootloader escape sequence.
+    // Blink until then, and stay responsive to the escape sequence in case the
+    // host catches us before the park.
     digitalWrite(LED_BUILTIN, HIGH);
-    hwTestIdle(250U);
+    hwTestIdle(125U);
     digitalWrite(LED_BUILTIN, LOW);
-    hwTestIdle(250U);
+    hwTestIdle(125U);
 }
 
 #endif
