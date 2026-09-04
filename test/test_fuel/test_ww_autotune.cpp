@@ -85,6 +85,16 @@ static void test_ww_baseline_tbody_scales_up(void) {
 
 /** Make every learning gate pass */
 static void setup_ww_learn_conditions(void) {
+  const uint8_t rpmAxis[6] = {80U, 50U, 40U, 30U, 20U, 10U};
+  const uint8_t loadAxis[6] = {70U, 50U, 40U, 30U, 20U, 10U};
+  for (uint8_t cell = 0U; cell < 36U; cell++) { afrDelayTables[0].values.values[cell] = 18U; }
+  for (uint8_t bin = 0U; bin < 6U; bin++) {
+    afrDelayTables[0].axisX.axis[bin] = rpmAxis[bin];
+    afrDelayTables[0].axisY.axis[bin] = loadAxis[bin];
+  }
+  invalidate_cache(&afrDelayTables[0].get_value_cache);
+  afrDelayConfig.wallWettingOffset10ms = 0;
+
   configPage2.aeMode = AE_MODE_WALL_WETTING;
   configPage2.wallWettingFuel = 10; // learning on, authority 10 counts
   configPage2.aeColdTaperMax = 0;
@@ -168,6 +178,17 @@ static void test_ww_learner_lean_tip_in_adjusts_tables(void) {
   TEST_ASSERT_EQUAL_UINT8(cell, wwAutotuneDiag().lastCellIndex);
   TEST_ASSERT_EQUAL_UINT8(wallWettingAddTable.values.values[cell], wwAutotuneDiag().lastAddValue);
   TEST_ASSERT_EQUAL_UINT8(wallWettingRemoveTable.values.values[cell], wwAutotuneDiag().lastRemoveValue);
+}
+
+static void test_ww_learner_applies_local_afr1_delay_offset(void) {
+  setup_ww_learn_conditions();
+  TEST_ASSERT_EQUAL_UINT16(167U, wwAutotuneEffectiveDelayMilliseconds());
+
+  afrDelayConfig.wallWettingOffset10ms = 10; //+100 ms over the 180 ms map
+  TEST_ASSERT_EQUAL_UINT16(267U, wwAutotuneEffectiveDelayMilliseconds());
+
+  afrDelayConfig.wallWettingOffset10ms = -50; //Clamp to one 30 Hz sample
+  TEST_ASSERT_EQUAL_UINT16(33U, wwAutotuneEffectiveDelayMilliseconds());
 }
 
 static void test_ww_learner_disabled_by_zero_authority(void) {
@@ -259,6 +280,7 @@ void testWwAutotune(void)
     RUN_TEST_P(test_ww_baseline_does_not_overwrite_valid_tables);
     RUN_TEST_P(test_ww_baseline_tbody_scales_up);
     RUN_TEST_P(test_ww_learner_lean_tip_in_adjusts_tables);
+    RUN_TEST_P(test_ww_learner_applies_local_afr1_delay_offset);
     RUN_TEST_P(test_ww_learner_disabled_by_zero_authority);
     RUN_TEST_P(test_ww_learner_aborts_on_gate_failure);
     RUN_TEST_P(test_ww_periodic_save_queues_eeprom_write);

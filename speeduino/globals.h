@@ -75,6 +75,8 @@ extern trimTable3d trimTables[INJ_CHANNELS]; //6x6 Fuel trim maps
 extern struct table3d4RpmLoad dwellTable; //4x4 Dwell map
 extern struct table3d8RpmLoad wallWettingAddTable; //8x8 wall wetting "added to wall" coefficient (X)
 extern struct table3d8RpmLoad wallWettingRemoveTable; //8x8 wall wetting "removed from wall" coefficient (Y)
+extern struct table3d6RpmLoad afrDelayTables[2]; //AFR1/AFR2 measurement delay maps, 10 ms/count
+extern afr_delay_config_t afrDelayConfig; //Page 16 settings shared by AFR delay consumers
 
 extern uint8_t softLimitTime; //The time (in 0.1 seconds, based on seclx10) that the soft limiter started
 extern volatile uint16_t mainLoopCount;

@@ -2,7 +2,8 @@
  * @brief Wideband-feedback learner for 6x6 sequential fuel trim tables.
  *
  * The learner is intentionally a slow adaptive LUT, not an AFR controller.
- * Each accepted observation is attributed through an RPM-dependent delay to
+ * Each accepted observation is attributed through the selected AFR channel's
+ * bilinearly interpolated RPM/load delay map to
  * the four cells that produced it. Their bilinear membership weights sum to
  * one. Signed evidence is retained per cell across later visits to other
  * RPM/load regions; it is reset only at a new drive cycle or when that trim's
@@ -10,6 +11,7 @@
  */
 #include "seq_trim_autotune.h"
 
+#include "afr_delay.h"
 #include "globals.h"
 #include "storage.h"
 #include "table3d_interpolate.h"
@@ -46,10 +48,8 @@ namespace {
 
 constexpr uint8_t TABLE_DIM = 6U;
 constexpr uint8_t TABLE_CELLS = TABLE_DIM * TABLE_DIM;
-constexpr uint8_t RING_SIZE = 24U;
+constexpr uint8_t RING_SIZE = 48U;
 constexpr uint8_t MAX_DELAY_TICKS = RING_SIZE - 1U;
-constexpr uint16_t LAG_FIXED_MS = 80U;
-constexpr uint32_t LAG_TRANSPORT_MS_RPM = 300000UL;
 constexpr uint8_t AFR_MIN = 70U;
 constexpr uint8_t AFR_MAX = 220U;
 constexpr uint8_t MIN_RUN_SECONDS = 30U;
@@ -81,6 +81,7 @@ struct HistorySample {
   uint16_t rpm;
   uint16_t load;
   uint8_t afrTarget;
+  uint8_t afrDelayTicks[2];
   bool eligible;
 };
 
@@ -177,7 +178,7 @@ void clearHistory(void)
   historyFilled = 0U;
   stableTicks = 0U;
   for (uint8_t index = 0U; index < RING_SIZE; index++) {
-    history[index] = HistorySample{0U, 0U, 0U, false};
+    history[index] = HistorySample{0U, 0U, 0U, {0U, 0U}, false};
   }
 }
 
@@ -310,14 +311,15 @@ uint16_t commonGateBits(void)
   return bits;
 }
 
-uint8_t delayTicks(void)
+const HistorySample* dueHistorySample(uint8_t channel)
 {
-  uint32_t delayMs = LAG_FIXED_MS;
-  if (currentStatus.RPM > 0U) { delayMs += LAG_TRANSPORT_MS_RPM / currentStatus.RPM; }
-  uint32_t ticks = ((delayMs * 3U) + 50U) / 100U;
-  if (ticks < 1U) { ticks = 1U; }
-  if (ticks > MAX_DELAY_TICKS) { ticks = MAX_DELAY_TICKS; }
-  return (uint8_t)ticks;
+  uint8_t available = historyFilled;
+  if (available > MAX_DELAY_TICKS) { available = MAX_DELAY_TICKS; }
+  for (uint8_t age = 1U; age <= available; age++) {
+    const uint8_t index = (uint8_t)((historyHead + RING_SIZE - age) % RING_SIZE);
+    if (history[index].afrDelayTicks[channel] == age) { return &history[index]; }
+  }
+  return nullptr;
 }
 
 void axisMembership(const table3d_axis_t *axis, uint16_t value, uint16_t factor,
@@ -426,29 +428,25 @@ bool updateCell(uint8_t trim, uint8_t cell, uint8_t weight, int16_t error)
   return true;
 }
 
-void processDelayedSample(const HistorySample &sample)
+void processDelayedSample(const HistorySample &sample, uint8_t trim)
 {
   if (!sample.eligible) { return; }
   if (!targetObjective() && (!validAfr(currentStatus.O2) || !validAfr(currentStatus.O2_2))) { return; }
-  const uint8_t count = configuredTrimCount();
-  bool accepted = false;
-  bool learned = false;
-  for (uint8_t trim = 0U; trim < count; trim++) {
-    const uint8_t mode = trimMode(trim);
-    if (mode == SEQ_TRIM_AUTOTUNE_OFF) { continue; }
-    if (targetObjective() && !validAfr(trimUsesAfr2(trim) ? currentStatus.O2_2 : currentStatus.O2)) { continue; }
-    const int16_t error = feedbackError(trim, sample);
-    diag.lastErrorTenthsPercent = error;
-    accepted = true;
-    if ((mode != SEQ_TRIM_AUTOTUNE_LEARN) || (absoluteI16(error) <= configPage15.seqTrimAutotuneDeadband)) { continue; }
+  const uint8_t mode = trimMode(trim);
+  if (mode == SEQ_TRIM_AUTOTUNE_OFF) { return; }
+  if (targetObjective() && !validAfr(trimUsesAfr2(trim) ? currentStatus.O2_2 : currentStatus.O2)) { return; }
 
-    WeightedCell cells[4];
-    weightedCells(trimTables[trim], sample.rpm, sample.load, cells);
-    for (uint8_t slot = 0U; slot < 4U; slot++) {
-      learned |= updateCell(trim, cells[slot].index, cells[slot].weight, error);
-    }
+  const int16_t error = feedbackError(trim, sample);
+  diag.lastErrorTenthsPercent = error;
+  if (diag.acceptedSamples < UINT16_MAX) { diag.acceptedSamples++; }
+  if ((mode != SEQ_TRIM_AUTOTUNE_LEARN) || (absoluteI16(error) <= configPage15.seqTrimAutotuneDeadband)) { return; }
+
+  bool learned = false;
+  WeightedCell cells[4];
+  weightedCells(trimTables[trim], sample.rpm, sample.load, cells);
+  for (uint8_t slot = 0U; slot < 4U; slot++) {
+    learned |= updateCell(trim, cells[slot].index, cells[slot].weight, error);
   }
-  if (accepted && (diag.acceptedSamples < UINT16_MAX)) { diag.acceptedSamples++; }
   if (learned) { diag.state = SEQ_TRIM_STATE_LEARNING; }
 }
 
@@ -511,8 +509,17 @@ void seqTrimAutotuneUpdate(void)
   const uint16_t requiredStableTicks = (uint16_t)configPage15.seqTrimAutotuneStableTime * 3U;
   const bool stableNow = eligibleNow && (stableTicks >= requiredStableTicks);
 
-  history[historyHead] = HistorySample{currentStatus.RPM, (uint16_t)currentStatus.fuelLoad,
-                                       currentStatus.afrTarget, stableNow};
+  const uint16_t currentLoad = (uint16_t)currentStatus.fuelLoad;
+  history[historyHead] = HistorySample{
+      currentStatus.RPM,
+      currentLoad,
+      currentStatus.afrTarget,
+      {
+        afrDelayTicks30Hz(AFR_DELAY_CHANNEL_1, currentStatus.RPM, currentLoad, MAX_DELAY_TICKS),
+        afrDelayTicks30Hz(AFR_DELAY_CHANNEL_2, currentStatus.RPM, currentLoad, MAX_DELAY_TICKS),
+      },
+      stableNow
+  };
 
   diag.state = (diag.activeMask == 0U) ? SEQ_TRIM_STATE_DISABLED
              : (diag.gateBits != 0U) ? SEQ_TRIM_STATE_BLOCKED
@@ -522,9 +529,16 @@ void seqTrimAutotuneUpdate(void)
 
   //Both ends of the causal pair must be acceptable: the delayed operating
   //point that produced the exhaust gas and the current wideband measurement.
-  if ((historyFilled >= MAX_DELAY_TICKS) && sessionActive && stableNow) {
-    const uint8_t delayedIndex = (uint8_t)((historyHead + RING_SIZE - delayTicks()) % RING_SIZE);
-    processDelayedSample(history[delayedIndex]);
+  if (sessionActive && stableNow) {
+    //Different sensors may have different physical locations and response
+    //times. Process one causal history point per active trim.
+    const uint8_t count = configuredTrimCount();
+    for (uint8_t trim = 0U; trim < count; trim++) {
+      if (trimMode(trim) == SEQ_TRIM_AUTOTUNE_OFF) { continue; }
+      const uint8_t channel = trimUsesAfr2(trim) ? AFR_DELAY_CHANNEL_2 : AFR_DELAY_CHANNEL_1;
+      const HistorySample *sample = dueHistorySample(channel);
+      if (sample != nullptr) { processDelayedSample(*sample, trim); }
+    }
   }
 
   historyHead = (uint8_t)((historyHead + 1U) % RING_SIZE);

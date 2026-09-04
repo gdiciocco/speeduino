@@ -368,6 +368,9 @@ static page_map_t getPageMap(uint8_t pageNumber)
   static constexpr entity_t wallWettingPageMap[] PROGMEM = {
     makeEntity(&wallWettingAddTable),
     makeEntity(&wallWettingRemoveTable),
+    makeEntity(&afrDelayTables[0]),
+    makeEntity(&afrDelayTables[1]),
+    makeEntity(&afrDelayConfig, sizeof(afrDelayConfig)),
   };
 
   static constexpr page_map_t pageMaps[MAX_PAGE_NUM] PROGMEM = {

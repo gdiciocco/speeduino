@@ -18,6 +18,8 @@ struct table3d6RpmLoad trimTables[INJ_CHANNELS];
 struct table3d4RpmLoad dwellTable; ///< 4x4 Dwell map
 struct table3d8RpmLoad wallWettingAddTable; ///< 8x8 wall wetting "added to wall" coefficient (X)
 struct table3d8RpmLoad wallWettingRemoveTable; ///< 8x8 wall wetting "removed from wall" coefficient (Y)
+struct table3d6RpmLoad afrDelayTables[2]; ///< AFR1/AFR2 measurement delay maps, 10 ms/count
+afr_delay_config_t afrDelayConfig; ///< Page 16 settings shared by AFR delay consumers
 
 //These are variables used across multiple files
 uint8_t softLimitTime = 0; //The time (in 0.1 seconds, based on seclx10) that the soft limiter started

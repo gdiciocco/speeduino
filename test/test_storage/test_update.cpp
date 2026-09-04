@@ -20,6 +20,8 @@ extern void upgradeV32toV33(void);
 extern void upgradeV33toV34(uint8_t originalVersion);
 extern void upgradeV34toV35(void);
 extern void upgradeV35toV36(void);
+extern void upgradeV36toV37(void);
+extern void upgradeV37toV38(void);
 
 static void assert_2dTable(table2D_u16_u8_32 &testSubject, uint16_t newAxis, uint8_t newValue)
 {
@@ -373,6 +375,57 @@ static void test_upgradeV35toV36_initialises_sequential_trim_autotune(void)
     TEST_ASSERT_EQUAL_UINT8(10U, configPage15.seqTrimAutotuneSavePeriod);
 }
 
+static void test_upgradeV36toV37_initialises_two_afr_delay_maps(void)
+{
+    (void)memset(afrDelayTables[0].values.values, UINT8_MAX, 36U);
+    (void)memset(afrDelayTables[1].values.values, UINT8_MAX, 36U);
+    (void)memset(afrDelayTables[0].axisX.axis, UINT8_MAX, 6U);
+    (void)memset(afrDelayTables[1].axisX.axis, UINT8_MAX, 6U);
+    configPage2.fuelAlgorithm = LOAD_SOURCE_MAP;
+    configPage2.mapMax = 140U;
+    setStorageAPI(setupEepromReadApi(36U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV36toV37();
+
+    TEST_ASSERT_EQUAL_UINT8(80U, afrDelayTables[0].axisX.axis[0]);
+    TEST_ASSERT_EQUAL_UINT8(10U, afrDelayTables[0].axisX.axis[5]);
+    TEST_ASSERT_EQUAL_UINT8(70U, afrDelayTables[0].axisY.axis[0]);
+    TEST_ASSERT_EQUAL_UINT8(10U, afrDelayTables[0].axisY.axis[5]);
+    TEST_ASSERT_EQUAL_UINT8(75U, get3DTableValue(&afrDelayTables[0], 20U, 1000U));
+    TEST_ASSERT_EQUAL_UINT8(11U, get3DTableValue(&afrDelayTables[0], 140U, 8000U));
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(afrDelayTables[0].values.values,
+                                  afrDelayTables[1].values.values, 36U);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(afrDelayTables[0].axisX.axis,
+                                  afrDelayTables[1].axisX.axis, 6U);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(afrDelayTables[0].axisY.axis,
+                                  afrDelayTables[1].axisY.axis, 6U);
+}
+
+static void test_upgradeV36toV37_encodes_tps_load_axis(void)
+{
+    configPage2.fuelAlgorithm = LOAD_SOURCE_TPS;
+    setStorageAPI(setupEepromReadApi(36U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV36toV37();
+
+    TEST_ASSERT_EQUAL_UINT8(200U, afrDelayTables[0].axisY.axis[0]);
+    TEST_ASSERT_EQUAL_UINT8(40U, afrDelayTables[0].axisY.axis[5]);
+    //Runtime fuelLoad is TPS percent * 4; table lookup halves it before
+    //comparing against the percent * 2 stored axis.
+    TEST_ASSERT_EQUAL_UINT8(75U, get3DTableValue(&afrDelayTables[0], 80U, 1000U));
+    TEST_ASSERT_EQUAL_UINT8(11U, get3DTableValue(&afrDelayTables[0], 400U, 8000U));
+}
+
+static void test_upgradeV37toV38_initialises_wall_wetting_delay_offset(void)
+{
+    afrDelayConfig.wallWettingOffset10ms = INT8_MAX;
+    setStorageAPI(setupEepromReadApi(37U, getOneByteStorageApi(0xFFF, 0xFFF, 127U)));
+
+    upgradeV37toV38();
+
+    TEST_ASSERT_EQUAL_INT8(0, afrDelayConfig.wallWettingOffset10ms);
+}
+
 void test_update(void) {
     SET_UNITY_FILENAME() {
         RUN_TEST(test_updateTableU16toU8);
@@ -389,5 +442,8 @@ void test_update(void) {
         RUN_TEST(test_upgradeV33toV34_preserves_v32_idle_and_defaults_new_iac);
         RUN_TEST(test_upgradeV34toV35_initialises_vehicle_distance);
         RUN_TEST(test_upgradeV35toV36_initialises_sequential_trim_autotune);
+        RUN_TEST(test_upgradeV36toV37_initialises_two_afr_delay_maps);
+        RUN_TEST(test_upgradeV36toV37_encodes_tps_load_axis);
+        RUN_TEST(test_upgradeV37toV38_initialises_wall_wetting_delay_offset);
     }
 }

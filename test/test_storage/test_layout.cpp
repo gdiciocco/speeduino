@@ -17,22 +17,18 @@ static void test_getEntityStartAddress_invalid_entity(void) {
     TEST_ASSERT_EQUAL(0, getEntityStartAddress(iter));
 }
 
-static bool inline isInRangeExclusive(uint16_t rangeStart, uint16_t rangeEnd, uint16_t testValue) {
-    return (testValue>=rangeStart) && (testValue<rangeEnd);
-}
-
 struct block {
     uint16_t start;
     uint16_t length;
 };
 
 static void assert_nocalibration_overlap(const block &newBlock, uint8_t idxCurrBlock, SensorCalibrationTable table) {
-    uint16_t start = getSensorCalibrationCrcAddress(table);
-    uint16_t end = start + sizeof(uint32_t);
+    const block calibrationCrc = { getSensorCalibrationCrcAddress(table), sizeof(uint32_t) };
     char msg[64];
     sprintf(msg, "EEPROM storage: entity %" PRIu16 " overlaps calibration CRC %" PRIu16, idxCurrBlock, (uint16_t)table);
-    TEST_ASSERT_FALSE_MESSAGE(isInRangeExclusive(start, end, newBlock.start), msg);
-    TEST_ASSERT_FALSE_MESSAGE(isInRangeExclusive(start, end, newBlock.start+newBlock.length), msg);
+    const bool overlapsCrc = (newBlock.start < calibrationCrc.start + calibrationCrc.length)
+                          && (calibrationCrc.start < newBlock.start + newBlock.length);
+    TEST_ASSERT_FALSE_MESSAGE(overlapsCrc, msg);
 }
 
 static void assert_nocalibration_overlap(const block &newBlock, uint8_t idxCurrBlock) {
@@ -42,8 +38,7 @@ static void assert_nocalibration_overlap(const block &newBlock, uint8_t idxCurrB
 }
 
 static bool inline overlaps(const block &a, const block &b) {
-    return  isInRangeExclusive(a.start, a.start+a.length-1, b.start);
-            isInRangeExclusive(a.start, a.start+a.length, b.start+b.length);
+    return (a.start < b.start + b.length) && (b.start < a.start + a.length);
 }
 
 static uint8_t find_overlap(const block blocks[], uint8_t idxCurrBlock, const block &newBlock) {
@@ -82,7 +77,7 @@ static uint8_t test_no_overlap_page(uint8_t pageNum, block blocks[], size_t leng
 }
 
 static void test_no_entity_overlap(void) {
-    block blocks[28];
+    block blocks[40];
     uint8_t idxCurrBlock = 0U;
 
     for (uint8_t i = MIN_PAGE_NUM; i < MAX_PAGE_NUM; i++) {
@@ -105,7 +100,7 @@ const char *getEntityName(const page_iterator_t &it) {
 
   struct entity_name_map_t {
       void *pEntity;
-      String name;
+      const char *name;
   };
 
   // Store a map of entity to EEPROM address in FLASH memory.
@@ -151,6 +146,11 @@ const char *getEntityName(const page_iterator_t &it) {
     { &ignitionTable2, GET_VARIABLE_NAME(ignitionTable2) },
     { &boostTableLookupDuty, GET_VARIABLE_NAME(boostTableLookupDuty) },
     { &configPage15, GET_VARIABLE_NAME(configPage15) },
+    { &wallWettingAddTable, GET_VARIABLE_NAME(wallWettingAddTable) },
+    { &wallWettingRemoveTable, GET_VARIABLE_NAME(wallWettingRemoveTable) },
+    { &afrDelayTables[0], GET_VARIABLE_NAME(afrDelayTables[0]) },
+    { &afrDelayTables[1], GET_VARIABLE_NAME(afrDelayTables[1]) },
+    { &afrDelayConfig, GET_VARIABLE_NAME(afrDelayConfig) },
   };
   static const constexpr entity_name_map_t* entityMapEnd = entityMap + _countof(entityMap);  
 
@@ -160,7 +160,7 @@ const char *getEntityName(const page_iterator_t &it) {
     ++pMapEntry;
   }
   if (pMapEntry!=entityMapEnd) {
-    return pMapEntry->name.c_str();
+    return pMapEntry->name;
   }
   static const char *unknown = "Unknown";
   return unknown;

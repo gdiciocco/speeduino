@@ -18,6 +18,7 @@
 #include "units.h"
 #include "unit_testing.h"
 #include "emp_pump.h"
+#include "load_source.h"
 #include <string.h>
 
 // Minimize flash usage of the non-performance critical code in this file.
@@ -182,6 +183,60 @@ TESTABLE_STATIC void setSequentialTrimAutotuneDefaults(void) {
     configPage15.seqTrimAutotuneMinLoadDiv2 = 20U;
     configPage15.seqTrimAutotuneMaxLoadDiv2 = 50U;
     configPage15.seqTrimAutotuneSavePeriod = 10U;
+}
+
+/** @brief Seed independent AFR1/AFR2 transport and sensor delay maps.
+ *
+ * Values are stored in 10 ms counts. The generic warm-engine baseline falls
+ * with both RPM and load (gas mass flow), but both maps start identical until
+ * their individual sensor positions are measured and calibrated.
+ */
+TESTABLE_STATIC void setAfrDelayTableDefaults(void) {
+    constexpr uint8_t DIM = 6U;
+    static constexpr uint8_t rpmBins[DIM] = {10U, 15U, 25U, 35U, 50U, 80U};       //RPM / 100
+    static constexpr uint8_t delay10ms[DIM][DIM] = {
+        {75U, 53U, 35U, 27U, 21U, 16U}, //lowest load bin
+        {55U, 40U, 27U, 22U, 18U, 14U},
+        {47U, 34U, 24U, 19U, 16U, 13U},
+        {42U, 30U, 22U, 18U, 15U, 12U},
+        {38U, 28U, 20U, 17U, 14U, 12U},
+        {33U, 25U, 18U, 15U, 13U, 11U}, //highest load bin
+    };
+
+    uint16_t loadMax = 100U;
+    if (configPage2.fuelAlgorithm != LOAD_SOURCE_TPS) {
+        loadMax = configPage2.mapMax;
+        if (loadMax < 100U) { loadMax = 100U; }
+        if (loadMax > 240U) { loadMax = 240U; }
+    }
+    uint8_t loadBins[DIM];
+    for (uint8_t logical = 0U; logical < DIM; logical++) {
+        const uint16_t load = 20U + ((loadMax - 20U) * logical) / (DIM - 1U);
+        //fuelLoad is MAP/ratio in native units, but TPS is represented as
+        //percent * 2. Match the same encoding used by the main fuel tables.
+        loadBins[logical] = (configPage2.fuelAlgorithm == LOAD_SOURCE_TPS)
+                          ? (uint8_t)(load * 2U)
+                          : (uint8_t)(load / 2U);
+    }
+
+    for (uint8_t channel = 0U; channel < 2U; channel++) {
+        for (uint8_t logical = 0U; logical < DIM; logical++) {
+            const uint8_t memory = DIM - 1U - logical;
+            afrDelayTables[channel].axisX.axis[memory] = rpmBins[logical];
+            afrDelayTables[channel].axisY.axis[memory] = loadBins[logical];
+        }
+        for (uint8_t loadIndex = 0U; loadIndex < DIM; loadIndex++) {
+            const uint8_t memoryRow = DIM - 1U - loadIndex;
+            for (uint8_t rpmIndex = 0U; rpmIndex < DIM; rpmIndex++) {
+                afrDelayTables[channel].values.values[memoryRow * DIM + rpmIndex] = delay10ms[loadIndex][rpmIndex];
+            }
+        }
+        invalidate_cache(&afrDelayTables[channel].get_value_cache);
+    }
+}
+
+TESTABLE_STATIC void setAfrDelayConfigDefaults(void) {
+    afrDelayConfig.wallWettingOffset10ms = 0;
 }
 
 /** @brief Complete EMP defaults for the compact page-15 layout.
@@ -437,9 +492,29 @@ TESTABLE_STATIC void upgradeV35toV36(void) {
     }
 }
 
+/** V37 appends the AFR1/AFR2 delay maps to page 16. */
+TESTABLE_STATIC void upgradeV36toV37(void) {
+    if(loadEEPROMVersion() == 36U)
+    {
+        setAfrDelayTableDefaults();
+        saveAllPages();
+        saveEEPROMVersion(37U);
+    }
+}
+
+/** V38 appends the wall-wetting learner's local AFR1 delay offset to page 16. */
+TESTABLE_STATIC void upgradeV37toV38(void) {
+    if(loadEEPROMVersion() == 37U)
+    {
+        setAfrDelayConfigDefaults();
+        saveAllPages();
+        saveEEPROMVersion(38U);
+    }
+}
+
 void doUpdates(void)
 {
-  #define CURRENT_DATA_VERSION    36
+  #define CURRENT_DATA_VERSION    38
   const uint8_t versionAtBoot = loadEEPROMVersion();
   //Only the latest update for small flash devices must be retained
    #ifndef SMALL_FLASH_MODE
@@ -1230,6 +1305,8 @@ void doUpdates(void)
   upgradeV33toV34(versionAtBoot);
   upgradeV34toV35();
   upgradeV35toV36();
+  upgradeV36toV37();
+  upgradeV37toV38();
 
   //Final check is always for 255 and 0 (Brand new arduino)
   if( (loadEEPROMVersion() == 0) || (loadEEPROMVersion() == 255) )
@@ -1241,6 +1318,8 @@ void doUpdates(void)
     setEmpPumpDefaults();
     setVehicleDistanceDefaults();
     setSequentialTrimAutotuneDefaults();
+    setAfrDelayTableDefaults();
+    setAfrDelayConfigDefaults();
 
     //Programmable outputs added. Set all to disabled
     configPage13.outputPin[0] = 0;

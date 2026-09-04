@@ -1063,3 +1063,10 @@ static_assert(offsetof(config15, vehicleOdometerDeciKm) == 143U, "Page 15 / INI 
 static_assert(offsetof(config15, vehicleTripDeciKm) == 147U, "Page 15 / INI trip offset mismatch");
 static_assert(offsetof(config15, seqTrimAutotuneConfig) == 151U, "Page 15 / INI sequential trim autotune offset mismatch");
 static_assert(offsetof(config15, seqTrimAutotuneSavePeriod) == 175U, "Page 15 sequential trim autotune tail mismatch");
+
+/** Page 16 settings stored after the wall-wetting and AFR-delay tables. */
+struct afr_delay_config_t : public config_page_t {
+  int8_t wallWettingOffset10ms; ///< Wall-wetting learner-only AFR1 delay offset, 10 ms/count
+} __attribute__((packed));
+
+static_assert(sizeof(afr_delay_config_t) == 1U, "Page 16 AFR delay settings layout must remain one byte");

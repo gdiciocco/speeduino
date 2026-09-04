@@ -2,6 +2,7 @@
 
 #include "../test_utils.h"
 #include "globals.h"
+#include "afr_delay.h"
 #include "seq_trim_autotune.h"
 #include "storage.h"
 #include "units.h"
@@ -24,9 +25,25 @@ void initialiseTrimTables(void)
   }
 }
 
+void initialiseDelayTables(uint8_t afr1Delay10ms = 18U, uint8_t afr2Delay10ms = 18U)
+{
+  const uint8_t rpmAxis[6] = {80U, 50U, 40U, 30U, 20U, 10U};
+  const uint8_t loadAxis[6] = {70U, 50U, 40U, 30U, 20U, 10U};
+  for (uint8_t channel = 0U; channel < 2U; channel++) {
+    const uint8_t delay = (channel == 0U) ? afr1Delay10ms : afr2Delay10ms;
+    for (uint8_t cell = 0U; cell < 36U; cell++) { afrDelayTables[channel].values.values[cell] = delay; }
+    for (uint8_t bin = 0U; bin < 6U; bin++) {
+      afrDelayTables[channel].axisX.axis[bin] = rpmAxis[bin];
+      afrDelayTables[channel].axisY.axis[bin] = loadAxis[bin];
+    }
+    invalidate_cache(&afrDelayTables[channel].get_value_cache);
+  }
+}
+
 void setupLearner(uint8_t resistancePreset = 0U, uint8_t authority = 10U)
 {
   initialiseTrimTables();
+  initialiseDelayTables();
   configPage2.nCylinders = 2U;
   configPage2.injLayout = INJ_SEQUENTIAL;
   configPage6.fuelTrimEnabled = true;
@@ -99,6 +116,45 @@ void test_fuel_trim_translation_matches_ini_zero(void)
 {
   TEST_ASSERT_EQUAL_UINT8(128U, FUEL_TRIM.toRaw(0));
   TEST_ASSERT_EQUAL_INT8(0, FUEL_TRIM.toUser(128U));
+}
+
+void test_afr_delay_maps_are_independent(void)
+{
+  initialiseDelayTables(10U, 30U);
+  TEST_ASSERT_EQUAL_UINT16(100U, afrDelayMilliseconds(AFR_DELAY_CHANNEL_1, 3000U, 60U));
+  TEST_ASSERT_EQUAL_UINT16(300U, afrDelayMilliseconds(AFR_DELAY_CHANNEL_2, 3000U, 60U));
+  TEST_ASSERT_EQUAL_UINT8(3U, afrDelayTicks30Hz(AFR_DELAY_CHANNEL_1, 3000U, 60U, 47U));
+  TEST_ASSERT_EQUAL_UINT8(9U, afrDelayTicks30Hz(AFR_DELAY_CHANNEL_2, 3000U, 60U, 47U));
+  initialiseDelayTables(18U, 18U);
+  TEST_ASSERT_EQUAL_UINT16(167U, afrDelayAppliedMilliseconds(AFR_DELAY_CHANNEL_1, 3000U, 60U, 47U));
+}
+
+void test_afr_delay_consumer_offset_is_applied_before_quantisation(void)
+{
+  initialiseDelayTables(18U, 18U); //180 ms map value
+  TEST_ASSERT_EQUAL_UINT8(8U, afrDelayTicks30HzWithOffset(AFR_DELAY_CHANNEL_1, 3000U, 60U, 100, 47U));
+  TEST_ASSERT_EQUAL_UINT8(2U, afrDelayTicks30HzWithOffset(AFR_DELAY_CHANNEL_1, 3000U, 60U, -100, 47U));
+  TEST_ASSERT_EQUAL_UINT16(267U, afrDelayAppliedMillisecondsWithOffset(AFR_DELAY_CHANNEL_1, 3000U, 60U, 100, 47U));
+  TEST_ASSERT_EQUAL_UINT8(1U, afrDelayTicks30HzWithOffset(AFR_DELAY_CHANNEL_1, 3000U, 60U, -500, 47U));
+}
+
+void test_seq_trim_uses_delay_from_source_operating_point(void)
+{
+  setupLearner(7U, 10U); //Keep the assertion on evidence, not a table step.
+  for (uint8_t cell = 0U; cell < 36U; cell++) { afrDelayTables[0].values.values[cell] = 10U; }
+  invalidate_cache(&afrDelayTables[0].get_value_cache);
+  TEST_ASSERT_EQUAL_UINT8(3U, afrDelayTicks30Hz(AFR_DELAY_CHANNEL_1, 3000U, 60U, 47U));
+
+  runSamples(3000U, 60U, 147U, 10U);
+  for (uint8_t cell = 0U; cell < 36U; cell++) { afrDelayTables[0].values.values[cell] = 30U; }
+  invalidate_cache(&afrDelayTables[0].get_value_cache);
+  TEST_ASSERT_EQUAL_UINT8(9U, afrDelayTicks30Hz(AFR_DELAY_CHANNEL_1, 5000U, 100U, 47U));
+  runSamples(5000U, 100U, 147U, 2U);
+  runSamples(5000U, 100U, 180U, 1U);
+
+  //The lean AFR belongs to the sample three ticks earlier, where the stored
+  //mapped delay was 100 ms; the later 300 ms lookup must not replace it.
+  TEST_ASSERT_GREATER_THAN_INT32(0, seqTrimAutotuneCellAccumulator(0U, CELL_AT_3000_RPM_60_LOAD));
 }
 
 void test_seq_trim_learning_adjusts_exact_visited_cell(void)
@@ -190,6 +246,9 @@ void testSeqTrimAutotune(void)
 {
   SET_UNITY_FILENAME() {
     RUN_TEST(test_fuel_trim_translation_matches_ini_zero);
+    RUN_TEST(test_afr_delay_maps_are_independent);
+    RUN_TEST(test_afr_delay_consumer_offset_is_applied_before_quantisation);
+    RUN_TEST(test_seq_trim_uses_delay_from_source_operating_point);
     RUN_TEST(test_seq_trim_learning_adjusts_exact_visited_cell);
     RUN_TEST(test_seq_trim_evidence_survives_visits_to_other_cells);
     RUN_TEST(test_seq_trim_authority_is_relative_to_drive_cycle_baseline);

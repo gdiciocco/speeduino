@@ -13,10 +13,8 @@
  * transport time plus the sensor response time - the same order of magnitude
  * as the transient being measured. Every AFR sample is therefore compared
  * against the AFR target from (delay) ago via a short history ring buffer
- * (de-lag). No per-RPM wideband delay curve exists in the tune, so the delay
- * is modelled as a fixed sensor term plus a transport term proportional to
- * 1/RPM; the constants below are the single place to re-point if a proper
- * delay curve is ever added.
+ * (de-lag). The delay is read from the AFR1 RPM/load map shared with the
+ * sequential fuel-trim learner, plus the wall-wetting learner's local offset.
  *
  * Learning is deliberately conservative:
  *  - Only accelerating tip-ins are learned. Deceleration uses the fixed
@@ -33,6 +31,7 @@
  */
 #include "globals.h"
 #include "ww_autotune.h"
+#include "afr_delay.h"
 #include "storage.h"
 #include "units.h"
 #include "load_source.h"
@@ -40,15 +39,9 @@
 
 // ============================ Tuning constants ============================
 
-// --- Wideband delay model (replace with a tune curve if one is added) ---
-/** Sensor + controller response portion of the wideband delay (ms) */
-static constexpr uint16_t WW_LEARN_LAG_FIXED_MS = 80U;
-/** Exhaust transport portion: delay_ms = this / RPM (100ms @ 3000rpm) */
-static constexpr uint32_t WW_LEARN_LAG_TRANSPORT_MS_RPM = 300000UL;
-
 // --- Observation window (all in 30Hz ticks) ---
-/** History depth. Bounds the maximum compensable wideband delay (~766ms) */
-static constexpr uint8_t WW_LEARN_RING_SIZE = 24U;
+/** History depth. Bounds the maximum compensable wideband delay (~1.57s) */
+static constexpr uint8_t WW_LEARN_RING_SIZE = 48U;
 static constexpr uint8_t WW_LEARN_MAX_DELAY_TICKS = WW_LEARN_RING_SIZE - 1U;
 /** Event ages (1-based) attributed to the initial excursion -> X table */
 static constexpr uint8_t WW_LEARN_PEAK_START = 2U;  // ~66ms
@@ -91,7 +84,7 @@ static constexpr uint8_t WW_TABLE_CELLS = WW_TABLE_DIM * WW_TABLE_DIM;
 struct WwLearnSample {
   uint8_t afrTarget; ///< currentStatus.afrTarget when the sample was taken
   uint8_t eventAge;  ///< 0 = no event in progress, else 1-based ticks since event start
-  bool gatesOk;      ///< All learning gates held when the sample was taken
+  uint8_t delayTicks;///< AFR1 delay at this sample's source RPM/load
 };
 
 static WwLearnSample ringBuffer[WW_LEARN_RING_SIZE];
@@ -102,6 +95,7 @@ static struct {
   bool active;
   bool aborted;
   uint8_t age;          ///< Ticks since the event started (1-based)
+  uint8_t maxDelayTicks;///< Largest AFR-map delay observed during this event
   uint8_t cellIndex;    ///< Linear index into the table value arrays
   bool dotWentQuiet;    ///< The triggering DOT dropped back below threshold (retrigger detection)
   int16_t peakErrSum;   ///< Sum of de-lagged AFR errors (x10) in the peak phase
@@ -160,17 +154,25 @@ static inline uint8_t cellValueIndex(uint8_t xAxisMemIdx, uint8_t yAxisMemIdx) {
   return (uint8_t)((yAxisMemIdx * WW_TABLE_DIM) + (WW_TABLE_DIM - 1U - xAxisMemIdx));
 }
 
-/** @brief The wideband delay at the current RPM, in 30Hz ticks */
+/** @brief The AFR1 wideband delay at the current RPM/load, in 30Hz ticks */
 static uint8_t currentDelayTicks(void) {
-  uint32_t delayMs = WW_LEARN_LAG_FIXED_MS;
-  if (currentStatus.RPM > 0U) {
-    delayMs += WW_LEARN_LAG_TRANSPORT_MS_RPM / currentStatus.RPM;
+  const int16_t offsetMs = (int16_t)afrDelayConfig.wallWettingOffset10ms * AFR_DELAY_MS_PER_COUNT;
+  return afrDelayTicks30HzWithOffset(AFR_DELAY_CHANNEL_1, currentStatus.RPM,
+                                     (uint16_t)currentStatus.fuelLoad, offsetMs,
+                                     WW_LEARN_MAX_DELAY_TICKS);
+}
+
+/** Return the source sample whose stored delay expires on this update.
+ * The delay belongs to the source operating point, not the later point at
+ * which its exhaust reaches the wideband. */
+static const WwLearnSample* dueRingSample(void) {
+  uint8_t available = ringFilled;
+  if (available > WW_LEARN_MAX_DELAY_TICKS) { available = WW_LEARN_MAX_DELAY_TICKS; }
+  for (uint8_t age = 1U; age <= available; age++) {
+    const uint8_t index = (uint8_t)((ringHead + WW_LEARN_RING_SIZE - age) % WW_LEARN_RING_SIZE);
+    if (ringBuffer[index].delayTicks == age) { return &ringBuffer[index]; }
   }
-  // ticks = ms * 30 / 1000, rounded
-  uint32_t ticks = ((delayMs * 3U) + 50U) / 100U;
-  if (ticks < 1U) { ticks = 1U; }
-  if (ticks > WW_LEARN_MAX_DELAY_TICKS) { ticks = WW_LEARN_MAX_DELAY_TICKS; }
-  return (uint8_t)ticks;
+  return nullptr;
 }
 
 // ================================= Gates ==================================
@@ -430,12 +432,13 @@ void wwAutotuneUpdate(void) {
                         || (currentStatus.mapDOT > (int16_t)configPage2.maeThresh);
   const bool decelDemand = (currentStatus.tpsDOT < -(int16_t)configPage2.taeThresh)
                         || (currentStatus.mapDOT < -(int16_t)configPage2.maeThresh);
+  const uint8_t measurementDelayTicks = currentDelayTicks();
 
   // --- Event state machine ---
   if (!event.active) {
     if (cooldownTicks > 0U) {
       cooldownTicks--;
-    } else if (gatesOk && accelDemand && !decelDemand && (ringFilled >= WW_LEARN_MAX_DELAY_TICKS)) {
+    } else if (gatesOk && accelDemand && !decelDemand && (ringFilled >= measurementDelayTicks)) {
       // Rising edge of an accelerating transient: anchor the event to the
       // cell at the tip-in operating point
       const uint8_t rpmComp = (uint8_t)((currentStatus.RPM + 50U) / 100U);
@@ -445,6 +448,7 @@ void wwAutotuneUpdate(void) {
       event.active = true;
       event.aborted = false;
       event.age = 1;
+      event.maxDelayTicks = measurementDelayTicks;
       event.cellIndex = cellValueIndex(xIdx, yIdx);
       event.dotWentQuiet = false;
       event.peakErrSum = 0;
@@ -468,8 +472,8 @@ void wwAutotuneUpdate(void) {
     }
 
     // Event ends once every capture-phase sample has had time to be observed
-    // through the longest possible wideband delay
-    if (event.age > (uint8_t)(WW_LEARN_CAPTURE_TICKS + WW_LEARN_MAX_DELAY_TICKS)) {
+    // through the largest mapped delay observed during this event
+    if (event.age > (uint8_t)(WW_LEARN_CAPTURE_TICKS + event.maxDelayTicks)) {
       if (!event.aborted) {
         diag.eventsCompleted++;
         finalizeEvent();
@@ -483,19 +487,21 @@ void wwAutotuneUpdate(void) {
   const bool capturing = event.active && !event.aborted && (event.age <= WW_LEARN_CAPTURE_TICKS);
   ringBuffer[ringHead].afrTarget = currentStatus.afrTarget;
   ringBuffer[ringHead].eventAge = capturing ? event.age : 0U;
-  ringBuffer[ringHead].gatesOk = gatesOk;
+  ringBuffer[ringHead].delayTicks = measurementDelayTicks;
+  if (capturing && (measurementDelayTicks > event.maxDelayTicks)) {
+    event.maxDelayTicks = measurementDelayTicks;
+  }
 
   // --- De-lagged analysis: attribute the current wideband reading to the
-  // sample taken one (modelled) wideband delay ago ---
-  if (event.active && !event.aborted && (ringFilled >= WW_LEARN_MAX_DELAY_TICKS)) {
-    const uint8_t delayTicks = currentDelayTicks();
-    const WwLearnSample &delayed = ringBuffer[(ringHead + WW_LEARN_RING_SIZE - delayTicks) % WW_LEARN_RING_SIZE];
-    if ((delayed.eventAge > 0U) && delayed.gatesOk) {
-      const int16_t afrError = (int16_t)currentStatus.O2 - (int16_t)delayed.afrTarget; // + == lean
-      if ((delayed.eventAge >= WW_LEARN_PEAK_START) && (delayed.eventAge <= WW_LEARN_PEAK_END)) {
+  // source sample whose own mapped delay expires now ---
+  if (event.active && !event.aborted) {
+    const WwLearnSample *delayed = dueRingSample();
+    if ((delayed != nullptr) && (delayed->eventAge > 0U)) {
+      const int16_t afrError = (int16_t)currentStatus.O2 - (int16_t)delayed->afrTarget; // + == lean
+      if ((delayed->eventAge >= WW_LEARN_PEAK_START) && (delayed->eventAge <= WW_LEARN_PEAK_END)) {
         event.peakErrSum += afrError;
         event.peakErrCount++;
-      } else if ((delayed.eventAge >= WW_LEARN_TAIL_START) && (delayed.eventAge <= WW_LEARN_TAIL_END)) {
+      } else if ((delayed->eventAge >= WW_LEARN_TAIL_START) && (delayed->eventAge <= WW_LEARN_TAIL_END)) {
         event.tailErrSum += afrError;
         event.tailErrCount++;
       } else {
@@ -539,4 +545,9 @@ const WwAutotuneDiagnostics& wwAutotuneDiag(void) {
 
 uint16_t wwAutotuneLearnedEventCount(void) {
   return diag.eventsLearned;
+}
+
+uint16_t wwAutotuneEffectiveDelayMilliseconds(void) {
+  const uint16_t ticks = currentDelayTicks();
+  return (uint16_t)((ticks * 100U + 1U) / 3U);
 }

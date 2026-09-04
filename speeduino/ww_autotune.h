@@ -86,4 +86,7 @@ const WwAutotuneDiagnostics& wwAutotuneDiag(void);
 /** @brief Number of transient events that resulted in a table adjustment (diagnostics) */
 uint16_t wwAutotuneLearnedEventCount(void);
 
+/** @brief AFR1 map plus local offset after the learner's 30 Hz quantisation. */
+uint16_t wwAutotuneEffectiveDelayMilliseconds(void);
+
 #endif

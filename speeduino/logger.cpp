@@ -2,6 +2,7 @@
 #include "logger.h"
 #include "ww_autotune.h"
 #include "seq_trim_autotune.h"
+#include "afr_delay.h"
 #include "idle.h"
 #include "corrections.h"
 #include "decoders.h"
@@ -222,7 +223,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 11U; break; //Custom block layout version
+    case 2: statusValue = 13U; break; //Custom block layout version
     //Backup SRAM integrity status in bits 0-3 (see buildStorageStatus). Bits 4-7 spare (dashboard inputs moved to their own byte in layout v8)
     case 3: statusValue = buildStorageStatus(); break;
     case 4: statusValue = lowByte(currentStatus.RPM); break;
@@ -331,6 +332,15 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     case 105: statusValue = highByte((uint16_t)seqTrimAutotuneDiag().lastErrorTenthsPercent); break;
     case 106: statusValue = lowByte(seqTrimAutotuneDiag().secondsToNextSave); break;
     case 107: statusValue = highByte(seqTrimAutotuneDiag().secondsToNextSave); break;
+    //Actually applied, bilinearly interpolated and 30 Hz-quantised AFR delays
+    //(absolute offsets 284-287). Both learners have a 47-tick history limit.
+    case 108: statusValue = lowByte(afrDelayAppliedMilliseconds(AFR_DELAY_CHANNEL_1, currentStatus.RPM, currentStatus.fuelLoad, 47U)); break;
+    case 109: statusValue = highByte(afrDelayAppliedMilliseconds(AFR_DELAY_CHANNEL_1, currentStatus.RPM, currentStatus.fuelLoad, 47U)); break;
+    case 110: statusValue = lowByte(afrDelayAppliedMilliseconds(AFR_DELAY_CHANNEL_2, currentStatus.RPM, currentStatus.fuelLoad, 47U)); break;
+    case 111: statusValue = highByte(afrDelayAppliedMilliseconds(AFR_DELAY_CHANNEL_2, currentStatus.RPM, currentStatus.fuelLoad, 47U)); break;
+    //Wall-wetting AFR1 delay including its local signed offset (absolute 288-289).
+    case 112: statusValue = lowByte(wwAutotuneEffectiveDelayMilliseconds()); break;
+    case 113: statusValue = highByte(wwAutotuneEffectiveDelayMilliseconds()); break;
     default: statusValue = 0; break;
   }
 

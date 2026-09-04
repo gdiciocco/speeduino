@@ -93,6 +93,26 @@ constexpr uint16_t EEPROM_CONFIG15_MAP   = 3199;
 constexpr uint16_t EEPROM_CONFIG15_START = 3281;
 constexpr uint16_t EEPROM_CONFIG16_MAP1  = 3457;
 constexpr uint16_t EEPROM_CONFIG16_MAP2  = 3537;
+constexpr uint16_t EEPROM_CONFIG16_MAP3  = 3617;
+//Calibration CRCs occupy 3674-3685; keep AFR2 beyond them.
+constexpr uint16_t EEPROM_CONFIG16_MAP4  = 3686;
+constexpr uint16_t EEPROM_CONFIG16_AFR_DELAY_CONFIG = 3734;
+constexpr uint16_t EEPROM_CALIBRATION_CLT_CRC = 3674;
+constexpr uint16_t EEPROM_CALIBRATION_IAT_CRC = 3678;
+constexpr uint16_t EEPROM_CALIBRATION_O2_CRC = 3682;
+constexpr uint16_t TABLE3D6_STORAGE_SIZE = 48U;
+static_assert(TABLE3D6_STORAGE_SIZE == sizeof(afrDelayTables[0].values)
+                                         + sizeof(afrDelayTables[0].axisX)
+                                         + sizeof(afrDelayTables[0].axisY),
+              "Update AFR delay table EEPROM spacing after a table layout change");
+static_assert(EEPROM_CONFIG16_MAP3 + TABLE3D6_STORAGE_SIZE <= EEPROM_CALIBRATION_CLT_CRC,
+              "AFR1 delay table overlaps calibration CRC storage");
+static_assert(EEPROM_CALIBRATION_O2_CRC + sizeof(uint32_t) <= EEPROM_CONFIG16_MAP4,
+              "AFR2 delay table overlaps calibration CRC storage");
+static_assert(EEPROM_CONFIG16_MAP4 + TABLE3D6_STORAGE_SIZE < EEPROM_LAST_BARO,
+              "AFR2 delay table overlaps calibration data storage");
+static_assert(EEPROM_CONFIG16_AFR_DELAY_CONFIG + sizeof(afrDelayConfig) <= EEPROM_LAST_BARO,
+              "AFR delay settings overlap calibration data storage");
 
 #if defined(UNIT_TEST)
 uint16_t MAX_PAGE_ADDRESS = EEPROM_LAST_BARO-sizeof(uint8_t);
@@ -152,6 +172,9 @@ TESTABLE_STATIC uint16_t getEntityStartAddress(page_iterator_t iter) {
     { &configPage15, EEPROM_CONFIG15_START },
     { &wallWettingAddTable, EEPROM_CONFIG16_MAP1 },
     { &wallWettingRemoveTable, EEPROM_CONFIG16_MAP2 },
+    { &afrDelayTables[0], EEPROM_CONFIG16_MAP3 },
+    { &afrDelayTables[1], EEPROM_CONFIG16_MAP4 },
+    { &afrDelayConfig, EEPROM_CONFIG16_AFR_DELAY_CONFIG },
   };
   static const constexpr entity_storage_map_t* entityMapEnd = entityMap + _countof(entityMap);
 
@@ -402,6 +425,9 @@ void savePage(uint8_t pageNum)
     case wallWettingPage:
       writesRemaining = writeTable(&wallWettingAddTable, decltype(wallWettingAddTable)::type_key, EEPROM_CONFIG16_MAP1, writesRemaining);
       writesRemaining = writeTable(&wallWettingRemoveTable, decltype(wallWettingRemoveTable)::type_key, EEPROM_CONFIG16_MAP2, writesRemaining);
+      writesRemaining = writeTable(&afrDelayTables[0], table3d6RpmLoad::type_key, EEPROM_CONFIG16_MAP3, writesRemaining);
+      writesRemaining = writeTable(&afrDelayTables[1], table3d6RpmLoad::type_key, EEPROM_CONFIG16_MAP4, writesRemaining);
+      writesRemaining = write_range((byte *)&afrDelayConfig, (byte *)&afrDelayConfig+sizeof(afrDelayConfig), EEPROM_CONFIG16_AFR_DELAY_CONFIG, writesRemaining);
       break;
 
     default:
@@ -545,6 +571,9 @@ void loadAllPages(void)
   //Wall wetting tables load (Page 16)
   (void)loadTable(&wallWettingAddTable, decltype(wallWettingAddTable)::type_key, EEPROM_CONFIG16_MAP1);
   (void)loadTable(&wallWettingRemoveTable, decltype(wallWettingRemoveTable)::type_key, EEPROM_CONFIG16_MAP2);
+  (void)loadTable(&afrDelayTables[0], table3d6RpmLoad::type_key, EEPROM_CONFIG16_MAP3);
+  (void)loadTable(&afrDelayTables[1], table3d6RpmLoad::type_key, EEPROM_CONFIG16_MAP4);
+  (void)load_range(EEPROM_CONFIG16_AFR_DELAY_CONFIG, (byte *)&afrDelayConfig, (byte *)&afrDelayConfig+sizeof(afrDelayConfig));
 
   //*********************************************************************************************************************************************************************************
 }
@@ -600,10 +629,6 @@ void saveCalibrationTable(SensorCalibrationTable sensor)
 }
 
 TESTABLE_INLINE_STATIC uint16_t getSensorCalibrationCrcAddress(SensorCalibrationTable sensor) {
-  constexpr uint16_t EEPROM_CALIBRATION_CLT_CRC = 3674;
-  constexpr uint16_t EEPROM_CALIBRATION_IAT_CRC = 3678;
-  constexpr uint16_t EEPROM_CALIBRATION_O2_CRC = 3682;
-
   switch(sensor)
   {
     case SensorCalibrationTable::O2Sensor:
