@@ -103,11 +103,9 @@ static constexpr uint32_t MILLI_PER_SEC = MICROS_PER_SEC/1000;
  */
 template <uint16_t divisor>
 TESTABLE_STATIC_CONSTEXPR uint16_t div_round_closest_u16(uint16_t n) {
-    // This is a compile time version of UDIV_ROUND_CLOSEST
-    //
-    // As of avr-gcc 5.4.0, the compiler will optimize this to a multiply/shift
-    // assuming d is a constant.    
-    return (uint16_t)((n + DIV_ROUND_CORRECT(divisor, uint16_t)) / divisor);
+    // Compile time version of UDIV_ROUND_CLOSEST. The rounding correction is
+    // added at 32 bits, so unlike the macro this cannot wrap for large n.
+    return (uint16_t)(((uint32_t)n + DIV_ROUND_CORRECT(divisor, uint32_t)) / (uint32_t)divisor);
 }
 
 /** @brief Rounding up \em unsigned integer division */
@@ -128,21 +126,31 @@ TESTABLE_STATIC_CONSTEXPR uint16_t div_round_closest_u16(uint16_t n) {
  * @return n/100, with rounding behavior applied
  */
 static inline uint16_t div100(uint16_t n) {
-    // GCC turns a division by a constant into a multiply/shift, so there is
-    // nothing to hand-optimise here.
-    return UDIV_ROUND_CLOSEST(n, UINT16_C(100), uint16_t);
+    // The rounding correction is applied at 32 bits. On an 8-bit core that
+    // would have cost a wider division, which is why UDIV_ROUND_CLOSEST()
+    // does it in the result type and documents that it wraps once
+    // n > MAX(t)-d/2. Here the wider type is free, so the limit goes away.
+    return (uint16_t)(((uint32_t)n + UINT32_C(50)) / UINT32_C(100));
 }
 
 static inline int16_t div100(int16_t n) {
-    return DIV_ROUND_CLOSEST(n, UINT16_C(100), int16_t);
+    const int32_t wide = (int32_t)n;
+    return (int16_t)((wide < 0 ? wide - INT32_C(50) : wide + INT32_C(50)) / INT32_C(100));
 }
 
 static inline uint32_t div100(uint32_t n) {
-    return UDIV_ROUND_CLOSEST(n, UINT32_C(100), uint32_t);
+    // No wider type needed: quotient and remainder cannot overflow, and the
+    // compiler folds both into one multiply-high sequence.
+    const uint32_t quotient = n / UINT32_C(100);
+    return (n % UINT32_C(100)) >= UINT32_C(50) ? quotient + 1U : quotient;
 }
 
 static inline int32_t div100(int32_t n) {
-    return DIV_ROUND_CLOSEST(n, INT32_C(100), int32_t);
+    const int32_t quotient = n / INT32_C(100);
+    const int32_t remainder = n % INT32_C(100); // Truncates toward zero, so this carries n's sign
+    if (remainder >= INT32_C(50))  { return quotient + 1; }
+    if (remainder <= INT32_C(-50)) { return quotient - 1; }
+    return quotient;
 }
 ///@}
 
@@ -153,7 +161,8 @@ static inline int32_t div100(int32_t n) {
  * @return uint32_t 
  */
 static inline uint32_t div360(uint32_t n) {
-    return (uint32_t)UDIV_ROUND_CLOSEST(n, UINT32_C(360), uint32_t);
+    const uint32_t quotient = n / UINT32_C(360);
+    return (n % UINT32_C(360)) >= UINT32_C(180) ? quotient + 1U : quotient;
 }
 
 /**
@@ -210,8 +219,9 @@ static inline uint32_t percentage(uint16_t percent, uint32_t value)
  * @return uint16_t 
  */
 static inline uint16_t halfPercentage(uint8_t percent, uint16_t value) {
-    uint32_t x200 = (uint32_t)percent * (uint32_t)value;
-    return (uint16_t)UDIV_ROUND_CLOSEST(x200, UINT16_C(200), uint32_t);
+    const uint32_t x200 = (uint32_t)percent * (uint32_t)value;
+    const uint32_t quotient = x200 / UINT32_C(200);
+    return (uint16_t)((x200 % UINT32_C(200)) >= UINT32_C(100) ? quotient + 1U : quotient);
 }
 
 /**
