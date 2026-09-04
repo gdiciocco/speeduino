@@ -188,6 +188,15 @@ static void print_page_layout(uint8_t pageNum)
 // An informational function to print the layout of the EEPROM as CSV
 // Requires "-v" flag on pio unit test runner 
 static void print_eeprom_layout(void) {
+    // Informational CSV, not an assertion - as the comment above says, it is
+    // only meant to be read with "-v". Dumping every entity of every page over
+    // a USB CDC link stops the board partway through and takes the rest of the
+    // suite with it, the same way print_all_page_entity_layout did in
+    // test_pages. Reproduced identically on caponord-stm32-optimized, so it
+    // predates the 8-bit removal.
+#if !defined(NATIVE_BOARD)
+    TEST_IGNORE_MESSAGE("EEPROM layout dump: blocks on a real board, native host only");
+#else
     UnityPrint("Page, Index, Item, Type, Start Address, Length"); UNITY_PRINT_EOL();
     for (uint8_t page = MIN_PAGE_NUM; page < MAX_PAGE_NUM; page++) {
         print_page_layout(page);
@@ -203,6 +212,7 @@ static void print_eeprom_layout(void) {
     UnityPrint(msg); UNITY_PRINT_EOL();
     sprintf(msg, "Calibrations, 0, Calib, Calib, %" PRIu16 ", %" PRIu16, MAX_PAGE_ADDRESS, (uint16_t)(STORAGE_SIZE-MAX_PAGE_ADDRESS));
     UnityPrint(msg); UNITY_PRINT_EOL();
+#endif
 }
 
 void test_layout(void) {
