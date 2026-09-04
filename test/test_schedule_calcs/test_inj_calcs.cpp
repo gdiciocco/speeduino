@@ -4,10 +4,10 @@
 #include "scheduler.h"
 #include "crankMaths.h"
 #include "../test_utils.h"
-#include "src/stdlib/type_traits.h"
+#include <type_traits>
 
-using raw_counter_t = type_traits::remove_reference<FuelSchedule::counter_t>::type;
-using raw_compare_t = type_traits::remove_reference<FuelSchedule::compare_t>::type;
+using raw_counter_t = std::remove_reference<FuelSchedule::counter_t>::type;
+using raw_compare_t = std::remove_reference<FuelSchedule::compare_t>::type;
 
 struct inj_test_parameters
 {
