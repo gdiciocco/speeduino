@@ -9,8 +9,6 @@ env:
   SKETCHES_REPORTS_PATH: sketches-reports
   # Libraries shared by all builds
   COMMON_LIB_DEPS: | 
-    - name: SimplyAtomic
-      version: "1.0"
     - name: FastCRC
       version: "1.41"
   COMMON_BUILD_FLAGS: -I./speeduino/ -I./src/ -I./lib/
