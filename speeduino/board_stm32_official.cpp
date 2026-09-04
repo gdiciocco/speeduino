@@ -727,6 +727,15 @@ void boardInitPins(uint8_t)
 
 static uint16_t getEepromWriteBlockSize(const statuses &current)
 {
+#if defined(SRAM_AS_EEPROM)
+  // Battery-backed SRAM: a "write" is a byte store into the backup domain plus
+  // a dirty flag, not a 3.3ms EEPROM cell burn or a flash page erase. There is
+  // nothing to pace, so let a page burn finish in a single pass instead of
+  // dribbling it out over dozens of main-loop iterations. The whole store is
+  // 4 kB, so this budget is never exhausted.
+  (void)current;
+  return UINT16_MAX;
+#else
 #if defined(USE_SPI_EEPROM)
   //For use with common Winbond SPI EEPROMs Eg W25Q16JV
   uint16_t maxWrite = 20; //This needs tuning
@@ -741,6 +750,7 @@ static uint16_t getEepromWriteBlockSize(const statuses &current)
   } 
 
   return maxWrite;
+#endif
 }
 
 /** @brief Get the EEPROM storage API for the board */
