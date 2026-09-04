@@ -20,14 +20,56 @@ constexpr void STR_LEN_CHECK(char const (&)[N])
 #define _countof(x) (sizeof(x) / sizeof (x[0]))
 #endif
 
-// This used to copy the test name out of flash into a 128 byte stack buffer,
-// because on AVR a string literal handed straight to UnityDefaultTestRun()
-// lands in the data segment and eats SRAM. On ARM literals live in .rodata,
-// so the copy - and the buffer, and its length check - bought nothing.
+#if !defined(NATIVE_BOARD) && defined(STM32_CORE_VERSION_MAJOR)
+#include <IWatchdog.h>
+#define HW_TEST_WATCHDOG_AVAILABLE
+
+/** @brief Arm the independent watchdog on first use, then feed it.
+ *
+ * Arming lazily means it is only running while a suite is executing: after a
+ * reset nothing has armed it yet, so the board can sit in the pre-test wait
+ * indefinitely, and after the last test nothing feeds it, so it resets back
+ * into that wait ~33s later. Both are what we want.
+ */
+static inline void hwTestFeedWatchdog(void)
+{
+    static bool armed = false;
+    if (armed)
+    {
+        IWatchdog.reload();
+    }
+    else
+    {
+        IWatchdog.begin(IWDG_TIMEOUT_MAX);   // ~33s on the F4's 32kHz LSI
+        armed = true;
+    }
+}
+#endif
+
+// A test that hangs on real hardware takes the board off the USB bus with
+// it: no CDC, no DFU, and the only way back is BOOT0 and a reset by hand.
+// So arm the independent watchdog and feed it once per test. A hang inside
+// any one test stops the feeding and the board resets itself back to the
+// window where tools/dfu_upload.py can pick it up.
 //
-// The _P in the name is now vestigial. Renaming the ~500 call sites to
-// Unity's own RUN_TEST() is a separate mechanical change.
-#define RUN_TEST_P(func) UnityDefaultTestRun(func, #func, __LINE__)
+// Per test, not per suite: the longest suites run well past the ~32s the
+// F4's IWDG can be stretched to, but no single test comes close.
+#if defined(HW_TEST_WATCHDOG_AVAILABLE)
+#define HW_TEST_FEED_WATCHDOG() hwTestFeedWatchdog()
+#else
+#define HW_TEST_FEED_WATCHDOG() ((void)0)
+#endif
+
+// RUN_TEST_P used to copy the test name out of flash into a 128 byte stack
+// buffer, because on AVR a string literal handed straight to
+// UnityDefaultTestRun() lands in the data segment and eats SRAM. On ARM
+// literals live in .rodata, so the copy - and the buffer, and its length
+// check - bought nothing. The _P in the name is now vestigial.
+#define RUN_TEST_P(func) \
+  do { \
+    HW_TEST_FEED_WATCHDOG(); \
+    UnityDefaultTestRun(func, #func, __LINE__); \
+  } while (0)
 
 // ============================ SET_UNITY_FILENAME ============================ 
 

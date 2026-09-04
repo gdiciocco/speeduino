@@ -24,7 +24,9 @@ static ComputePulseWidthsContext getBasicFullContext(void) {
   return context;
 }
 
-static constexpr uint16_t NO_MULTIPLY_EXPECTED = 1618U;
+// reqFuel 11 -> 1100us, VE 130%, corrections 113%: 1100 * 1.30 * 1.13 = 1615.9
+// The previous value of 1618 was percentageApprox()'s error, not the answer.
+static constexpr uint16_t NO_MULTIPLY_EXPECTED = 1616U;
 
 static void test_PW_batt_correction(void) {
   // Same as test_PW_No_Multiply, but we apply battery correction to open time
@@ -83,7 +85,7 @@ static void test_PW_MAP_Multiply()
   context.current.baro = 103;
 
   pulseWidths result = computePulseWidths(context);
-  TEST_ASSERT_EQUAL(1466, result.primary);
+  TEST_ASSERT_EQUAL(1463, result.primary);
   TEST_ASSERT_EQUAL(0, result.secondary);
 }
 
@@ -95,7 +97,7 @@ static void test_PW_MAP_Multiply_Compatibility()
 //   context.current.MAP = 103;
 
   pulseWidths result = computePulseWidths(context);
-  TEST_ASSERT_EQUAL(1516, result.primary);
+  TEST_ASSERT_EQUAL(1514, result.primary);
   TEST_ASSERT_EQUAL(0, result.secondary);
 }
 
@@ -112,16 +114,17 @@ static void test_PW_AFR_Multiply()
   context.current.baro = 100;
 
   pulseWidths result = computePulseWidths(context);
-  TEST_ASSERT_EQUAL(1643, result.primary);
+  TEST_ASSERT_EQUAL(1641, result.primary);
   TEST_ASSERT_EQUAL(0, result.secondary);
 }
 
 /*
-  To avoid overflow errors, the PW() function reduces accuracy slightly when the corrections figure becomes large.
-  There are 3 levels of this:
-  1) Corrections below 511 - No change in accuracy
-  2) Corrections between 512 and 1023 - Minor reduction to accuracy
-  3) Corrections above 1023 - Further reduction to accuracy
+  These used to lose accuracy as the corrections figure grew, in three bands
+  (below 511, 512-1023, above 1023), because percentageApprox() scaled its
+  fixed-point precision to keep the intermediate inside 16 bits. percentage()
+  computes on 64 bits and is exact, so there are no bands any more:
+    1430 * 6.00  = 8580   exactly (was 8586)
+    1430 * 15.00 = 21450  exactly (was 21465)
 */
 static void test_PW_Large_Correction()
 {
@@ -131,7 +134,7 @@ static void test_PW_Large_Correction()
   context.current.corrections = 600;
 
   pulseWidths result = computePulseWidths(context);
-  TEST_ASSERT_EQUAL(8586, result.primary);
+  TEST_ASSERT_EQUAL(8580, result.primary);
   TEST_ASSERT_EQUAL(0, result.secondary);
 }
 
@@ -143,7 +146,7 @@ static void test_PW_Very_Large_Correction()
   context.current.corrections = 1500;
 
   pulseWidths result = computePulseWidths(context);
-  TEST_ASSERT_EQUAL(21465, result.primary);
+  TEST_ASSERT_EQUAL(21450, result.primary);
   TEST_ASSERT_EQUAL(0, result.secondary);
 }
 

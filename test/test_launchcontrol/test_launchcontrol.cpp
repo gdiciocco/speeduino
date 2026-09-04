@@ -10,8 +10,12 @@ static void test_checkLaunchAndFlatShift_enablesHardLaunchWhenConditionsAreMet(v
     config15 page15 = {};
 
     constexpr uint8_t launchPin = 13;
-    pinMode(launchPin, INPUT);
-    digitalWrite(launchPin, HIGH);
+    // INPUT + digitalWrite(HIGH) is the AVR spelling of "enable the pull-up".
+    // On STM32 writing to an input pin does nothing, so the pin floats, reads
+    // low, and the launch input never asserts. INPUT_PULLUP means the same
+    // thing on both, and unlike driving the pin it is electrically safe on a
+    // board where this pin number belongs to the selected board map.
+    pinMode(launchPin, INPUT_PULLUP);
 
     current.RPM = 11000;
     current.TPS = 90;
@@ -42,8 +46,12 @@ static void test_checkLaunchAndFlatShift_enablesFlatShiftWhenLaunchIsDisabled(vo
     config15 page15 = {};
 
     constexpr uint8_t launchPin = 13;
-    pinMode(launchPin, INPUT);
-    digitalWrite(launchPin, HIGH);
+    // INPUT + digitalWrite(HIGH) is the AVR spelling of "enable the pull-up".
+    // On STM32 writing to an input pin does nothing, so the pin floats, reads
+    // low, and the launch input never asserts. INPUT_PULLUP means the same
+    // thing on both, and unlike driving the pin it is electrically safe on a
+    // board where this pin number belongs to the selected board map.
+    pinMode(launchPin, INPUT_PULLUP);
 
     current.clutchTrigger = true;
     current.previousClutchTrigger = true;
@@ -107,8 +115,12 @@ static void test_checkLaunchAndFlatShift_appliesRollingCutDelta(void)
     config15 page15 = {};
 
     constexpr uint8_t launchPin = 13;
-    pinMode(launchPin, INPUT);
-    digitalWrite(launchPin, HIGH);
+    // INPUT + digitalWrite(HIGH) is the AVR spelling of "enable the pull-up".
+    // On STM32 writing to an input pin does nothing, so the pin floats, reads
+    // low, and the launch input never asserts. INPUT_PULLUP means the same
+    // thing on both, and unlike driving the pin it is electrically safe on a
+    // board where this pin number belongs to the selected board map.
+    pinMode(launchPin, INPUT_PULLUP);
 
     current.RPM = 9000;
     current.TPS = 50;

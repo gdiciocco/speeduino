@@ -69,24 +69,37 @@ def _jump_via_test_harness(port):
     precisely so that flashing a test build is not a one-way door.
     """
     import serial
-    # Opening the port is what releases the harness's "wait for the monitor"
-    # loop, so the board then runs its whole suite and - because UNITY_END()
-    # calls Serial.end() - drops off the bus and comes back. Stream the escape
-    # for long enough to cover the run and the re-enumeration afterwards.
-    deadline = time.time() + 40.0
+    # Opening the port releases the harness's "wait for the monitor" loop, so
+    # the board runs its whole previously-flashed suite before anything else
+    # can happen - and only then tears the CDC down, jumps, resets, and comes
+    # back at the top of setup() where the escape is polled again.
+    #
+    # So the stream has to outlast a full suite run plus the re-enumeration.
+    # The longest ones take well over a minute.
+    deadline = time.time() + 180.0
     sent = 0
-    while time.time() < deadline and not in_dfu():
+    next_dfu_check = 0.0
+    while time.time() < deadline:
+        now = time.time()
+        if now >= next_dfu_check:
+            # Each check spawns a PowerShell; once a second is plenty and keeps
+            # the write loop tight enough to hit a 5 second window.
+            next_dfu_check = now + 1.0
+            if in_dfu():
+                break
         try:
-            with serial.Serial(port, 115200, timeout=0.2) as ser:
-                while time.time() < deadline and not in_dfu():
+            with serial.Serial(port, 115200, timeout=0.05) as ser:
+                inner = time.time() + 5.0
+                while time.time() < min(inner, deadline):
                     ser.write(b'@BOOTLOADER')
                     ser.flush()
                     sent += 1
                     ser.read(256)          # drain whatever the suite prints
-                    time.sleep(0.2)
+                    time.sleep(0.05)
         except Exception:                                       # noqa: BLE001
-            # The port vanishes each time the harness tears the CDC down.
-            time.sleep(0.4)
+            # The port vanishes each time the harness tears the CDC down and
+            # again while the board resets. Both are expected.
+            time.sleep(0.3)
     print('[dfu] streamed the test-harness escape sequence to %s (%d writes)' % (port, sent))
 
 
