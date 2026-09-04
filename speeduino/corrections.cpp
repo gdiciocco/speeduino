@@ -266,7 +266,7 @@ static inline uint16_t lookUpCrankingEnrichmentPct(void) {
 static inline uint16_t computeCrankingTaperStartPct(uint16_t crankingPercent) {
   // Avoid 32-bit division if possible
   if (currentStatus.aseIsActive && currentStatus.ASEValue!=NO_FUEL_CORRECTION) {
-    return fast_div32_16((uint32_t)crankingPercent * BASELINE_FUEL_CORRECTION, currentStatus.ASEValue);
+    return (uint16_t)(((uint32_t)crankingPercent * BASELINE_FUEL_CORRECTION) / currentStatus.ASEValue);
   }
 
   return crankingPercent;
@@ -455,7 +455,7 @@ static inline int16_t computeMapDot(void) {
     // Faster division path. Will almost always be taken when above idle - a 360° cycle time of 65535µS
     // equals 915 RPM.
     if ((mapDeltaT<=MAX_udiv_32_16) && (mapDeltaT>MIN_udiv_32_16)) {
-      mapDOT = (int16_t)fast_div32_16(MICROS_PER_SEC, mapDeltaT) * (int16_t)mapChange; 
+      mapDOT = (int16_t)(uint16_t)(MICROS_PER_SEC / mapDeltaT) * (int16_t)mapChange; 
     } else {
       mapDOT = (int16_t)(MICROS_PER_SEC / mapDeltaT) * mapChange;
     }
@@ -2001,8 +2001,8 @@ uint16_t correctionsDwell(uint16_t dwell)
   if(dwellPerRevolution > currentStatus.revolutionTime)
   {
     //Possibly need some method of reducing spark duration here as well, but this is a start
-    uint16_t adjustedSparkDur = fast_div32_16(sparkDur_uS * currentStatus.revolutionTime, dwellPerRevolution);
-    dwell = (pulsesPerRevolution==1U ? currentStatus.revolutionTime : fast_div32_16(currentStatus.revolutionTime, (uint16_t)pulsesPerRevolution)) - adjustedSparkDur;
+    uint16_t adjustedSparkDur = (uint16_t)((sparkDur_uS * currentStatus.revolutionTime) / dwellPerRevolution);
+    dwell = (pulsesPerRevolution==1U ? currentStatus.revolutionTime : (uint16_t)(currentStatus.revolutionTime / (uint16_t)pulsesPerRevolution)) - adjustedSparkDur;
   }
 
   return dwell;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <avr-fast-div.h>
 #include "statuses.h"
 
 /** \enum LoadSource
@@ -35,7 +34,7 @@ static inline uint16_t getLoad(LoadSource algorithm, const statuses &current) {
   else if (algorithm == LOAD_SOURCE_IMAPEMAP)
   {
     //IMAP / EMAP
-    return fast_div32_16((uint32_t)current.MAP * 100UL, current.EMAP);
+    return (uint16_t)(((uint32_t)current.MAP * 100UL) / current.EMAP);
   } else {
     // LOAD_SOURCE_MAP (the default). Aka Speed Density
     return (uint16_t)current.MAP;

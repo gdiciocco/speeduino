@@ -13,8 +13,6 @@ env:
       version: "1.0"
     - name: FastCRC
       version: "1.41"
-    - name: avr-fast-div
-      version: "1.4.0"
   COMMON_BUILD_FLAGS: -I./speeduino/ -I./src/ -I./lib/
 
 jobs:

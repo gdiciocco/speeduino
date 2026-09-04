@@ -2,7 +2,6 @@
 #define MATH_H
 
 #include <stdint.h>
-#include <avr-fast-div.h>
 #include "unit_testing.h"
 
 uint8_t random1to100(void) noexcept;
@@ -290,14 +289,13 @@ static inline int16_t nudge(int16_t min, int16_t max, int16_t value, int16_t nud
 }
 
 /**
- * @brief Same as fast_div(), except this will round to nearest integer 
- * instead of truncating.
+ * @brief Integer division that rounds to nearest instead of truncating.
  * 
- * Minor performance drop compared to non-rounding version.
+ * Minor performance drop compared to the plain division operator.
  **/
 template <typename TDividend, typename TDivisor>
 TESTABLE_STATIC_CONSTEXPR TDividend fast_div_closest(TDividend dividend, TDivisor divisor) {
-    return fast_div(dividend + DIV_ROUND_CORRECT(divisor, TDivisor), divisor);
+    return (TDividend)((dividend + DIV_ROUND_CORRECT(divisor, TDivisor)) / divisor);
 }
 
 /**
