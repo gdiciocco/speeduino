@@ -1978,7 +1978,11 @@ uint16_t correctionsDwell(uint16_t dwell)
     dwellCorrection = (uint8_t)table2D_getValue(&dwellVCorrectionTable, currentStatus.battery10);
   }
   if (dwellCorrection != ONE_HUNDRED_PCT) { 
-    dwell = div100(dwell) * dwellCorrection; 
+    // Dividing by 100 *first* was how this stayed inside 16 bits on an 8-bit
+    // core. It costs up to 99us of the requested dwell and still wrapped for
+    // large dwell values. percentage() is exact and computes on 64 bits.
+    const uint32_t correctedDwell = percentage(dwellCorrection, dwell);
+    dwell = (correctedDwell > (uint32_t)UINT16_MAX) ? UINT16_MAX : (uint16_t)correctedDwell;
   }
 
   //**************************************************************************************************************************
@@ -1997,12 +2001,22 @@ uint16_t correctionsDwell(uint16_t dwell)
   */
   uint16_t sparkDur_uS = TIME_TEN_MILLIS.toUser( configPage4.sparkDur);
   uint8_t pulsesPerRevolution = getPulsesPerRev();
-  uint16_t dwellPerRevolution = (dwell + sparkDur_uS) * pulsesPerRevolution;
+  // 32-bit: dwell is up to 65535us, sparkDur up to 25500us and there can be up
+  // to nCylinders/2 pulses per revolution, so the product does not fit in 16
+  // bits. Wrapping here can leave dwellPerRevolution *below* revolutionTime
+  // when the true value is above it, which skips the limiter entirely.
+  uint32_t dwellPerRevolution = ((uint32_t)dwell + (uint32_t)sparkDur_uS) * (uint32_t)pulsesPerRevolution;
   if(dwellPerRevolution > currentStatus.revolutionTime)
   {
     //Possibly need some method of reducing spark duration here as well, but this is a start
-    uint16_t adjustedSparkDur = (uint16_t)((sparkDur_uS * currentStatus.revolutionTime) / dwellPerRevolution);
-    dwell = (pulsesPerRevolution==1U ? currentStatus.revolutionTime : (uint16_t)(currentStatus.revolutionTime / (uint16_t)pulsesPerRevolution)) - adjustedSparkDur;
+    // Bounded: this branch requires revolutionTime < dwellPerRevolution, so the
+    // product below stays under 2^32.
+    uint16_t adjustedSparkDur = (uint16_t)(((uint32_t)sparkDur_uS * currentStatus.revolutionTime) / dwellPerRevolution);
+    // Cannot exceed 16 bits: the result is revolutionTime * dwell/(dwell+sparkDur),
+    // and revolutionTime is below (dwell+sparkDur) inside this branch.
+    const uint32_t availableTime = (pulsesPerRevolution==1U) ? currentStatus.revolutionTime
+                                                             : (currentStatus.revolutionTime / (uint32_t)pulsesPerRevolution);
+    dwell = (uint16_t)(availableTime - (uint32_t)adjustedSparkDur);
   }
 
   return dwell;
