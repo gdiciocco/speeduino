@@ -14,3 +14,14 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           filename: reference/speeduino.ini
+
+      # The action above checks the ini against the TunerStudio schema. This
+      # checks it against the firmware: page sizes, the live data block, and
+      # that nothing names a channel the ini never declares. The half that
+      # needs a board is not run here.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Check INI layout against the firmware
+        run: python tools/check_ini_layout.py
