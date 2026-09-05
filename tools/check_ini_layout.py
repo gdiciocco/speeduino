@@ -89,6 +89,53 @@ def check_offsets(ini):
     return len(located), len(sizes), problems
 
 
+def active_setting(ini, name):
+    """The last uncommented value of a setting, ignoring COMMS_COMPAT branches.
+
+    The ini declares several of these inside #if branches. Only the compat one
+    is conditional on something we are not, so take the value that a normal
+    STM32 build sees.
+    """
+    value = None
+    in_compat = False
+    for line in ini.split('\n'):
+        stripped = line.strip()
+        if stripped.startswith('#if COMMS_COMPAT'):
+            in_compat = True
+            continue
+        if stripped.startswith('#endif'):
+            in_compat = False
+            continue
+        if in_compat or stripped.startswith(';'):
+            continue
+        match = re.match(re.escape(name) + r'\s*=\s*(\d+)', stripped)
+        if match:
+            value = int(match.group(1))
+    return value
+
+
+def check_blocking_factors(ini, ecu):
+    """The ini must not promise TunerStudio bigger chunks than the board takes.
+
+    The firmware reports its own limits through the 'f' command, and nothing
+    checks the two against each other: an ini asking for more than the serial
+    buffer holds fails as a corrupted transfer, not as a clear error.
+    """
+    reply = ecu.command(b'f')
+    board_block = (reply[2] << 8) | reply[3]
+    board_table = (reply[4] << 8) | reply[5]
+    print('board blocking factors: %d / %d (page / table)' % (board_block, board_table))
+
+    problems = []
+    for name, reported in (('blockingFactor', board_block), ('tableBlockingFactor', board_table)):
+        declared = active_setting(ini, name)
+        if declared is None:
+            problems.append('%s: not found in the ini' % name)
+        elif declared > reported:
+            problems.append('%s: ini asks for %d, board accepts %d' % (name, declared, reported))
+    return problems
+
+
 def check_against_board(ini, port):
     """Ask a running board for each page: right size, and a CRC that agrees.
 
@@ -105,6 +152,7 @@ def check_against_board(ini, port):
     problems = []
     with Ecu(port) as ecu:
         print('board: %s' % ecu.code_version())
+        problems += check_blocking_factors(ini, ecu)
         for number, declared in enumerate(sizes, start=1):
             try:
                 data = ecu.read_page(number, 0, declared)
