@@ -11,6 +11,9 @@ plus names declared in two places at once - and it needs no board.
 It also checks the live data block, where nothing else does: a channel declared
 past ochBlockSize is never sent, and two scalars sharing bytes means one gauge
 shows another's value - both silent, both wrong on screen rather than missing.
+And it matches the command buttons against the firmware's handlers in both
+directions: a button with no handler is clickable and does nothing, a handler
+no button reaches is dead code that looks live.
 
 Exits non-zero if anything overruns. The rest needs hardware: that the declared
 page sizes and ochBlockSize match what the firmware serves, that the firmware's
@@ -192,6 +195,62 @@ def check_references(ini):
     return problems
 
 
+BACKSLASH = chr(92)
+BUTTON_DECL = re.compile(
+    r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"E((?:' + BACKSLASH * 2 + r'x[0-9A-Fa-f]{2})+)"', re.M)
+BUTTON_BYTE = re.compile(BACKSLASH * 2 + r'x([0-9A-Fa-f]{2})')
+TS_CMD_DEFINE = re.compile(r'#define\s+(TS_CMD_[A-Z0-9_]+)\s+(\d+)')
+TS_CMD_ASSIGN = re.compile(r'(TS_CMD_[A-Z0-9_]+)\s*=\s*(\d+)')
+TS_CMD_CASE = re.compile(r'case\s+(TS_CMD_[A-Z0-9_]+)\s*:')
+
+
+def check_command_buttons(ini):
+    """A button in the ini that no case in the firmware answers does nothing.
+
+    TunerStudio sends the two bytes and the firmware's default branch ignores
+    them, so the button is there, it is clickable, and it has no effect. The
+    reverse - a handler no button reaches - is dead code that looks live.
+
+    Both directions are checked because the two lists are maintained by hand in
+    different files.
+    """
+    header = os.path.join(REPO, 'speeduino', 'TS_CommandButtonHandler.h')
+    source = os.path.join(REPO, 'speeduino', 'TS_CommandButtonHandler.cpp')
+    if not (os.path.exists(header) and os.path.exists(source)):
+        return ['TS_CommandButtonHandler sources not found']
+
+    section = ini_section(ini, 'ControllerCommands', 'CurveEditor')
+    buttons = {}
+    for match in BUTTON_DECL.finditer(section):
+        parts = [int(value, 16) for value in BUTTON_BYTE.findall(match.group(2))]
+        if len(parts) == 2:
+            buttons[match.group(1)] = (parts[0] << 8) | parts[1]
+
+    with open(header, encoding='utf-8') as handle:
+        header_text = handle.read()
+    constants = {}
+    for pattern in (TS_CMD_DEFINE, TS_CMD_ASSIGN):
+        for match in pattern.finditer(header_text):
+            constants[match.group(1)] = int(match.group(2))
+
+    with open(source, encoding='utf-8') as handle:
+        handled = set(TS_CMD_CASE.findall(handle.read()))
+    handled_values = set(constants[name] for name in handled if name in constants)
+
+    problems = []
+    for name, value in sorted(buttons.items(), key=lambda item: item[1]):
+        if value not in handled_values:
+            problems.append('command button %s (0x%04X) has no handler in the firmware' % (name, value))
+    declared = set(buttons.values())
+    for name in sorted(handled):
+        if name in constants and constants[name] not in declared:
+            problems.append('handler %s (%d) is not reachable from any ini button' % (name, constants[name]))
+
+    print('command buttons: %d, handlers: %d, %s'
+          % (len(buttons), len(handled), 'matched' if not problems else '%d mismatched' % len(problems)))
+    return problems
+
+
 def active_setting(ini, name):
     """The last uncommented value of a setting, ignoring COMMS_COMPAT branches.
 
@@ -297,6 +356,7 @@ def main():
     print('%s: %d constants across %d pages' % (os.path.relpath(args.ini, REPO), count, pages))
     problems += check_output_channels(ini)
     problems += check_references(ini)
+    problems += check_command_buttons(ini)
 
     if args.port:
         problems += check_against_board(ini, args.port)
