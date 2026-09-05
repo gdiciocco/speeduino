@@ -125,6 +125,22 @@ static_assert(EEPROM_CONFIG17_PINS >= EEPROM_CONFIG16_AFR_DELAY_CONFIG + sizeof(
 static_assert(EEPROM_CONFIG17_PINS + sizeof(configPins) <= EEPROM_LAST_BARO,
               "Pin assignment page overlaps calibration data storage");
 
+/** @brief First byte after the last config page.
+ *
+ * Everything from here to @ref EEPROM_LAST_BARO is free, and that is all the
+ * room there is: the store is the 4kB of battery-backed SRAM, the calibration
+ * tables own the top 289 bytes of it, and the pages below are contiguous.
+ *
+ * As of the pin assignment page that leaves <b>23 bytes</b> (3783-3805), plus a
+ * 9 byte hole at 3665-3673 between the AFR1 delay table and the calibration
+ * CRCs. The next feature that wants a config page has to come out of those, or
+ * the store has to grow - which means moving off the backup SRAM, not widening
+ * an address type.
+ */
+constexpr uint16_t EEPROM_FREE_TAIL_START = EEPROM_CONFIG17_PINS + (uint16_t)sizeof(configPins);
+static_assert(EEPROM_FREE_TAIL_START <= EEPROM_LAST_BARO,
+              "Config pages have run into the baro byte: the 4kB store is full");
+
 #if defined(UNIT_TEST)
 uint16_t MAX_PAGE_ADDRESS = EEPROM_LAST_BARO-sizeof(uint8_t);
 uint16_t STORAGE_SIZE = STORAGE_END;
