@@ -83,6 +83,22 @@ static void test_ProgrammableIOGetData_special_indices(void)
     TEST_ASSERT_EQUAL_INT16(-1, ProgrammableIOGetData(LOG_ENTRY_SIZE, mockGetLogEntry));
 }
 
+// The hazard is specifically that 239 is *inside* the live data block on this
+// build, so the special case only works because it is checked first. Assert the
+// overlap as well as the result: without it, shrinking LOG_ENTRY_SIZE back
+// under 239 would make this pass again for the wrong reason.
+static void test_ProgrammableIOGetData_239_is_running_seconds_despite_overlap(void)
+{
+    TEST_ASSERT_GREATER_THAN_UINT16(239U, LOG_ENTRY_SIZE);
+
+    static const byte logData[256] = { 0 };
+    mockLogEntryData = logData;   // log byte 239 reads as 0
+
+    runSecsX10 = 50000U;
+    TEST_ASSERT_EQUAL_INT16((int16_t)50000U, ProgrammableIOGetData(239U, mockGetLogEntry));
+    TEST_ASSERT_NOT_EQUAL_INT16(0, ProgrammableIOGetData(239U, mockGetLogEntry));
+}
+
 static void test_initialiseProgrammableIO_disabled(void)
 {
     programmableIOTestContext_t context;
@@ -788,6 +804,7 @@ void testProgrammableIOControl(void)
         RUN_TEST_P(test_ProgrammableIOGetData_single_byte_entry);
         RUN_TEST_P(test_ProgrammableIOGetData_two_byte_entry);
         RUN_TEST_P(test_ProgrammableIOGetData_special_indices);
+        RUN_TEST_P(test_ProgrammableIOGetData_239_is_running_seconds_despite_overlap);
         RUN_TEST_P(test_FlatShiftBlink_EveryHalfSecond);
     }
 }

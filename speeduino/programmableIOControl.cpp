@@ -163,7 +163,16 @@ void checkProgrammableIO(statuses& current, const config13& page13)
 TESTABLE_STATIC int16_t ProgrammableIOGetData(uint16_t index, byte (*pGetLogEntry)(uint16_t byteNum))
 {
   int16_t result;
-  if ( index < LOG_ENTRY_SIZE )
+  //239 is not a log offset, it is the running seconds - that is what the ini
+  //labels it, and what TunerStudio offers in the programmable output source
+  //list. It used to be reached only after the log range check, which worked
+  //while the live data block was the stock 138 bytes. This fork's block is 320,
+  //so 239 fell *inside* it and a rule set to "running seconds x10" silently
+  //read log byte 239 instead - the EMP pump thermal state, on this board. The
+  //source selector is a byte, so there is no index above 320 to move this to:
+  //it has to be checked first.
+  if ( index == 239U ) { result = (int16_t)max((uint32_t)runSecsX10, (uint32_t)32768); } //STM32 used std lib
+  else if ( index < LOG_ENTRY_SIZE )
   {
     if(is2ByteEntry(index)) { result = word(pGetLogEntry(index+1), pGetLogEntry(index)); }
     else { result = pGetLogEntry(index); }
@@ -171,7 +180,6 @@ TESTABLE_STATIC int16_t ProgrammableIOGetData(uint16_t index, byte (*pGetLogEntr
     //Special cases for temperatures
     if( (index == 6) || (index == 7) ) { result = temperatureRemoveOffset(result); }
   }
-  else if ( index == 239U ) { result = (int16_t)max((uint32_t)runSecsX10, (uint32_t)32768); } //STM32 used std lib
   else { result = -1; } //Index is bigger than fullStatus array
   return result;
 }
