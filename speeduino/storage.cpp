@@ -91,6 +91,8 @@ constexpr uint16_t EEPROM_CONFIG16_MAP3  = 3617;
 //Calibration CRCs occupy 3674-3685; keep AFR2 beyond them.
 constexpr uint16_t EEPROM_CONFIG16_MAP4  = 3686;
 constexpr uint16_t EEPROM_CONFIG16_AFR_DELAY_CONFIG = 3734;
+//Page 17 - user pin assignments
+constexpr uint16_t EEPROM_CONFIG17_PINS = 3735;
 constexpr uint16_t EEPROM_CALIBRATION_CLT_CRC = 3674;
 constexpr uint16_t EEPROM_CALIBRATION_IAT_CRC = 3678;
 constexpr uint16_t EEPROM_CALIBRATION_O2_CRC = 3682;
@@ -107,6 +109,10 @@ static_assert(EEPROM_CONFIG16_MAP4 + TABLE3D6_STORAGE_SIZE < EEPROM_LAST_BARO,
               "AFR2 delay table overlaps calibration data storage");
 static_assert(EEPROM_CONFIG16_AFR_DELAY_CONFIG + sizeof(afrDelayConfig) <= EEPROM_LAST_BARO,
               "AFR delay settings overlap calibration data storage");
+static_assert(EEPROM_CONFIG17_PINS >= EEPROM_CONFIG16_AFR_DELAY_CONFIG + sizeof(afrDelayConfig),
+              "Pin assignment page overlaps the AFR delay settings");
+static_assert(EEPROM_CONFIG17_PINS + sizeof(configPins) <= EEPROM_LAST_BARO,
+              "Pin assignment page overlaps calibration data storage");
 
 #if defined(UNIT_TEST)
 uint16_t MAX_PAGE_ADDRESS = EEPROM_LAST_BARO-sizeof(uint8_t);
@@ -169,6 +175,7 @@ TESTABLE_STATIC uint16_t getEntityStartAddress(page_iterator_t iter) {
     { &afrDelayTables[0], EEPROM_CONFIG16_MAP3 },
     { &afrDelayTables[1], EEPROM_CONFIG16_MAP4 },
     { &afrDelayConfig, EEPROM_CONFIG16_AFR_DELAY_CONFIG },
+    { &configPins, EEPROM_CONFIG17_PINS },
   };
   static const constexpr entity_storage_map_t* entityMapEnd = entityMap + _countof(entityMap);
 
@@ -424,6 +431,10 @@ void savePage(uint8_t pageNum)
       writesRemaining = write_range((byte *)&afrDelayConfig, (byte *)&afrDelayConfig+sizeof(afrDelayConfig), EEPROM_CONFIG16_AFR_DELAY_CONFIG, writesRemaining);
       break;
 
+    case pinAssignPage:
+      writesRemaining = write_range((byte *)&configPins, (byte *)&configPins+sizeof(configPins), EEPROM_CONFIG17_PINS, writesRemaining);
+      break;
+
     default:
       break;
   }
@@ -568,6 +579,9 @@ void loadAllPages(void)
   (void)loadTable(&afrDelayTables[0], table3d6RpmLoad::type_key, EEPROM_CONFIG16_MAP3);
   (void)loadTable(&afrDelayTables[1], table3d6RpmLoad::type_key, EEPROM_CONFIG16_MAP4);
   (void)load_range(EEPROM_CONFIG16_AFR_DELAY_CONFIG, (byte *)&afrDelayConfig, (byte *)&afrDelayConfig+sizeof(afrDelayConfig));
+
+  //Page 17 - user pin assignments
+  (void)load_range(EEPROM_CONFIG17_PINS, (byte *)&configPins, (byte *)&configPins+sizeof(configPins));
 
   //*********************************************************************************************************************************************************************************
 }

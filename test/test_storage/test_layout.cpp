@@ -6,6 +6,40 @@
 #include "config_pages.h"
 #include "scheduler.h"
 
+// Page 17 offsets, copied from the ini. The enum *is* the offset, so a
+// reordered PinAssignment silently reassigns every pin in an existing tune -
+// this is the tripwire.
+static_assert(PIN_ASSIGN_TACHO == 0U, "Page 17 / INI tachoPin offset mismatch");
+static_assert(PIN_ASSIGN_IDLE_UP == 1U, "Page 17 / INI idleUpPin offset mismatch");
+static_assert(PIN_ASSIGN_IDLE_UP_OUTPUT == 2U, "Page 17 / INI idleUpOutputPin offset mismatch");
+static_assert(PIN_ASSIGN_CTPS == 3U, "Page 17 / INI CTPSPin offset mismatch");
+static_assert(PIN_ASSIGN_VSS == 4U, "Page 17 / INI vssPin offset mismatch");
+static_assert(PIN_ASSIGN_FUEL_PUMP == 5U, "Page 17 / INI fuelPumpPin offset mismatch");
+static_assert(PIN_ASSIGN_RESET_CONTROL == 6U, "Page 17 / INI resetControlPin offset mismatch");
+static_assert(PIN_ASSIGN_IGN_BYPASS == 7U, "Page 17 / INI ignBypassPin offset mismatch");
+static_assert(PIN_ASSIGN_VVT1 == 8U, "Page 17 / INI vvt1Pin offset mismatch");
+static_assert(PIN_ASSIGN_BOOST == 9U, "Page 17 / INI boostPin offset mismatch");
+static_assert(PIN_ASSIGN_LAUNCH == 10U, "Page 17 / INI launchPin offset mismatch");
+static_assert(PIN_ASSIGN_FAN == 11U, "Page 17 / INI fanPin offset mismatch");
+static_assert(PIN_ASSIGN_BARO == 12U, "Page 17 / INI baroPin offset mismatch");
+static_assert(PIN_ASSIGN_EMAP == 13U, "Page 17 / INI EMAPPin offset mismatch");
+static_assert(PIN_ASSIGN_N2O_ARM == 14U, "Page 17 / INI n2o_arming_pin offset mismatch");
+static_assert(PIN_ASSIGN_N2O_STAGE1 == 15U, "Page 17 / INI n2o_stage1_pin offset mismatch");
+static_assert(PIN_ASSIGN_N2O_STAGE2 == 16U, "Page 17 / INI n2o_stage2_pin offset mismatch");
+static_assert(PIN_ASSIGN_KNOCK == 17U, "Page 17 / INI knock_pin offset mismatch");
+static_assert(PIN_ASSIGN_FUEL2_INPUT == 18U, "Page 17 / INI fuel2InputPin offset mismatch");
+static_assert(PIN_ASSIGN_SPARK2_INPUT == 19U, "Page 17 / INI spark2InputPin offset mismatch");
+static_assert(PIN_ASSIGN_OIL_PRESSURE == 20U, "Page 17 / INI oilPressurePin offset mismatch");
+static_assert(PIN_ASSIGN_FUEL_PRESSURE == 21U, "Page 17 / INI fuelPressurePin offset mismatch");
+static_assert(PIN_ASSIGN_WMI_INDICATOR == 22U, "Page 17 / INI wmiIndicatorPin offset mismatch");
+static_assert(PIN_ASSIGN_WMI_EMPTY == 23U, "Page 17 / INI wmiEmptyPin offset mismatch");
+static_assert(PIN_ASSIGN_WMI_ENABLED == 24U, "Page 17 / INI wmiEnabledPin offset mismatch");
+static_assert(PIN_ASSIGN_VVT2 == 25U, "Page 17 / INI vvt2Pin offset mismatch");
+static_assert(PIN_ASSIGN_SD_ENABLE == 26U, "Page 17 / INI onboard_log_tr5_Epin_pin offset mismatch");
+static_assert(PIN_ASSIGN_AIRCON_COMP == 27U, "Page 17 / INI airConCompPin offset mismatch");
+static_assert(PIN_ASSIGN_AIRCON_REQUEST == 28U, "Page 17 / INI airConReqPin offset mismatch");
+static_assert(PIN_ASSIGN_AIRCON_FAN == 29U, "Page 17 / INI airConFanPin offset mismatch");
+
 extern uint16_t getEntityStartAddress(page_iterator_t entity);
 extern const uint16_t MAX_PAGE_ADDRESS;
 extern uint16_t getSensorCalibrationCrcAddress(SensorCalibrationTable sensor);

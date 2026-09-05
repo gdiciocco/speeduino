@@ -199,7 +199,7 @@ void test_initialisation_outputs_reset_control_use_board_default(void)
 #else
   prepareForInitialiseAll(9);
   configPage4.resetControlConfig = (byte)ResetControlMode::PreventWhenRunning;
-  configPage4.resetControlPin = 0; // Flags to use board default
+  configPins.pin[PIN_ASSIGN_RESET_CONTROL] = PIN_ASSIGNMENT_BOARD_DEFAULT;
   initialiseAll(); //Run the main initialise function
 
   TEST_ASSERT_NOT_EQUAL(0, pinResetControl); 
@@ -217,7 +217,7 @@ void test_initialisation_outputs_reset_control_override_board_default(void)
 #else
   prepareForInitialiseAll(9);
   configPage4.resetControlConfig = (byte)ResetControlMode::PreventWhenRunning;
-  configPage4.resetControlPin = 45; // Use a different pin
+  configPins.pin[PIN_ASSIGN_RESET_CONTROL] = 45; // Use a different pin
   initialiseAll(); //Run the main initialise function
 
   TEST_ASSERT_EQUAL(45, pinResetControl);  
@@ -236,7 +236,7 @@ void test_initialisation_user_pin_override_board_default(void)
   prepareForInitialiseAll(3);
   // We do not test all pins, too many & too fragile. So fingers crossed the 
   // same pattern is used for all.
-  configPage2.tachoPin = 15;
+  configPins.pin[PIN_ASSIGN_TACHO] = 15;
   initialiseAll(); //Run the main initialise function
 
   TEST_ASSERT_EQUAL(15, pinTachOut);  
@@ -244,21 +244,23 @@ void test_initialisation_user_pin_override_board_default(void)
 #endif
 }
 
-// All config user pin fields are <= 6 *bits*. So too small to
-// assign BOARD_MAX_IO_PINS to. So while there is defensive code
-// in place, it cannot be unit tested.
-#if false
+// Pin assignments are a full byte each now, so an out-of-range assignment is
+// finally expressible - and the defensive code that rejects it is testable.
 void test_initialisation_user_pin_not_valid_no_override(void)
 {
+#if !defined(NATIVE_BOARD)
+  // Board-specific pin numbers: only the native host still runs setPinMapping()
+  // without a platform override rewriting these pins.
+  TEST_IGNORE_MESSAGE("Pin-number assertions only hold on the native host");
+#else
   prepareForInitialiseAll(3);
-  configPage2.tachoPin = (uint8_t)BOARD_MAX_IO_PINS;// + (uint8_t)1U;
-  ++configPage2.tachoPin;
+  configPins.pin[PIN_ASSIGN_TACHO] = (uint8_t)BOARD_MAX_IO_PINS;
   initialiseAll(); //Run the main initialise function
 
-  TEST_ASSERT_EQUAL(49, pinTachOut);  
+  TEST_ASSERT_EQUAL(49, pinTachOut);
   TEST_ASSERT_EQUAL(OUTPUT, getPinMode(pinTachOut));
-}
 #endif
+}
 
 void test_initialisation_input_user_pin_does_not_override_outputpin(void)
 {
@@ -269,7 +271,7 @@ void test_initialisation_input_user_pin_does_not_override_outputpin(void)
 #else
   // A user defineable input pin should not overwrite any output pins.
   prepareForInitialiseAll(3);
-  configPage6.launchPin = 49; // 49 is the default tacho output
+  configPins.pin[PIN_ASSIGN_LAUNCH] = 49; // 49 is the default tacho output
   initialiseAll(); //Run the main initialise function
 
   TEST_ASSERT_EQUAL(49, pinTachOut);  
@@ -291,6 +293,7 @@ void testInitialisation()
   RUN_TEST_P(test_initialisation_outputs_reset_control_use_board_default);
   RUN_TEST_P(test_initialisation_outputs_reset_control_override_board_default);
   RUN_TEST_P(test_initialisation_user_pin_override_board_default);
+  RUN_TEST_P(test_initialisation_user_pin_not_valid_no_override);
   RUN_TEST_P(test_initialisation_input_user_pin_does_not_override_outputpin);
   }
 }

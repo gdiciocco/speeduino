@@ -370,6 +370,9 @@ static page_map_t getPageMap(uint8_t pageNumber)
     makeEntity(&afrDelayTables[1]),
     makeEntity(&afrDelayConfig, sizeof(afrDelayConfig)),
   };
+  static constexpr entity_t pinAssignPageMap[] = {
+    makeEntity(&configPins, sizeof(configPins)),
+  };
 
   static constexpr page_map_t pageMaps[MAX_PAGE_NUM] = {
     { pageZeroMap, _countof(pageZeroMap) },
@@ -389,6 +392,7 @@ static page_map_t getPageMap(uint8_t pageNumber)
     { ign2PageMap, _countof(ign2PageMap) },
     { boostVvt2PageMap, _countof(boostVvt2PageMap) },
     { wallWettingPageMap, _countof(wallWettingPageMap) },
+    { pinAssignPageMap, _countof(pinAssignPageMap) },
   };
 
   if (pageNumber>=MAX_PAGE_NUM)

@@ -25,8 +25,9 @@ constexpr uint8_t progOutsPage  = 13;
 constexpr uint8_t ignMap2Page   = 14;
 constexpr uint8_t boostvvtPage2 = 15;
 constexpr uint8_t wallWettingPage = 16;
+constexpr uint8_t pinAssignPage = 17;
 constexpr uint8_t MIN_PAGE_NUM  = veSetPage;
-constexpr uint8_t MAX_PAGE_NUM  = (wallWettingPage+1U);
+constexpr uint8_t MAX_PAGE_NUM  = (pinAssignPage+1U);
 
 /** @brief Fill the tune (config pages & tables) with zeroes. */
 void setTuneToEmpty(void);

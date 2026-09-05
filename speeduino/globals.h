@@ -191,6 +191,7 @@ extern struct config9 configPage9;
 extern struct config10 configPage10;
 extern struct config13 configPage13;
 extern struct config15 configPage15;
+extern struct config_pins configPins;   //Page 17, user pin assignments
 
 bool pinIsOutput(byte pin);
 bool pinIsUsed(byte pin);

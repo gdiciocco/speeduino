@@ -226,13 +226,14 @@ void initialiseAll(void)
     //As above but for knock pulses
     if(configPage10.knock_mode == KNOCK_MODE_DIGITAL)
     {
-      if(configPage10.knock_pullup) { pinMode(configPage10.knock_pin, INPUT_PULLUP); }
-      else { pinMode(configPage10.knock_pin, INPUT); }
+      const uint8_t knockPin = configPins.get(PIN_ASSIGN_KNOCK);
+      if(configPage10.knock_pullup) { pinMode(knockPin, INPUT_PULLUP); }
+      else { pinMode(knockPin, INPUT); }
 
-      if(!pinIsReserved(configPage10.knock_pin)) 
+      if(!pinIsReserved(knockPin)) 
       { 
-        if(configPage10.knock_trigger == KNOCK_TRIGGER_HIGH) { attachInterrupt(digitalPinToInterrupt(configPage10.knock_pin), knockPulse, RISING); }
-        else { attachInterrupt(digitalPinToInterrupt(configPage10.knock_pin), knockPulse, FALLING); }
+        if(configPage10.knock_trigger == KNOCK_TRIGGER_HIGH) { attachInterrupt(digitalPinToInterrupt(knockPin), knockPulse, RISING); }
+        else { attachInterrupt(digitalPinToInterrupt(knockPin), knockPulse, FALLING); }
       }
     }
 
@@ -2316,52 +2317,67 @@ void setPinMapping(byte boardID)
       break;
   }
 
-  //Setup any devices that are using selectable pins
+  //Setup any devices that are using selectable pins.
+  //
+  //Each entry reads "if the user assigned this function a pin, use it in place
+  //of whatever the board map above chose". The assignments all live in one
+  //contiguous page (see pin_assignments.h), so this is a table rather than the
+  //two dozen near-identical if statements it replaces - and adding an
+  //assignable pin is now one row here.
+  struct pin_override_t {
+    uint8_t      *pTarget;   ///< Board default, replaced when the user assigned one
+    PinAssignment function;  ///< The assignment that names this pin
+    bool          isAnalog;  ///< Assignment is an analog channel index, not a pin
+    bool          enabled;   ///< Feature gate: when false the board default stands
+  };
+  const pin_override_t pinOverrides[] = {
+    { &pinLaunch,        PIN_ASSIGN_LAUNCH,         false, true },
+    { &pinIgnBypass,     PIN_ASSIGN_IGN_BYPASS,     false, true },
+    { &pinTachOut,       PIN_ASSIGN_TACHO,          false, true },
+    { &pinFuelPump,      PIN_ASSIGN_FUEL_PUMP,      false, true },
+    { &pinFan,           PIN_ASSIGN_FAN,            false, true },
+    { &pinBoost,         PIN_ASSIGN_BOOST,          false, true },
+    { &pinVVT_1,         PIN_ASSIGN_VVT1,           false, true },
+    { &pinVVT_2,         PIN_ASSIGN_VVT2,           false, true },
+    { &pinFuel2Input,    PIN_ASSIGN_FUEL2_INPUT,    false, true },
+    { &pinSpark2Input,   PIN_ASSIGN_SPARK2_INPUT,   false, true },
+    { &pinVSS,           PIN_ASSIGN_VSS,            false, true },
+    { &pinWMIEmpty,      PIN_ASSIGN_WMI_EMPTY,      false, true },
+    { &pinWMIIndicator,  PIN_ASSIGN_WMI_INDICATOR,  false, true },
+    { &pinWMIEnabled,    PIN_ASSIGN_WMI_ENABLED,    false, true },
+    { &pinIdleUp,        PIN_ASSIGN_IDLE_UP,        false, true },
+    { &pinIdleUpOutput,  PIN_ASSIGN_IDLE_UP_OUTPUT, false, true },
+    { &pinCTPS,          PIN_ASSIGN_CTPS,           false, true },
+    { &pinAirConComp,    PIN_ASSIGN_AIRCON_COMP,    false, true },
+    { &pinAirConFan,     PIN_ASSIGN_AIRCON_FAN,     false, true },
+    { &pinAirConRequest, PIN_ASSIGN_AIRCON_REQUEST, false, true },
+    //Feature-gated: these share their board default with another function, so
+    //the override only applies when the feature that needs its own pin is on.
+    { &pinBaro,          PIN_ASSIGN_BARO,           true,  configPage6.useExtBaro != 0U },
+    { &pinEMAP,          PIN_ASSIGN_EMAP,           true,  configPage6.useEMAP != 0U },
+    { &pinFuelPressure,  PIN_ASSIGN_FUEL_PRESSURE,  true,  configPage10.fuelPressureEnable != 0U },
+    { &pinOilPressure,   PIN_ASSIGN_OIL_PRESSURE,   true,  configPage10.oilPressureEnable != 0U },
+    { &pinSDEnable,      PIN_ASSIGN_SD_ENABLE,      false, configPage13.onboard_log_trigger_Epin != 0U },
+  };
 
-  if ( (configPage6.launchPin != 0) && (configPage6.launchPin < BOARD_MAX_IO_PINS) ) { pinLaunch = pinTranslate(configPage6.launchPin); }
-  if ( (configPage4.ignBypassPin != 0) && (configPage4.ignBypassPin < BOARD_MAX_IO_PINS) ) { pinIgnBypass = pinTranslate(configPage4.ignBypassPin); }
-  if ( (configPage2.tachoPin != 0) && (configPage2.tachoPin < BOARD_MAX_IO_PINS) ) { pinTachOut = pinTranslate(configPage2.tachoPin); }
-  if ( (configPage4.fuelPumpPin != 0) && (configPage4.fuelPumpPin < BOARD_MAX_IO_PINS) ) { pinFuelPump = pinTranslate(configPage4.fuelPumpPin); }
-  if ( (configPage6.fanPin != 0) && (configPage6.fanPin < BOARD_MAX_IO_PINS) ) { pinFan = pinTranslate(configPage6.fanPin); }
-  if ( (configPage6.boostPin != 0) && (configPage6.boostPin < BOARD_MAX_IO_PINS) ) { pinBoost = pinTranslate(configPage6.boostPin); }
-  if ( (configPage6.vvt1Pin != 0) && (configPage6.vvt1Pin < BOARD_MAX_IO_PINS) ) { pinVVT_1 = pinTranslate(configPage6.vvt1Pin); }
-  if ( (configPage6.useExtBaro != 0) && (configPage6.baroPin < BOARD_MAX_IO_PINS) ) { pinBaro = pinTranslateAnalog(configPage6.baroPin); }
-  if ( (configPage6.useEMAP != 0) && (configPage10.EMAPPin < BOARD_MAX_IO_PINS) ) { pinEMAP = pinTranslateAnalog(configPage10.EMAPPin); }
-  if ( (configPage10.fuel2InputPin != 0) && (configPage10.fuel2InputPin < BOARD_MAX_IO_PINS) ) { pinFuel2Input = pinTranslate(configPage10.fuel2InputPin); }
-  if ( (configPage10.spark2InputPin != 0) && (configPage10.spark2InputPin < BOARD_MAX_IO_PINS) ) { pinSpark2Input = pinTranslate(configPage10.spark2InputPin); }
-  if ( (configPage2.vssPin != 0) && (configPage2.vssPin < BOARD_MAX_IO_PINS) ) { pinVSS = pinTranslate(configPage2.vssPin); }
-  if ( (configPage10.fuelPressureEnable) && (configPage10.fuelPressurePin < BOARD_MAX_IO_PINS) ) { pinFuelPressure = pinTranslateAnalog(configPage10.fuelPressurePin); }
-  if ( (configPage10.oilPressureEnable) && (configPage10.oilPressurePin < BOARD_MAX_IO_PINS) ) { pinOilPressure = pinTranslateAnalog(configPage10.oilPressurePin); }
-  
-  if ( (configPage10.wmiEmptyPin != 0) && (configPage10.wmiEmptyPin < BOARD_MAX_IO_PINS) ) { pinWMIEmpty = pinTranslate(configPage10.wmiEmptyPin); }
-  if ( (configPage10.wmiIndicatorPin != 0) && (configPage10.wmiIndicatorPin < BOARD_MAX_IO_PINS) ) { pinWMIIndicator = pinTranslate(configPage10.wmiIndicatorPin); }
-  if ( (configPage10.wmiEnabledPin != 0) && (configPage10.wmiEnabledPin < BOARD_MAX_IO_PINS) ) { pinWMIEnabled = pinTranslate(configPage10.wmiEnabledPin); }
-  if ( (configPage10.vvt2Pin != 0) && (configPage10.vvt2Pin < BOARD_MAX_IO_PINS) ) { pinVVT_2 = pinTranslate(configPage10.vvt2Pin); }
-  if ( (configPage13.onboard_log_trigger_Epin != 0 ) && (configPage13.onboard_log_trigger_Epin != 0) && (configPage13.onboard_log_tr5_Epin_pin < BOARD_MAX_IO_PINS) ) { pinSDEnable = pinTranslate(configPage13.onboard_log_tr5_Epin_pin); }
-  
+  for (uint8_t index = 0U; index < (uint8_t)_countof(pinOverrides); ++index)
+  {
+    const pin_override_t &override = pinOverrides[index];
+    const uint8_t assigned = configPins.get(override.function);
+    if (override.enabled && (assigned != PIN_ASSIGNMENT_BOARD_DEFAULT) && (assigned < BOARD_MAX_IO_PINS))
+    {
+      *override.pTarget = override.isAnalog ? pinTranslateAnalog(assigned) : pinTranslate(assigned);
+    }
+  }
 
-  //Currently there's no default pin for Idle Up
-  
-  pinIdleUp = pinTranslate(configPage2.idleUpPin);
-
-  //Currently there's no default pin for Idle Up Output
-  pinIdleUpOutput = pinTranslate(configPage2.idleUpOutputPin);
-
-  //Currently there's no default pin for closed throttle position sensor
-  pinCTPS = pinTranslate(configPage2.CTPSPin);
-  
-  // Air conditioning control initialisation
-  if ((configPage15.airConCompPin != 0) && (configPage15.airConCompPin < BOARD_MAX_IO_PINS) ) { pinAirConComp = pinTranslate(configPage15.airConCompPin); }
-  if ((configPage15.airConFanPin != 0) && (configPage15.airConFanPin < BOARD_MAX_IO_PINS) ) { pinAirConFan = pinTranslate(configPage15.airConFanPin); }
-  if ((configPage15.airConReqPin != 0) && (configPage15.airConReqPin < BOARD_MAX_IO_PINS) ) { pinAirConRequest = pinTranslate(configPage15.airConReqPin); }
-    
   /* Reset control is a special case. If reset control is enabled, it needs its initial state set BEFORE its pinMode.
      If that doesn't happen and reset control is in "Serial Command" mode, the Arduino will end up in a reset loop
      because the control pin will go low as soon as the pinMode is set to OUTPUT. */
-  if ( (configPage4.resetControlConfig != 0) && (configPage4.resetControlPin < BOARD_MAX_IO_PINS) )
+  if (configPage4.resetControlConfig != 0)
   {
-    if (configPage4.resetControlPin!=0U) {
-      pinResetControl = pinTranslate(configPage4.resetControlPin);
+    const uint8_t assigned = configPins.get(PIN_ASSIGN_RESET_CONTROL);
+    if ((assigned != PIN_ASSIGNMENT_BOARD_DEFAULT) && (assigned < BOARD_MAX_IO_PINS)) {
+      pinResetControl = pinTranslate(assigned);
     }
     initialiseResetControl((ResetControlMode)configPage4.resetControlConfig, pinResetControl);
   }

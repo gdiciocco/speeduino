@@ -52,11 +52,12 @@ static uint8_t getN2oArmPinPolarity(const config10 &page10)
 }
 static void initialiseN2oArmPin(const config10 &page10)
 {
-  if(configPage10.n2o_enable!=0U && !pinIsReserved(page10.n2o_arming_pin))
+  const uint8_t armPin = configPins.get(PIN_ASSIGN_N2O_ARM);
+  if(configPage10.n2o_enable!=0U && !pinIsReserved(armPin))
   {
     // The pin modes are only set if the if n2o is enabled to prevent them conflicting 
     // with other inputs. 
-    n2o_arming_pin.setPin(page10.n2o_arming_pin, getN2oArmPinPolarity(page10));
+    n2o_arming_pin.setPin(armPin, getN2oArmPinPolarity(page10));
   }
 }
 
@@ -86,8 +87,8 @@ static boardOutputPin_t aircon_fan_pin;
 
 static void initialiseN2oPins(const config10 &page10)
 {
-  n2o_stage1_pin.setPin(page10.n2o_stage1_pin, OUTPUT);
-  n2o_stage2_pin.setPin(page10.n2o_stage2_pin, OUTPUT);
+  n2o_stage1_pin.setPin(configPins.get(PIN_ASSIGN_N2O_STAGE1), OUTPUT);
+  n2o_stage2_pin.setPin(configPins.get(PIN_ASSIGN_N2O_STAGE2), OUTPUT);
   initialiseN2oArmPin(page10);
 }
 

@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include "board_definition.h" // Needed for struct packing.
 #include "load_source.h"
+#include "pin_assignments.h"
 
 using byte = uint8_t;
 
@@ -183,7 +184,7 @@ struct config2 : public config_page_t {
   byte wueValues[10];   ///< Warm up enrichment array (10 bytes, transferred to @ref WUETable)
   byte crankingPct;     ///< Cranking enrichment (See @ref config10, updates.ino)
   byte pinMapping;      ///< The board / ping mapping number / id to be used (See: @ref setPinMapping in init.ino)
-  byte tachoPin : 6;    ///< Custom pin setting for tacho output (if != 0, override copied to pinTachOut, which defaults to board assigned tach pin)
+  byte spare_tachoPin : 6;  ///< Spare. Was tachoPin, now @ref config_pins
   byte tachoDiv : 2;    ///< Whether to change the tacho speed ("half speed tacho" ?)
   byte tachoDuration;   //The duration of the tacho pulse in mS
   byte maeThresh;       /**< The MAPdot threshold that must be exceeded before AE is engaged */
@@ -248,7 +249,7 @@ struct config2 : public config_page_t {
   uint16_t oddfire3; ///< The ATDC angle of channel 3 for oddfire
   uint16_t oddfire4; ///< The ATDC angle of channel 4 for oddfire
 
-  byte idleUpPin : 6;
+  byte spare_idleUpPin : 6;  ///< Spare. Was idleUpPin, now @ref config_pins
   byte idleUpPolarity : 1;
   byte idleUpEnabled : 1;
 
@@ -278,7 +279,7 @@ struct config2 : public config_page_t {
   byte primePulse[4];//Priming pulsewidth values (mS, copied to @ref PrimingPulseTable)
   byte primeBins[4]; //Priming temperatures (source,x-axis)
 
-  byte CTPSPin : 6;
+  byte spare_CTPSPin : 6;  ///< Spare. Was CTPSPin, now @ref config_pins
   byte CTPSPolarity : 1;
   byte CTPSEnabled : 1;
 
@@ -297,7 +298,7 @@ struct config2 : public config_page_t {
 
   //VSS Stuff
   byte vssMode : 2; ///< VSS (Vehicle speed sensor) mode (0=none, 1=CANbus, 2,3=Interrupt driven)
-  byte vssPin : 6; ///< VSS (Vehicle speed sensor) pin number
+  byte spare_vssPin : 6;  ///< Spare. Was vssPin, now @ref config_pins
   
   uint16_t vssPulsesPerKm; ///< VSS (Vehicle speed sensor) pulses per Km
   byte vssSmoothing;
@@ -310,7 +311,7 @@ struct config2 : public config_page_t {
 
   byte idleUpOutputEnabled : 1;
   byte idleUpOutputInv : 1;
-  byte idleUpOutputPin  : 6;
+  byte spare_idleUpOutputPin : 6;  ///< Spare. Was idleUpOutputPin, now @ref config_pins
 
   byte tachoSweepMaxRPM;
   byte primingDelay;
@@ -370,7 +371,7 @@ struct config4 : public config_page_t {
   byte TrigPattern : 5; ///< Decoder configured (DECODER_MISSING_TOOTH, DECODER_BASIC_DISTRIBUTOR, DECODER_GM7X, ... See init.ino)
 
   byte TrigEdgeSec : 1; ///< Secondary (RPM2) Trigger Edge (See RPM1)
-  byte fuelPumpPin : 6; ///< Fuel pump pin (copied as override to pinFuelPump, defaults to board default, See: init.ino)
+  byte spare_fuelPumpPin : 6;  ///< Spare. Was fuelPumpPin, now @ref config_pins
   byte useResync : 1;
 
   byte sparkDur; ///< Spark duration in ms * 10
@@ -380,7 +381,7 @@ struct config4 : public config_page_t {
 
   byte resetControlConfig : 2; /** Which method of reset control to use - 0=Disabled (RESET_CONTROL_DISABLED), 1=Prevent When Running (RESET_CONTROL_PREVENT_WHEN_RUNNING),
      2=Prevent Always (RESET_CONTROL_PREVENT_ALWAYS), 3=Serial Command (RESET_CONTROL_SERIAL_COMMAND) - Copied to resetControl (See init.ino, utilities.ino) */
-  byte resetControlPin : 6;
+  byte spare_resetControlPin : 6;  ///< Spare. Was resetControlPin, now @ref config_pins
 
   byte StgCycles; //The number of initial cycles before the ignition should fire when first cranking
 
@@ -413,7 +414,7 @@ struct config4 : public config_page_t {
   byte dfcoTPSThresh; //TPS must be below this figure for DFCO to engage (Unit: ...)
 
   byte ignBypassEnabled : 1; //Whether or not the ignition bypass is enabled
-  byte ignBypassPin : 6; //Pin the ignition bypass is activated on
+  byte spare_ignBypassPin : 6;  ///< Spare. Was ignBypassPin, now @ref config_pins
   byte ignBypassHiLo : 1; //Whether this should be active high or low.
 
   uint8_t ADCFILTER_TPS;
@@ -481,10 +482,10 @@ struct config6 : public config_page_t {
   byte ego_sdelay;  /// Time in seconds after engine starts that closed loop becomes available
   byte egoRPM;      /// RPM must be above this for closed loop to function
   byte egoTPSMax;   /// TPS must be below this for closed loop to function
-  byte vvt1Pin : 6;
+  byte spare_vvt1Pin : 6;  ///< Spare. Was vvt1Pin, now @ref config_pins
   byte useExtBaro : 1;
   byte boostMode : 1; /// Boost control mode: 0=Simple (BOOST_MODE_SIMPLE) or 1=full (BOOST_MODE_FULL)
-  byte boostPin : 6;
+  byte spare_boostPin : 6;  ///< Spare. Was boostPin, now @ref config_pins
   byte tachoMode : 1; /// Whether to use fixed tacho pulse duration or match to dwell duration
   byte useEMAP : 1;    ///< Enable EMAP
   byte voltageCorrectionBins[6]; //X axis bins for voltage correction tables
@@ -495,7 +496,7 @@ struct config6 : public config_page_t {
   byte vvtFreq;     /// Frequency of the vvt PWM valve
   byte idleFreq;
   // Launch stuff, see beginning of speeduino.ino main loop
-  byte launchPin : 6; ///< Launch (control ?) pin
+  byte spare_launchPin : 6;  ///< Spare. Was launchPin, now @ref config_pins
   byte launchEnabled : 1; ///< Launch ...???... (control?) enabled
   byte launchHiLo : 1;  // 
 
@@ -518,7 +519,7 @@ struct config6 : public config_page_t {
   byte iacPWMrun : 1; ///< Run the PWM idle valve before engine is cranked over (0 = off, 1 = on)
   byte fuelTrimEnabled : 1;
   byte flatSEnable : 1; ///< Flat shift enable
-  byte baroPin : 4;
+  byte spare_baroPin : 4;  ///< Spare. Was baroPin, now @ref config_pins
   byte flatSSoftWin;
   int8_t flatSRetard;
   byte flatSArm;
@@ -543,7 +544,7 @@ struct config6 : public config_page_t {
 
   byte fanInv : 1;        // Fan output inversion bit
   byte fanUnused : 1;
-  byte fanPin : 6;
+  byte spare_fanPin : 6;  ///< Spare. Was fanPin, now @ref config_pins
   byte fanSP;             // Cooling fan start temperature
   byte fanHyster;         // Fan hysteresis
   byte fanFreq;           // Fan PWM frequency
@@ -670,7 +671,7 @@ struct config10 : public config_page_t {
   byte rotaryType : 2;
   byte stagingEnabled : 1;
   byte stagingMode : 1;
-  byte EMAPPin : 4;
+  byte spare_EMAPPin : 4;  ///< Spare. Was EMAPPin, now @ref config_pins
 
   byte rotarySplitValues[8]; //Bytes 9-16
   byte rotarySplitBins[8]; //Bytes 17-24
@@ -692,14 +693,14 @@ struct config10 : public config_page_t {
   //Byte 75
   byte lnchCtrlTPS; //Byte 74
   byte n2o_enable : 2;
-  byte n2o_arming_pin : 6;
+  byte spare_n2o_arming_pin : 6;  ///< Spare. Was n2o_arming_pin, now @ref config_pins
   byte n2o_minCLT; //Byte 76
   byte n2o_maxMAP; //Byte 77
   byte n2o_minTPS; //Byte 78
   byte n2o_maxAFR; //Byte 79
 
   //Byte 80
-  byte n2o_stage1_pin : 6;
+  byte spare_n2o_stage1_pin : 6;  ///< Spare. Was n2o_stage1_pin, now @ref config_pins
   byte n2o_pin_polarity : 1;
   byte n2o_stage1_unused : 1;
   byte n2o_stage1_minRPM; //Byte 81
@@ -709,7 +710,7 @@ struct config10 : public config_page_t {
   byte n2o_stage1_retard; //Byte 85
 
   //Byte 86
-  byte n2o_stage2_pin : 6;
+  byte spare_n2o_stage2_pin : 6;  ///< Spare. Was n2o_stage2_pin, now @ref config_pins
   byte n2o_stage2_unused : 2;
   byte n2o_stage2_minRPM; //Byte 87
   byte n2o_stage2_maxRPM; //Byte 88
@@ -719,7 +720,7 @@ struct config10 : public config_page_t {
 
   //Byte 92
   byte knock_mode : 2;
-  byte knock_pin : 6;
+  byte spare_knock_pin : 6;  ///< Spare. Was knock_pin, now @ref config_pins
 
   //Byte 93
   byte knock_trigger : 1;
@@ -754,7 +755,7 @@ struct config10 : public config_page_t {
   uint16_t fuel2SwitchValue;
 
   //Byte 125
-  byte fuel2InputPin : 6;
+  byte spare_fuel2InputPin : 6;  ///< Spare. Was fuel2InputPin, now @ref config_pins
   byte fuel2InputPolarity : 1;
   byte fuel2InputPullup : 1;
 
@@ -771,9 +772,9 @@ struct config10 : public config_page_t {
   byte fuelPressureEnable : 1; ///< Enable fuel pressure sensing from an analog pin (@ref pinFuelPressure)
   byte oilPressureEnable : 1;  ///< Enable oil pressure sensing from an analog pin (@ref pinOilPressure)
   byte oilPressureProtEnbl : 1;
-  byte oilPressurePin : 5;
+  byte spare_oilPressurePin : 5;  ///< Spare. Was oilPressurePin, now @ref config_pins
 
-  byte fuelPressurePin : 5;
+  byte spare_fuelPressurePin : 5;  ///< Spare. Was fuelPressurePin, now @ref config_pins
   byte unused11_165 : 3;
   
   int8_t fuelPressureMin;
@@ -797,21 +798,21 @@ struct config10 : public config_page_t {
   int8_t wmiOffset; // Byte 155
 
   byte wmiIndicatorEnabled : 1; // 156
-  byte wmiIndicatorPin : 6;
+  byte spare_wmiIndicatorPin : 6;  ///< Spare. Was wmiIndicatorPin, now @ref config_pins
   byte wmiIndicatorPolarity : 1;
 
   byte wmiEmptyEnabled : 1; // 157
-  byte wmiEmptyPin : 6;
+  byte spare_wmiEmptyPin : 6;  ///< Spare. Was wmiEmptyPin, now @ref config_pins
   byte wmiEmptyPolarity : 1;
 
-  byte wmiEnabledPin; // 158
+  byte spare_wmiEnabledPin;            ///< Spare. Was wmiEnabledPin, now @ref config_pins
 
   byte wmiAdvBins[6]; //Bytes 159-164
   byte wmiAdvAdj[6];  //Additional advance (in degrees)
                       //Bytes 165-170
   byte vvtCLminDuty;
   byte vvtCLmaxDuty;
-  byte vvt2Pin : 6;
+  byte spare_vvt2Pin : 6;  ///< Spare. Was vvt2Pin, now @ref config_pins
   byte vvt2Enabled : 1;
   byte TrigEdgeThrd : 1;
 
@@ -828,7 +829,7 @@ struct config10 : public config_page_t {
   uint16_t spark2SwitchValue;
 
   //Byte 189
-  byte spark2InputPin : 6;
+  byte spare_spark2InputPin : 6;  ///< Spare. Was spark2InputPin, now @ref config_pins
   byte spark2InputPolarity : 1;
   byte spark2InputPullup : 1;
 
@@ -895,7 +896,7 @@ struct config13 : public config_page_t {
   byte onboard_log_tr3_thr_AFR   :1;  // "Disabled", "Enabled"     
   byte onboard_log_tr4_thr_on;        // "V",        0.1,   0.0,  0.0,  15.90,      2 ; * (  1 byte)    
   byte onboard_log_tr4_thr_off;       // "V",        0.1,   0.0,  0.0,  15.90,      2 ; * (  1 byte)   
-  byte onboard_log_tr5_Epin_pin  :6;        // "pin",      0,    0, 0,  1,    255,        0 ;  
+  byte spare_onboard_log_tr5_Epin_pin : 6;  ///< Spare. Was onboard_log_tr5_Epin_pin, now @ref config_pins
   byte unused13_125_2            :2;
 
   byte hwTestIgnDuration;
@@ -923,9 +924,9 @@ struct config15 : public config_page_t {
   byte airConUnused1 : 2;
 
   //Bytes 84-97 - Air conditioning analog points
-  byte airConCompPin : 6;
+  byte spare_airConCompPin : 6;  ///< Spare. Was airConCompPin, now @ref config_pins
   byte airConUnused2 : 2;
-  byte airConReqPin : 6;
+  byte spare_airConReqPin : 6;  ///< Spare. Was airConReqPin, now @ref config_pins
   byte airConUnused3 : 2;
   byte airConTPSCut;
   byte airConMinRPMdiv10;
@@ -936,7 +937,7 @@ struct config15 : public config_page_t {
   byte airConCompOnDelay;
   byte airConAfterStartDelay;
   byte airConRPMCutTime;
-  byte airConFanPin : 6;
+  byte spare_airConFanPin : 6;  ///< Spare. Was airConFanPin, now @ref config_pins
   byte airConUnused4 : 2;
   byte airConIdleUpRPMAdder;
   byte airConPwmFanMinDuty;
@@ -1070,3 +1071,26 @@ struct afr_delay_config_t : public config_page_t {
 } __attribute__((packed));
 
 static_assert(sizeof(afr_delay_config_t) == 1U, "Page 16 AFR delay settings layout must remain one byte");
+
+/** Page 17 - user pin assignments, one byte per function.
+ *
+ * Indexed by @ref PinAssignment. Zero means "keep the board map's default", so
+ * an all-zero page behaves exactly like a board with no overrides at all, and
+ * the reserved tail can be handed out to new functions without moving anything.
+ *
+ * @see pin_assignments.h for why these no longer live in the feature pages.
+ */
+struct config_pins : public config_page_t {
+  uint8_t pin[PIN_ASSIGNMENT_PAGE_SIZE];
+
+  /** @brief Read one assignment. */
+  inline uint8_t get(PinAssignment which) const { return pin[(uint8_t)which]; }
+
+  /** @brief True when the user has overridden this function's board default. */
+  inline bool isAssigned(PinAssignment which) const
+  {
+    return pin[(uint8_t)which] != PIN_ASSIGNMENT_BOARD_DEFAULT;
+  }
+} __attribute__((packed));
+
+static_assert(sizeof(config_pins) == PIN_ASSIGNMENT_PAGE_SIZE, "Pin assignment page must be exactly its declared size");

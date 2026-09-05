@@ -403,7 +403,7 @@ void boardInitPins(uint8_t)
 
   if(configPage2.flexEnabled > 0) { setPinHysteresis(pinFlex); }
   if(configPage2.vssMode > 1) { setPinHysteresis(pinVSS); }// VSS modes 2 and 3 are interrupt drive (Mode 1 is CAN)
-  if(configPage10.knock_mode == KNOCK_MODE_DIGITAL) { setPinHysteresis(configPage10.knock_pin); }
+  if(configPage10.knock_mode == KNOCK_MODE_DIGITAL) { setPinHysteresis(configPins.get(PIN_ASSIGN_KNOCK)); }
 }
 
 static uint16_t getEepromWriteBlockSize(const statuses &current)

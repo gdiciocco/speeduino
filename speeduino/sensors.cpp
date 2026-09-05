@@ -145,7 +145,7 @@ static inline void registerConfiguredStm32AdcPins(void)
   if(configPage10.fuelPressureEnable && !pinIsOutput(pinFuelPressure)) { registerStm32AdcPin(pinFuelPressure); }
 #endif
   if(configPage10.oilPressureEnable && !pinIsOutput(pinOilPressure)) { registerStm32AdcPin(pinOilPressure); }
-  if(configPage10.knock_pin >= 47U) { registerStm32AdcPin(pinTranslateAnalog(configPage10.knock_pin - 47U)); }
+  if(configPins.get(PIN_ASSIGN_KNOCK) >= KNOCK_PIN_ANALOG_BASE) { registerStm32AdcPin(pinTranslateAnalog(configPins.get(PIN_ASSIGN_KNOCK) - KNOCK_PIN_ANALOG_BASE)); }
 }
 #endif
 
@@ -187,15 +187,15 @@ static inline void refreshRuntimeAnalogPins(void)
     configureAnalogInputPin(pinBaro);
   }
 #else
-  if((configPage6.useExtBaro != 0U) && (configPage6.baroPin < BOARD_MAX_IO_PINS))
+  if((configPage6.useExtBaro != 0U) && (configPins.get(PIN_ASSIGN_BARO) < BOARD_MAX_IO_PINS))
   {
-    pinBaro = pinTranslateAnalog(configPage6.baroPin);
+    pinBaro = pinTranslateAnalog(configPins.get(PIN_ASSIGN_BARO));
     configureAnalogInputPin(pinBaro);
   }
 #endif
-  if((configPage6.useEMAP != 0U) && (configPage10.EMAPPin < BOARD_MAX_IO_PINS))
+  if((configPage6.useEMAP != 0U) && (configPins.get(PIN_ASSIGN_EMAP) < BOARD_MAX_IO_PINS))
   {
-    pinEMAP = pinTranslateAnalog(configPage10.EMAPPin);
+    pinEMAP = pinTranslateAnalog(configPins.get(PIN_ASSIGN_EMAP));
     configureAnalogInputPin(pinEMAP);
   }
 #if defined(CAPONORD_BOARD)
@@ -205,15 +205,15 @@ static inline void refreshRuntimeAnalogPins(void)
     configureAnalogInputPin(pinFuelPressure);
   }
 #else
-  if((configPage10.fuelPressureEnable) && (configPage10.fuelPressurePin < BOARD_MAX_IO_PINS))
+  if((configPage10.fuelPressureEnable) && (configPins.get(PIN_ASSIGN_FUEL_PRESSURE) < BOARD_MAX_IO_PINS))
   {
-    pinFuelPressure = pinTranslateAnalog(configPage10.fuelPressurePin);
+    pinFuelPressure = pinTranslateAnalog(configPins.get(PIN_ASSIGN_FUEL_PRESSURE));
     if(!pinIsOutput(pinFuelPressure)) { configureAnalogInputPin(pinFuelPressure); }
   }
 #endif
-  if((configPage10.oilPressureEnable) && (configPage10.oilPressurePin < BOARD_MAX_IO_PINS))
+  if((configPage10.oilPressureEnable) && (configPins.get(PIN_ASSIGN_OIL_PRESSURE) < BOARD_MAX_IO_PINS))
   {
-    pinOilPressure = pinTranslateAnalog(configPage10.oilPressurePin);
+    pinOilPressure = pinTranslateAnalog(configPins.get(PIN_ASSIGN_OIL_PRESSURE));
     if(!pinIsOutput(pinOilPressure)) { configureAnalogInputPin(pinOilPressure); }
   }
 }
@@ -1019,9 +1019,10 @@ END_LTO_INLINE()
 uint8_t getAnalogKnock(void)
 {
   uint8_t pinKnock = A15; //Default value in case the user has not selected an analog pin in TunerStudio
-  if(configPage10.knock_pin >=47U)
+  const uint8_t knockAssignment = configPins.get(PIN_ASSIGN_KNOCK);
+  if(knockAssignment >= KNOCK_PIN_ANALOG_BASE)
   {
-    pinKnock = pinTranslateAnalog(configPage10.knock_pin - 47U); //The knock_pin variable has both digital and analog pins listed. A0 is at position 47
+    pinKnock = pinTranslateAnalog(knockAssignment - KNOCK_PIN_ANALOG_BASE); //The knock assignment names either a digital pin or an analog channel
   }
 
   //Perform ADC read

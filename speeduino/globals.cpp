@@ -132,6 +132,7 @@ struct config9 configPage9;
 struct config10 configPage10;
 struct config13 configPage13;
 struct config15 configPage15;
+struct config_pins configPins;   ///< Page 17, user pin assignments
 
 //These function do checks on a pin to determine if it is already in use by another (higher importance) active function
 bool pinIsOutput(byte pin)
