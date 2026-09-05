@@ -8,10 +8,15 @@ plus names declared in two places at once - and it needs no board.
 
     python tools/check_ini_layout.py [path/to/speeduino.ini]
 
-Exits non-zero if anything overruns. The other half needs hardware: that the
-declared page sizes match what the firmware serves, and that the firmware's own
-page CRC - the number TunerStudio uses to decide whether a burn took - agrees
-with the bytes it just handed over.
+It also checks the live data block, where nothing else does: a channel declared
+past ochBlockSize is never sent, and two scalars sharing bytes means one gauge
+shows another's value - both silent, both wrong on screen rather than missing.
+
+Exits non-zero if anything overruns. The rest needs hardware: that the declared
+page sizes and ochBlockSize match what the firmware serves, that the firmware's
+own page CRC - the number TunerStudio uses to decide whether a burn took -
+agrees with the bytes it just handed over, and that the ini does not promise
+TunerStudio bigger chunks than the board will accept.
 
     python tools/check_ini_layout.py --port COM25
 """
@@ -89,6 +94,50 @@ def check_offsets(ini):
     return len(located), len(sizes), problems
 
 
+def check_output_channels(ini):
+    """Nothing guards the live data block the way page sizes guard the pages.
+
+    A channel declared past ochBlockSize is simply never sent, and two scalars
+    sharing bytes means one gauge shows the other's value. Both are silent: the
+    number on the screen is wrong, not missing. Bits sharing a byte are how
+    flags are meant to work, and the same name at the same offset twice is a
+    CELSIUS/#else pair, so neither counts.
+    """
+    match = re.search(r'ochBlockSize\s*=\s*(\d+)', ini)
+    if not match:
+        return ['ochBlockSize not found']
+    size = int(match.group(1))
+
+    start = ini.index('[OutputChannels]')
+    end = ini.index('[Datalog]', start)
+
+    problems = []
+    entries = []
+    for line in ini[start:end].split('\n'):
+        stripped = line.strip()
+        if not stripped or stripped.startswith(';'):
+            continue
+        match = ENTRY.match(stripped)
+        if not match:
+            continue
+        name, kind, type_name, offset = match.group(1), match.group(2), match.group(3), int(match.group(4))
+        span = entry_size(kind, type_name, match.group(5) or '')
+        if offset + span > size:
+            problems.append('output channel %s at %d+%d is past ochBlockSize %d'
+                            % (name, offset, span, size))
+        if kind != 'bits':
+            entries.append((offset, span, name))
+
+    entries.sort()
+    for (offset, span, name), (next_offset, next_span, next_name) in zip(entries, entries[1:]):
+        if offset + span > next_offset and name != next_name:
+            problems.append('output channels %s (%d+%d) and %s (%d+%d) overlap'
+                            % (name, offset, span, next_name, next_offset, next_span))
+
+    print('[OutputChannels]: %d channels in %d bytes' % (len(entries), size))
+    return problems
+
+
 def active_setting(ini, name):
     """The last uncommented value of a setting, ignoring COMMS_COMPAT branches.
 
@@ -153,6 +202,12 @@ def check_against_board(ini, port):
     with Ecu(port) as ecu:
         print('board: %s' % ecu.code_version())
         problems += check_blocking_factors(ini, ecu)
+
+        #The live data block is the other size the two sides have to agree on.
+        declared_block = int(re.search(r'ochBlockSize\s*=\s*(\d+)', ini).group(1))
+        served = len(ecu.output_channels(0, declared_block))
+        if served != declared_block:
+            problems.append('ochBlockSize: ini says %d bytes, board served %d' % (declared_block, served))
         for number, declared in enumerate(sizes, start=1):
             try:
                 data = ecu.read_page(number, 0, declared)
@@ -186,6 +241,7 @@ def main():
 
     count, pages, problems = check_offsets(ini)
     print('%s: %d constants across %d pages' % (os.path.relpath(args.ini, REPO), count, pages))
+    problems += check_output_channels(ini)
 
     if args.port:
         problems += check_against_board(ini, args.port)
