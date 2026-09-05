@@ -8,8 +8,10 @@ plus names declared in two places at once - and it needs no board.
 
     python tools/check_ini_layout.py [path/to/speeduino.ini]
 
-Exits non-zero if anything overruns. The other half, that the declared page
-sizes match what the firmware actually serves, needs hardware:
+Exits non-zero if anything overruns. The other half needs hardware: that the
+declared page sizes match what the firmware serves, and that the firmware's own
+page CRC - the number TunerStudio uses to decide whether a burn took - agrees
+with the bytes it just handed over.
 
     python tools/check_ini_layout.py --port COM25
 """
@@ -17,6 +19,7 @@ import argparse
 import os
 import re
 import sys
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -87,7 +90,14 @@ def check_offsets(ini):
 
 
 def check_against_board(ini, port):
-    """Ask a running board for each page and compare with the declared size."""
+    """Ask a running board for each page: right size, and a CRC that agrees.
+
+    The CRC comparison is the one that matters. TunerStudio decides whether a
+    burn took by asking the board for a page CRC, so if the firmware's own walk
+    over a page ever disagrees with the bytes it serves for that page, TS is
+    told the tune did not stick when it did - or worse, that it did when it
+    did not.
+    """
     sys.path.insert(0, HERE)
     from tsclient import Ecu, EcuError
 
@@ -97,12 +107,23 @@ def check_against_board(ini, port):
         print('board: %s' % ecu.code_version())
         for number, declared in enumerate(sizes, start=1):
             try:
-                served = len(ecu.read_page(number, 0, declared))
+                data = ecu.read_page(number, 0, declared)
             except EcuError as exc:
                 problems.append('page %d: %s' % (number, exc))
                 continue
-            if served != declared:
-                problems.append('page %d: ini says %d bytes, board served %d' % (number, declared, served))
+            if len(data) != declared:
+                problems.append('page %d: ini says %d bytes, board served %d'
+                                % (number, declared, len(data)))
+                continue
+            try:
+                reported = ecu.page_crc(number)
+            except EcuError as exc:
+                problems.append('page %d CRC: %s' % (number, exc))
+                continue
+            computed = zlib.crc32(data) & 0xFFFFFFFF
+            if reported != computed:
+                problems.append('page %d: board reports CRC %08X, its own bytes give %08X'
+                                % (number, reported, computed))
     return problems
 
 
