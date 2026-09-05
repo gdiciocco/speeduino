@@ -165,6 +165,28 @@ void setCallbacks(Schedule &schedule, Schedule::callback pStartCallback, Schedul
  */
 void setSchedule(Schedule &schedule, uint32_t delay, uint16_t duration, bool allowQueuedSchedule);
 
+/**
+ * @brief How many schedules have been dropped for being further out than the
+ * timer can express.
+ *
+ * setSchedule() cannot represent a delay of MAX_TIMER_PERIOD or more, and it
+ * does not clamp: it returns having done nothing, so the injection or the
+ * spark simply does not happen. With a 16-bit compare and a 4us tick that
+ * horizon is 262ms, and a revolution at 300 RPM is 200ms - close enough that
+ * cranking a slow-turning engine can reach it.
+ *
+ * Nothing recorded that, so the symptom was a missing event with no trace.
+ * This counter is free running from boot and saturates rather than wrapping,
+ * so a nonzero value in the log means it happened, and how often.
+ *
+ * @note Incremented from ISR context without a lock. It is a diagnostic: a
+ * lost increment under a simultaneous update costs nothing that matters.
+ */
+uint16_t getScheduleHorizonDropCount(void);
+
+/** @brief Reset the horizon drop counter. For tests. */
+void resetScheduleHorizonDropCount(void);
+
 /** @brief An ignition schedule.
  *
  * Goal is to fire the spark as close to the requested angle as possible.

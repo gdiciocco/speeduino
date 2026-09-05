@@ -34,6 +34,39 @@ static void test_timeout_TooSmall(void) {
   TEST_ASSERT_EQUAL(0, schedule._duration);
 }
 
+// A schedule past the horizon is dropped, not clamped: the event does not
+// happen. That used to leave no trace at all.
+static void test_timeout_TooLarge_is_counted(void) {
+  raw_counter_t counter = { INITIAL_COUNTER };
+  raw_compare_t compare = {0};
+  Schedule schedule(counter, compare);
+
+  resetScheduleHorizonDropCount();
+  setSchedule(schedule, MAX_TIMER_PERIOD, DURATION, true);
+  TEST_ASSERT_EQUAL(1U, getScheduleHorizonDropCount());
+
+  setSchedule(schedule, MAX_TIMER_PERIOD * 4U, DURATION, true);
+  TEST_ASSERT_EQUAL(2U, getScheduleHorizonDropCount());
+}
+
+// A zero delay or a zero duration is not an event anybody asked for, so it is
+// not a dropped one either - counting those would bury the signal.
+static void test_no_event_is_not_counted_as_a_drop(void) {
+  raw_counter_t counter = { INITIAL_COUNTER };
+  raw_compare_t compare = {0};
+  Schedule schedule(counter, compare);
+
+  resetScheduleHorizonDropCount();
+  setSchedule(schedule, 0U, DURATION, true);
+  setSchedule(schedule, MAX_TIMER_PERIOD, 0U, true);
+  TEST_ASSERT_EQUAL(0U, getScheduleHorizonDropCount());
+
+  //And a schedule that is accepted must not count either.
+  setSchedule(schedule, TIMEOUT, DURATION, true);
+  TEST_ASSERT_EQUAL(PENDING, schedule._status);
+  TEST_ASSERT_EQUAL(0U, getScheduleHorizonDropCount());
+}
+
 static void test_duration_TooLarge(void) {
   if (MAX_TIMER_PERIOD < (uint32_t)UINT16_MAX)
   {
@@ -160,6 +193,8 @@ void test_schedule(void)
   SET_UNITY_FILENAME() {
     RUN_TEST_P(test_timeout_TooLarge);
     RUN_TEST_P(test_timeout_TooSmall);
+    RUN_TEST_P(test_timeout_TooLarge_is_counted);
+    RUN_TEST_P(test_no_event_is_not_counted_as_a_drop);
     RUN_TEST_P(test_duration_TooLarge);
     RUN_TEST_P(test_duration_TooSmall);
     RUN_TEST_P(test_schedule_OFF_to_PENDING);

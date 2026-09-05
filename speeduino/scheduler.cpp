@@ -95,6 +95,32 @@ static inline void setScheduleRunning(Schedule &schedule, uint32_t delay, uint16
   schedule._status = PENDING; //Turn this schedule on
 }
 
+static volatile uint16_t scheduleHorizonDrops = 0U;
+
+uint16_t getScheduleHorizonDropCount(void)
+{
+  return scheduleHorizonDrops;
+}
+
+void resetScheduleHorizonDropCount(void)
+{
+  scheduleHorizonDrops = 0U;
+}
+
+/** @brief Record a schedule we were asked for and could not express.
+ *
+ * A zero delay or a zero duration is not an event anybody wanted; a delay past
+ * the timer horizon is. Only the latter is counted, and it saturates so a long
+ * run of them cannot wrap the count back through zero.
+ */
+static inline void noteDroppedSchedule(uint32_t delay, uint16_t duration)
+{
+  if((duration > 0U) && (delay >= MAX_TIMER_PERIOD) && (scheduleHorizonDrops < UINT16_MAX))
+  {
+    ++scheduleHorizonDrops;
+  }
+}
+
 void setSchedule(Schedule &schedule, uint32_t delay, uint16_t duration, bool allowQueuedSchedule)
 {
   if((delay>0U) && (delay < MAX_TIMER_PERIOD) && (duration > 0U))
@@ -114,7 +140,11 @@ void setSchedule(Schedule &schedule, uint32_t delay, uint16_t duration, bool all
         // Cannot schedule next event, as it would exceed the maximum future time
       }
     }
-  }  
+  }
+  else
+  {
+    noteDroppedSchedule(delay, duration);
+  }
 }
 
 #if defined(KNOCK_WINDOW_OUTPUT_PIN)
@@ -146,6 +176,10 @@ void setSchedule(IgnitionSchedule &schedule, uint32_t delay, uint16_t duration, 
         // Cannot schedule next event, as it would exceed the maximum future time
       }
     }
+  }
+  else
+  {
+    noteDroppedSchedule(delay, duration);
   }
 }
 #endif

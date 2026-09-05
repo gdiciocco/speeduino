@@ -223,7 +223,7 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
   {
     case 0: statusValue = lowByte(0xCA50U); break; //Block marker
     case 1: statusValue = highByte(0xCA50U); break;
-    case 2: statusValue = 13U; break; //Custom block layout version
+    case 2: statusValue = 14U; break; //Custom block layout version
     //Backup SRAM integrity status in bits 0-3 (see buildStorageStatus). Bits 4-7 spare (dashboard inputs moved to their own byte in layout v8)
     case 3: statusValue = buildStorageStatus(); break;
     case 4: statusValue = lowByte(currentStatus.RPM); break;
@@ -341,6 +341,11 @@ static byte getCaponordTSLogEntry(uint16_t byteNum)
     //Wall-wetting AFR1 delay including its local signed offset (absolute 288-289).
     case 112: statusValue = lowByte(wwAutotuneEffectiveDelayMilliseconds()); break;
     case 113: statusValue = highByte(wwAutotuneEffectiveDelayMilliseconds()); break;
+    //Schedules dropped for being further out than the 16-bit timer can express
+    //(absolute 290-291). Nonzero means an injection or a spark was asked for
+    //and silently did not happen - see getScheduleHorizonDropCount().
+    case 114: statusValue = lowByte(getScheduleHorizonDropCount()); break;
+    case 115: statusValue = highByte(getScheduleHorizonDropCount()); break;
     default: statusValue = 0; break;
   }
 
