@@ -20,6 +20,7 @@ void runAllScheduleTests(void)
   extern void test_overdwell(void);
   extern void test_ignition_schedule_controller();
   extern void testApplyPwToInjectorChannels(void);
+  extern void testHorizonRpm(void);
 
   initialiseAll();
 
@@ -32,6 +33,7 @@ void runAllScheduleTests(void)
   test_accuracy_duration();
   testScheduleStateMachine();
   test_schedule();
+  testHorizonRpm();
   test_fuel_schedule();
   test_ignition_schedule();
   test_ignition_controller();
