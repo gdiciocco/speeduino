@@ -917,7 +917,12 @@ bool is2ByteEntry(uint16_t key)
   // This array indicates which index values from the log are 2 byte values
   // This array MUST remain in ascending order
   // !!!! WARNING: If any value above 255 is required in this array, changes MUST be made to is2ByteEntry() function !!!!
-  static constexpr byte fsIntIndex[] = {4, 14, 17, 22, 26, 28, 33, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 76, 78, 80, 82, 86, 88, 90, 93, 95, 99, 104, 111, 121, 125, 130, 132, 134, 136, 142, 146, 148, 150, 155 };
+  static constexpr byte fsIntIndex[] = {
+  4, 14, 17, 22, 26, 28, 33, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 76,
+  78, 80, 82, 86, 88, 90, 93, 95, 99, 104, 111, 121, 125, 130, 132, 134, 136, 140, 142, 146, 148,
+  150, 155, 158, 168, 176, 180, 182, 195, 197, 199, 204, 216, 218, 220, 225, 227, 229, 231, 233,
+  235, 244, 246, 248, 250, 253
+  };
 
   unsigned int bot = 0U;
   unsigned int mid = _countof(fsIntIndex);

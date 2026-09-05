@@ -172,6 +172,14 @@ TESTABLE_STATIC int16_t ProgrammableIOGetData(uint16_t index, byte (*pGetLogEntr
   //source selector is a byte, so there is no index above 320 to move this to:
   //it has to be checked first.
   if ( index == 239U ) { result = (int16_t)max((uint32_t)runSecsX10, (uint32_t)32768); } //STM32 used std lib
+  //240-247 are the eight rule states, which is exactly what the ini's source
+  //list calls them - a rule that depends on another rule is the reason they are
+  //offered. Same story as 239: they land inside this fork's 320 byte block, so
+  //unless they are checked first they read EMP pump telemetry instead.
+  else if ( (index >= 240U) && (index <= 247U) )
+  {
+    result = BIT_CHECK(currentStatus.outputsStatus, index - 240U) ? 1 : 0;
+  }
   else if ( index < LOG_ENTRY_SIZE )
   {
     if(is2ByteEntry(index)) { result = word(pGetLogEntry(index+1), pGetLogEntry(index)); }

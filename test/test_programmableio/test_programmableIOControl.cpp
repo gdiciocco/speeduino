@@ -99,6 +99,27 @@ static void test_ProgrammableIOGetData_239_is_running_seconds_despite_overlap(vo
     TEST_ASSERT_NOT_EQUAL_INT16(0, ProgrammableIOGetData(239U, mockGetLogEntry));
 }
 
+// The ini offers "Rule 1".."Rule 8" as programmable output sources at 240-247.
+// They land inside this fork's live data block, so without being checked ahead
+// of the log range they read EMP pump telemetry under those names.
+static void test_ProgrammableIOGetData_rule_states(void)
+{
+    static const byte logData[256] = { 0 };
+    mockLogEntryData = logData;
+
+    currentStatus.outputsStatus = 0b10100101;
+    for (uint16_t rule = 0U; rule < 8U; ++rule)
+    {
+        const int16_t expected = ((currentStatus.outputsStatus >> rule) & 1U) ? 1 : 0;
+        char message[48];
+        sprintf(message, "rule %" PRIu16, rule + 1U);
+        TEST_ASSERT_EQUAL_INT16_MESSAGE(expected, ProgrammableIOGetData(240U + rule, mockGetLogEntry), message);
+    }
+
+    //248 is past them and back to being an ordinary log offset.
+    TEST_ASSERT_EQUAL_INT16(0, ProgrammableIOGetData(248U, mockGetLogEntry));
+}
+
 static void test_initialiseProgrammableIO_disabled(void)
 {
     programmableIOTestContext_t context;
@@ -805,6 +826,7 @@ void testProgrammableIOControl(void)
         RUN_TEST_P(test_ProgrammableIOGetData_two_byte_entry);
         RUN_TEST_P(test_ProgrammableIOGetData_special_indices);
         RUN_TEST_P(test_ProgrammableIOGetData_239_is_running_seconds_despite_overlap);
+        RUN_TEST_P(test_ProgrammableIOGetData_rule_states);
         RUN_TEST_P(test_FlatShiftBlink_EveryHalfSecond);
     }
 }
