@@ -195,6 +195,55 @@ def check_references(ini):
     return problems
 
 
+# Things a menu entry or a panel reference can legitimately point at. Each has
+# its own declaration form, and missing one of them reports false positives by
+# the dozen rather than finding anything.
+UI_TARGETS = (
+    re.compile(r'^\s*dialog\s*=\s*([A-Za-z_][A-Za-z0-9_]*)', re.M),
+    re.compile(r'^\s*curve\s*=\s*([A-Za-z_][A-Za-z0-9_]*)', re.M),
+    re.compile(r'^\s*help\s*=\s*([A-Za-z_][A-Za-z0-9_]*)', re.M),
+    re.compile(r'^\s*indicatorPanel\s*=\s*([A-Za-z_][A-Za-z0-9_]*)', re.M),
+    # table = <tableName>, <mapName>, "Title", page - a menu may name either
+    re.compile(r'^\s*table\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)', re.M),
+)
+
+# TunerStudio's own built-in dialogs and panels, which the ini never declares.
+UI_BUILTINS = frozenset((
+    'main',
+    'std_constants', 'std_enrichments', 'std_realtime', 'std_warmup', 'std_separator',
+    'std_injection', 'std_ms2gentherm', 'std_ms2geno2', 'std_ms3SdConsole', 'std_ms3Rtc',
+))
+
+MENU_REF = re.compile(r'^\s*(?:subMenu|groupChildMenu|menuDialog)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)', re.M)
+PANEL_REF = re.compile(r'^\s*panel\s*=\s*([A-Za-z_][A-Za-z0-9_]*)', re.M)
+
+
+def check_menus(ini):
+    """A menu entry or panel pointing at a dialog that does not exist.
+
+    Same silence as a dangling field: the entry is missing from the menu, or
+    the panel is missing from the dialog, and nothing says why.
+    """
+    targets = set(UI_BUILTINS)
+    for pattern in UI_TARGETS:
+        for match in pattern.finditer(ini):
+            targets.update(group for group in match.groups() if group)
+
+    problems = []
+    menu = ini_section(ini, 'Menu', 'SettingContextHelp')
+    refs = MENU_REF.findall(menu)
+    for name in sorted(set(refs) - targets):
+        problems.append('menu entry %s points at nothing' % name)
+
+    panels = PANEL_REF.findall(ini)
+    for name in sorted(set(panels) - targets):
+        problems.append('panel %s points at nothing' % name)
+
+    print('menu and panel references: %d, %s'
+          % (len(refs) + len(panels), 'all resolved' if not problems else '%d dangling' % len(problems)))
+    return problems
+
+
 BACKSLASH = chr(92)
 BUTTON_DECL = re.compile(
     r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"E((?:' + BACKSLASH * 2 + r'x[0-9A-Fa-f]{2})+)"', re.M)
@@ -357,6 +406,7 @@ def main():
     problems += check_output_channels(ini)
     problems += check_references(ini)
     problems += check_command_buttons(ini)
+    problems += check_menus(ini)
 
     if args.port:
         problems += check_against_board(ini, args.port)
