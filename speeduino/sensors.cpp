@@ -230,7 +230,7 @@ static inline void refreshAuxInputConfiguration(void)
     }
     else if(isAuxAnalogInputActive(auxInChan))
     {
-      uint8_t pinNumber = pinTranslateAnalog(configPage9.Auxinpina[auxInChan] & 63U);
+      uint8_t pinNumber = pinTranslateAnalog(configPage9.Auxinpina[auxInChan]);
       if(pinIsUsed(pinNumber))
       {
         currentStatus.ioError = true;
@@ -246,7 +246,7 @@ static inline void refreshAuxInputConfiguration(void)
     }
     else if(isAuxDigitalInputActive(auxInChan))
     {
-      uint8_t pinNumber = (configPage9.Auxinpinb[auxInChan] & 63U) + 1U;
+      uint8_t pinNumber = configPage9.Auxinpinb[auxInChan];
       if(pinIsUsed(pinNumber))
       {
         currentStatus.ioError = true;
@@ -982,7 +982,7 @@ static inline void updateFuelLevel(void)
 {
   if(isAuxAnalogInputActive(0U))
   {
-    const uint8_t fuelLevelPin = pinTranslateAnalog(configPage9.Auxinpina[0] & 63U);
+    const uint8_t fuelLevelPin = pinTranslateAnalog(configPage9.Auxinpina[0]);
     currentStatus.fuelLevel = fuelLevelFilter.update(readAnalogSensor(fuelLevelPin));
   }
   else

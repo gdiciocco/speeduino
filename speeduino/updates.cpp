@@ -254,7 +254,7 @@ TESTABLE_STATIC void setIdleAdvanceClosedLoopDefaults(void) {
  * existing tune mean something different. There is no migration path: the
  * bump is what tells an older tune apart, and an older tune is discarded.
  */
-#define CURRENT_DATA_VERSION 39
+#define CURRENT_DATA_VERSION 40
 
 /** @brief Put every page into its as-shipped state. */
 static void setTuneToDefaults(void)
