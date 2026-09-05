@@ -601,16 +601,16 @@ static inline uint16_t correctionAccelWallWetting(void)
   // Update wall fuel state at a controlled rate (30Hz)
   if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_30HZ))
   {
-    uint16_t addedToWall = ((uint32_t)fuelDemand * addCoeff) >> 8;
-    uint16_t removedFromWall = ((uint32_t)currentStatus.wallFuel * removeCoeff) >> 8;
-    if (currentStatus.wallFuel + addedToWall > removedFromWall)
-    {
-      currentStatus.wallFuel = currentStatus.wallFuel + addedToWall - removedFromWall;
-    }
-    else
-    {
-      currentStatus.wallFuel = 0;
-    }
+    // Saturate rather than wrap. The model's equilibrium is fuelDemand * X / Y,
+    // and with a small removal coefficient nothing bounds that below 65535.
+    // Truncating there turned a saturated film into a nearly empty one, which
+    // reads downstream as "the wall just went dry" - the opposite of the truth,
+    // and it would command a large enrichment at exactly the wrong moment.
+    const uint32_t addedToWall = ((uint32_t)fuelDemand * (uint32_t)addCoeff) >> 8U;
+    const uint32_t removedFromWall = ((uint32_t)currentStatus.wallFuel * (uint32_t)removeCoeff) >> 8U;
+    const uint32_t grossWallFuel = (uint32_t)currentStatus.wallFuel + addedToWall;
+    const uint32_t netWallFuel = (grossWallFuel > removedFromWall) ? (grossWallFuel - removedFromWall) : 0U;
+    currentStatus.wallFuel = (netWallFuel > (uint32_t)UINT16_MAX) ? UINT16_MAX : (uint16_t)netWallFuel;
   }
 
   return correction;

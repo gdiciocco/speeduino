@@ -1983,6 +1983,26 @@ static void test_corrections_WW_wall_fuel_update(void)
   TEST_ASSERT_EQUAL(15, currentStatus.wallFuel);
 }
 
+// The film state is uint16_t while the model that feeds it is not bounded by
+// 65535: a small removal coefficient puts the equilibrium above it. The old
+// code truncated, so a full wall read back as an empty one.
+static void test_corrections_WW_wall_fuel_saturates(void)
+{
+  setup_wall_wetting();
+
+  BIT_SET(currentStatus.LOOP_TIMER, BIT_TIMER_30HZ);
+
+  // addCoeff=255, removeCoeff=0: everything deposits, nothing evaporates.
+  fill_table_values(wallWettingAddTable, 255);
+  fill_table_values(wallWettingRemoveTable, 0);
+  currentStatus.wallFuel = UINT16_MAX;
+
+  // fuelDemand=30, addCoeff=255 -> addedToWall = (30*255) >> 8 = 29.
+  // 65535 + 29 wrapped to 28 before this was fixed.
+  (void)correctionAccel();
+  TEST_ASSERT_EQUAL(UINT16_MAX, currentStatus.wallFuel);
+}
+
 static void test_corrections_WW(void)
 {
   RUN_TEST_P(test_corrections_WW_steady_state);
@@ -1992,6 +2012,7 @@ static void test_corrections_WW(void)
   RUN_TEST_P(test_corrections_WW_deceleration);
   RUN_TEST_P(test_corrections_WW_zero_fuel_demand);
   RUN_TEST_P(test_corrections_WW_wall_fuel_update);
+  RUN_TEST_P(test_corrections_WW_wall_fuel_saturates);
 }
 
 static void test_corrections_correctionsFuel(void) {
