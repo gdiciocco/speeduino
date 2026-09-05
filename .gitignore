@@ -32,3 +32,6 @@ test/output_export.cpp
 misra/.results
 ~$*
 local.ini
+
+# cppcheck writes these next to the source when it crashes on a file
+*.dump
