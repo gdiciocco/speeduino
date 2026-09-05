@@ -42,8 +42,19 @@ parse_command_line "$@"
 #   2.1. E.g. exclusion folders
 source_folder=$(get_abs_filename "$source_folder")
 
-cppcheck_bin="${cppcheck_path}/cppcheck"
-cppcheck_misra="${cppcheck_path}/addons/misra.py"
+# With no -c the binary comes from PATH; "${cppcheck_path}/cppcheck" would
+# resolve to "/cppcheck", which is nobody's install and a confusing 127.
+if [ -z "$cppcheck_path" ] ; then
+  cppcheck_bin="cppcheck"
+else
+  cppcheck_bin="${cppcheck_path}/cppcheck"
+fi
+
+if ! command -v "$cppcheck_bin" > /dev/null 2>&1 ; then
+  echo "cppcheck not found: $cppcheck_bin" >&2
+  echo "Install it, or point at an install with -c /path/to/cppcheck-folder" >&2
+  exit 127
+fi
 
 num_cores=`getconf _NPROCESSORS_ONLN`
 let num_cores--
