@@ -19,6 +19,11 @@ uint16_t oneByteLength(void)
     return oneByteEeprom._length;
 }
 
+static void oneByteCommit(void)
+{
+    ++oneByteEeprom.commitCount;
+}
+
 uint16_t oneByteGetMaxWriteBlockSize(const statuses&)
 {
     return oneByteEeprom._blockSize;
@@ -31,5 +36,6 @@ storage_api_t getOneByteStorageApi(uint16_t length, uint16_t blockSize, char rea
     oneByteEeprom._blockSize = blockSize;
     oneByteEeprom.readCount = 0U;
     oneByteEeprom.writeCount = 0U;
-    return { .read = oneByteRead, .write = oneBytWrite, .length = oneByteLength, .getMaxWriteBlockSize = oneByteGetMaxWriteBlockSize };
+    oneByteEeprom.commitCount = 0U;
+    return { .read = oneByteRead, .write = oneBytWrite, .length = oneByteLength, .getMaxWriteBlockSize = oneByteGetMaxWriteBlockSize, .commit = oneByteCommit };
 }

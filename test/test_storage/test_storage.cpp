@@ -19,6 +19,34 @@ static void test_saveAllPages(void)
     TEST_ASSERT_TRUE(isEepromWritePending());
 }
 
+// A backend whose integrity metadata lives apart from the data is only
+// self-consistent once commit() has run. If a write sequence can end without
+// it, a reset in between loses more than the write.
+static void test_savePage_commits(void)
+{
+    setStorageAPI(getOneByteStorageApi(8192, 8192, BUFFER_MARKER));
+    savePage(veSetPage);
+    TEST_ASSERT_GREATER_THAN(0U, oneByteEeprom.commitCount);
+}
+
+static void test_saveAllPages_commits_every_page(void)
+{
+    setStorageAPI(getOneByteStorageApi(8192, 8192, BUFFER_MARKER));
+    saveAllPages();
+    TEST_ASSERT_GREATER_OR_EQUAL(MAX_PAGE_NUM - MIN_PAGE_NUM, oneByteEeprom.commitCount);
+}
+
+// The burn deferral only earns its risk where a write can stall the loop, so
+// the decision hangs on whether the backend will take a whole page at once.
+static void test_canStorageAbsorbFullPage(void)
+{
+    setStorageAPI(getOneByteStorageApi(8192, 16, BUFFER_MARKER));
+    TEST_ASSERT_FALSE(canStorageAbsorbFullPage());
+
+    setStorageAPI(getOneByteStorageApi(8192, UINT16_MAX, BUFFER_MARKER));
+    TEST_ASSERT_TRUE(canStorageAbsorbFullPage());
+}
+
 static void assert_entity(page_iterator_t iter, char expectedContent)
 {
     for (uint16_t offset=0; offset<iter.entity.size; ++offset)
@@ -103,6 +131,9 @@ static void test_saveAllCalibrationTables(void)
 void test_storage(void) {
     SET_UNITY_FILENAME() {     
         RUN_TEST_P(test_saveAllPages);
+    RUN_TEST_P(test_savePage_commits);
+    RUN_TEST_P(test_saveAllPages_commits_every_page);
+    RUN_TEST_P(test_canStorageAbsorbFullPage);
         RUN_TEST_P(test_loadAllPages);
         RUN_TEST_P(test_loadAllCalibrationTables);
         RUN_TEST_P(test_saveAllCalibrationTables);

@@ -221,7 +221,13 @@ static void test_vss_60km_internal_pin(void)
 
 static void test_vss_60km_external(void)
 {
+    // The two pulses have to land in different microseconds. vssPulse() stamps
+    // micros(), and back to back on a 168MHz core both calls can fall inside
+    // one tick - the gap is then zero and the handler correctly refuses to
+    // calibrate from it, so the test fails on timing rather than on behaviour.
+    // 1000us also keeps the result (60000000/gap) inside uint16_t.
     vssPulse();
+    delayMicroseconds(1000);
     vssPulse();
     configPage2.vssMode = VSS_MODE_EXTERNAL_KM;
     configPage2.vssPulsesPerKm = 0;
