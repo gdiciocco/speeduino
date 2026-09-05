@@ -138,6 +138,60 @@ def check_output_channels(ini):
     return problems
 
 
+def declared_names(ini):
+    """Every name the ini defines: typed entries, expression channels, defines."""
+    names = set()
+    for pattern in (r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:scalar|bits|array|string)\s*,',
+                    r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{',
+                    r'^\s*#define\s+([A-Za-z_][A-Za-z0-9_]*)',
+                    r'^\s*settingOption\s*=\s*([A-Za-z_][A-Za-z0-9_]*)'):
+        names.update(match.group(1) for match in re.finditer(pattern, ini, re.M))
+    return names
+
+
+def ini_section(ini, name, following):
+    """The text of one [Section], up to the next one."""
+    begin = ini.index('[%s]' % name)
+    return ini[begin:ini.index('[%s]' % following, begin)]
+
+
+DATALOG_REF = re.compile(r'^\s*entry\s*=\s*([A-Za-z_][A-Za-z0-9_]*)', re.M)
+GAUGE_REF = re.compile(r'^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*"', re.M)
+FIELD_REF = re.compile(r'^\s*field\s*=\s*"[^"]*"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)', re.M)
+
+
+def check_references(ini):
+    """A field, gauge or log entry naming something that does not exist.
+
+    TunerStudio does not stop on one: the field is missing from the dialog, or
+    the gauge reads nothing, and you find out by noticing an absence. Moving
+    entries between pages - which this branch did with thirty pin fields and
+    thirty-two aux ones - is exactly what leaves these behind.
+
+    The gauge and datalog patterns are scoped to their own sections: the same
+    "name, quoted label" shape means something else entirely in [Menu] and in
+    the dialog definitions.
+    """
+    names = declared_names(ini)
+    checks = (
+        ('datalog entry', DATALOG_REF, ini_section(ini, 'Datalog', 'LoggerDefinition')),
+        ('gauge', GAUGE_REF, ini_section(ini, 'GaugeConfigurations', 'FrontPage')),
+        ('dialog field', FIELD_REF, ini),
+    )
+
+    problems = []
+    total = 0
+    for label, pattern, text in checks:
+        refs = pattern.findall(text)
+        total += len(refs)
+        for name in sorted(set(refs) - names):
+            problems.append('%s names %s, which the ini never declares' % (label, name))
+
+    print('cross references: %d, %s'
+          % (total, 'all resolved' if not problems else '%d dangling' % len(problems)))
+    return problems
+
+
 def active_setting(ini, name):
     """The last uncommented value of a setting, ignoring COMMS_COMPAT branches.
 
@@ -242,6 +296,7 @@ def main():
     count, pages, problems = check_offsets(ini)
     print('%s: %d constants across %d pages' % (os.path.relpath(args.ini, REPO), count, pages))
     problems += check_output_channels(ini)
+    problems += check_references(ini)
 
     if args.port:
         problems += check_against_board(ini, args.port)
