@@ -372,7 +372,7 @@ void legacySerialCommand(void)
       byte tableID;
 
       //The first 2 bytes sent represent the canID and tableID
-      while (primarySerial.available() == 0) { }
+      if (!waitForCommandArgument()) { break; }
       tableID = primarySerial.read(); //Not currently used for anything
 
       //Clear the serial buffers
@@ -400,8 +400,8 @@ void legacySerialCommand(void)
         if (serialStatusFlag == SERIAL_INACTIVE) { primarySerial.println(F("Comms halted. Next byte will reset the Arduino.")); }
       #endif
 
-        while (primarySerial.available() == 0) { }
-        digitalWrite(pinResetControl, LOW);
+        //No byte, no reset: better to carry on than to sit here forever.
+        if (waitForCommandArgument()) { digitalWrite(pinResetControl, LOW); }
       }
       else
       {

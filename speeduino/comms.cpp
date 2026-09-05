@@ -113,6 +113,21 @@ static uint32_t deferEEPROMWritesDelay = 0; //!< How long (µS) after deferEEPRO
 static constexpr uint32_t EEPROM_DEFER_DELAY = MICROS_PER_SEC; //1.0 second pause after large comms before writing to EEPROM
 
 /** @brief Has the current receive operation timed out? */
+//Generous on purpose: these arguments follow a human pressing a button, not a
+//machine streaming, so a second is not a constraint on anything real.
+static constexpr uint16_t SERIAL_ARGUMENT_TIMEOUT = 1000U;
+
+bool waitForCommandArgument(void)
+{
+  const uint32_t started = millis();
+  while ((primarySerial.available() == 0)
+         && !hasIntervalElapsed(millis(), started, SERIAL_ARGUMENT_TIMEOUT))
+  {
+    //Spin. There is nothing useful to do here: the caller is mid-command.
+  }
+  return primarySerial.available() != 0;
+}
+
 bool isRxTimeout(void) 
 {
   return hasIntervalElapsed(millis(), serialReceiveStartTime, SERIAL_TIMEOUT);
@@ -952,8 +967,8 @@ void processSerialCommand(void)
         if (serialStatusFlag == SERIAL_INACTIVE) { primarySerial.println(F("Comms halted. Next byte will reset the Arduino.")); }
       #endif
 
-        while (primarySerial.available() == 0) { }
-        digitalWrite(pinResetControl, LOW);
+        //No byte, no reset: better to carry on than to sit here forever.
+        if (waitForCommandArgument()) { digitalWrite(pinResetControl, LOW); }
       }
       else
       {

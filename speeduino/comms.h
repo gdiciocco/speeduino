@@ -32,6 +32,19 @@ void serialTransmit(void);
 bool isRxTimeout(void);
 
 /**
+ * @brief Wait for one more byte of a command's arguments, but not forever.
+ *
+ * Some commands read an argument byte that arrives after the command letter.
+ * Spinning on availableForRead() with no bound stops the main loop dead if
+ * that byte never comes - a cable pulled between the two, or a host that died
+ * mid-command - and the engine is then running on whatever schedules were
+ * already armed, with nothing recomputing them.
+ *
+ * @return true if a byte is now available, false if it gave up.
+ */
+bool waitForCommandArgument(void);
+
+/**
  * @brief During serial comms, defer storage writes
  * 
  * Serial comms can send data quicker than we can write it to permanent storage.
