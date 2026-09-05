@@ -16,6 +16,7 @@ out_folder="$script_folder/.results"        # -o, --out
 cppcheck_path=""                            # -c, --cppcheck
 quiet=0                                     # -q, --quiet
 output_xml=0                                # -x, --xml
+update_baseline=0                           # -b, --update-baseline
 
 function parse_command_line() {
    while [ $# -gt 0 ] ; do
@@ -25,6 +26,7 @@ function parse_command_line() {
       -c | --cppcheck) cppcheck_path="$2" ;;
       -q | --quiet) quiet=1 ;;
       -x | --xml) output_xml=1 ;;
+      -b | --update-baseline) update_baseline=1 ;;
       -*) 
         echo "Unknown option: " $1
         exit 1
@@ -59,6 +61,12 @@ fi
 num_cores=`getconf _NPROCESSORS_ONLN`
 let num_cores--
 
+# --cppcheck-build-dir below is a cache, and a warm one silently changes the
+# answer: an unchanged file is not re-analysed, so no .dump is produced for it,
+# so the MISRA addon never sees it. A second run over identical sources reported
+# 128 findings where the first reported 151. Start clean, and the number means
+# something.
+rm -rf "$out_folder"
 mkdir -p "$out_folder"
 
 # misra.json points at the rule texts with a path relative to the *current*
@@ -142,5 +150,47 @@ if [ $quiet -eq 0 ]; then
 fi
 echo $error_count MISRA violations
 echo $error_count > "$out_folder/error_count.txt"
+
+# Compare the per-rule counts against the recorded baseline. Counts rather than
+# file positions, so moving code around does not churn the file and only a
+# violation actually being added shows up.
+baseline_file="$script_folder/baseline.txt"
+current_counts=$(grep -o "misra-c2012-[0-9.]*" "$cppcheck_out_file" | sort | uniq -c | awk '{print $2, $1}' | sort)
+
+if [ $update_baseline -eq 1 ] ; then
+  {
+    grep '^#' "$baseline_file" 2> /dev/null
+    echo "$current_counts"
+  } > "$baseline_file.new"
+  mv "$baseline_file.new" "$baseline_file"
+  echo "Baseline updated: $(echo "$current_counts" | awk '{s+=$2} END {print s}') findings"
+  exit 0
+fi
+
+if [ ! -f "$baseline_file" ] ; then
+  echo "No baseline at $baseline_file - run with --update-baseline to create one" >&2
+  exit 0
+fi
+
+regressions=0
+while read -r rule count ; do
+  [ -z "$rule" ] && continue
+  was=$(grep -E "^$rule " "$baseline_file" | awk '{print $2}')
+  was=${was:-0}
+  if [ "$count" -gt "$was" ] ; then
+    echo "REGRESSION: $rule went from $was to $count" >&2
+    regressions=$((regressions + 1))
+  fi
+done <<< "$current_counts"
+
+total_now=$(echo "$current_counts" | awk '{s+=$2} END {print s+0}')
+total_was=$(grep -v '^#' "$baseline_file" | awk '{s+=$2} END {print s+0}')
+echo "MISRA findings: $total_now (baseline $total_was)"
+
+if [ $regressions -ne 0 ] ; then
+  echo "$regressions rule(s) got worse. Fix them, or update the baseline deliberately." >&2
+  exit 1
+fi
+
 
 exit 0

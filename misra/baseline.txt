@@ -1,0 +1,44 @@
+# MISRA-C:2012 baseline for the STM32 build.
+#
+# One line per rule: <rule> <count>. Counts, not file positions, so the
+# baseline survives code moving around and only reacts to violations being
+# added. Regenerate with:  misra/check_misra.sh --update-baseline -c <path>
+#
+# Established with cppcheck 2.11 over 74 files (the vendored SPIAsEEPROM
+# library is excluded). Every finding here is stylistic: rule 10.4 is
+# mixed essential types, 2.2 is the '- 0' and '0 +' left in formulas for
+# readability, 8.2 is unnamed parameters in prototypes. None of them was
+# hiding a defect - that was checked before freezing this.
+misra-c2012-1.2 1
+misra-c2012-10.1 1
+misra-c2012-10.3 4
+misra-c2012-10.4 46
+misra-c2012-10.5 1
+misra-c2012-11.4 1
+misra-c2012-11.5 1
+misra-c2012-12.2 12
+misra-c2012-12.4 1
+misra-c2012-13.3 1
+misra-c2012-13.4 1
+misra-c2012-14.2 1
+misra-c2012-15.1 1
+misra-c2012-15.4 1
+misra-c2012-15.7 1
+misra-c2012-17.5 1
+misra-c2012-18.5 1
+misra-c2012-19.2 1
+misra-c2012-2.2 23
+misra-c2012-2.3 1
+misra-c2012-2.6 1
+misra-c2012-20.9 2
+misra-c2012-21.1 2
+misra-c2012-21.12 1
+misra-c2012-4.2 1
+misra-c2012-5.6 2
+misra-c2012-6.1 8
+misra-c2012-7.1 1
+misra-c2012-7.2 5
+misra-c2012-8.10 5
+misra-c2012-8.13 1
+misra-c2012-8.2 17
+misra-c2012-8.5 4
