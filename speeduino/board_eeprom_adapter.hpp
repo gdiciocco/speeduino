@@ -26,6 +26,15 @@ namespace EEPROMApi {
   {
     return EEPROM.length();
   }
+  static inline void commit(void)
+  {
+#if defined(SRAM_AS_EEPROM) && defined(STM32F407xx)
+    //Refresh the CRC seal covering the backup SRAM image. Cheap (~25us on the
+    //hardware CRC unit) and a no-op when nothing has been written since the
+    //last seal. Main-loop context only: it shares the CRC peripheral.
+    EEPROM.sealCrcIfDirty();
+#endif
+  }
 }
 
 /** @brief Get the EEPROM storage API for the board */
@@ -36,5 +45,6 @@ storage_api_t getEEPROMStorageApi(uint16_t (*getMaxWriteBlockSize)(const statuse
     .write = EEPROMApi::write,
     .length = EEPROMApi::length,
     .getMaxWriteBlockSize = getMaxWriteBlockSize,
+    .commit = EEPROMApi::commit,
   };
 }

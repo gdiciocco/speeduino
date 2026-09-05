@@ -31,6 +31,22 @@ struct storage_api_t {
 
     /** @brief The maximum number of write operations that will be performed in one go. */
     uint16_t (*getMaxWriteBlockSize)(const statuses &current);
+
+    /** @brief Make everything written so far durable across a reset.
+     *
+     * Most backends write straight through and have nothing to do here. A
+     * backend that keeps its integrity metadata separately from the data - the
+     * battery-backed SRAM store keeps a CRC seal of the whole image in the RTC
+     * backup registers - is only self-consistent once this has run. A reset in
+     * between leaves the store looking corrupt, and it then falls back to its
+     * last snapshot: the cost of that is not the last write, it is the whole
+     * tune.
+     *
+     * Called at the end of each write sequence, so the window in which a reset
+     * can lose data is the length of one page write rather than however long
+     * until the next housekeeping tick.
+     */
+    void (*commit)(void);
 };
 
 /**

@@ -70,6 +70,17 @@ bool isEepromWritePending(void);
  */
 void setEepromWritePending(bool isPending);
 
+/**
+ * @brief True when the backend can absorb a whole page in one pass.
+ *
+ * Deferring a burn only buys something if writing would stall the engine loop.
+ * A backend that reports no limit on writes per pass - the battery-backed SRAM
+ * store, where a write is a store into RAM - has nothing to gain by waiting,
+ * and everything to lose: a burn that is deferred but reported as done is a
+ * burn the user can switch the ignition off on top of.
+ */
+bool canStorageAbsorbFullPage(void);
+
 ///@}
 
 /**

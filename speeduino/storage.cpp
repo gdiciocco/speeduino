@@ -33,6 +33,17 @@ static storage_api_t externalApi = {
 
 // LCOV_EXCL_START
 // Exclude simple getter/setter from code coverage
+bool canStorageAbsorbFullPage(void)
+{
+  return getStorageAPI().getMaxWriteBlockSize(currentStatus) == UINT16_MAX;
+}
+
+/** @brief Ask the storage backend to make its writes durable, if it needs to. */
+static inline void commitStorage(void)
+{
+  if (getStorageAPI().commit != nullptr) { getStorageAPI().commit(); }
+}
+
 void setStorageAPI(const storage_api_t &api) 
 {
   externalApi = api;
@@ -440,6 +451,9 @@ void savePage(uint8_t pageNum)
   }
 
   setEepromWritePending(writesRemaining==0U);
+
+  //Make what was just written survive a reset. See storage_api_t::commit.
+  commitStorage();
 }
 
 //  ================================= Internal read support ===============================
@@ -634,6 +648,8 @@ void saveCalibrationTable(SensorCalibrationTable sensor)
   } else {
     // Unknown sensor identifier - do nothing but keep MISRA checker happy
   }
+
+  commitStorage();
 }
 
 TESTABLE_INLINE_STATIC uint16_t getSensorCalibrationCrcAddress(SensorCalibrationTable sensor) {
@@ -655,6 +671,7 @@ TESTABLE_INLINE_STATIC uint16_t getSensorCalibrationCrcAddress(SensorCalibration
 void saveCalibrationCrc(SensorCalibrationTable sensor, uint32_t calibrationCRC)
 {
   updateObject(getStorageAPI(), calibrationCRC, getSensorCalibrationCrcAddress(sensor));
+  commitStorage();
 }
 
 /** Retrieves and returns the 4 byte CRC32 checksum for a given calibration page from EEPROM. */
@@ -677,6 +694,7 @@ uint8_t loadLastBaro(void)
 void saveLastBaro(uint8_t newValue)
 { 
   (void)update(getStorageAPI(), EEPROM_LAST_BARO, newValue); 
+  commitStorage();
 }
 // LCOV_EXCL_STOP
 
@@ -689,6 +707,7 @@ uint8_t loadEEPROMVersion(void)
 void saveEEPROMVersion(uint8_t newVersion)
 { 
   (void)update(getStorageAPI(), EEPROM_DATA_VERSION, newVersion); 
+  commitStorage();
 }
 // LCOV_EXCL_STOP
 

@@ -598,7 +598,12 @@ void serialTransmit(void)
 
 static void burnSinglePage(uint8_t page)
 {
-  if( storageWriteTimeoutExpired()) { 
+  //Both branches answer BURN_OK, so the deferred one tells TunerStudio the tune
+  //is in the ECU when it is still only in RAM - and the user switches off right
+  //after a burn. The deferral is there because an ATmega EEPROM write stalls
+  //the CPU for 3.3ms and would cost trigger sync during heavy comms; where a
+  //write cannot stall anything, waiting buys nothing and risks the tune.
+  if( storageWriteTimeoutExpired() || canStorageAbsorbFullPage()) { 
     savePage(page); 
   } else { 
     setEepromWritePending(true); 
