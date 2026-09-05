@@ -915,9 +915,14 @@ void processSerialCommand(void)
 
     case 't': // receive new Calibration info. Command structure: "t", <tble_idx> <data array>.
     {
+      //Same shape as 'p' and 'M': [2] is the table, [3..4] the offset and
+      //[5..6] the length, both little-endian, with the values from [7]. This
+      //read used to take the offset and the length big-endian, which is the
+      //opposite of every other command and of what TunerStudio sends: a length
+      //of 64 arrived as 16384 and the upload was rejected outright.
       SensorCalibrationTable cmd = (SensorCalibrationTable)serialPayload[2];
-      uint16_t offset = word(serialPayload[3], serialPayload[4]);
-      uint16_t calibrationLength = word(serialPayload[5], serialPayload[6]); // Should be 256
+      uint16_t offset = word(serialPayload[4], serialPayload[3]);
+      uint16_t calibrationLength = word(serialPayload[6], serialPayload[5]); // 64 for a temperature table, 256 per O2 chunk
 
       if(cmd == SensorCalibrationTable::O2Sensor)
       {
