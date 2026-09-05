@@ -33,11 +33,26 @@
 
 #define CRANK_ANGLE_MAX (max(CRANK_ANGLE_MAX_IGN, CRANK_ANGLE_MAX_INJ))
 
+/** @brief Trigger log depth, in teeth.
+ *
+ * 127 was an ATmega number: the two buffers had to fit inside 8kB of SRAM
+ * alongside everything else, and the index was a byte so 255 was the ceiling
+ * regardless. On a 36-1 wheel that is barely three and a half revolutions -
+ * short enough that an intermittent trigger fault can fall between captures.
+ *
+ * 500 costs 2500 bytes of the F407's 128kB and covers about fourteen
+ * revolutions. Keep it in step with the loggerDef dataLength entries in the
+ * ini: TunerStudio is told the transfer size there, not by the firmware.
+ */
 #ifndef UNIT_TEST 
-constexpr uint8_t TOOTH_LOG_SIZE = 127U;
+constexpr uint16_t TOOTH_LOG_SIZE = 500U;
 #else
-constexpr uint8_t TOOTH_LOG_SIZE = 1U;
+constexpr uint16_t TOOTH_LOG_SIZE = 1U;
 #endif
+
+//The whole log goes out in one response, with the length written as a uint16_t.
+static_assert(((uint32_t)TOOTH_LOG_SIZE * 5U) + 1U <= UINT16_MAX,
+              "Trigger log too large for the serial length field");
 
 #define INJ1_CMD_BIT      0
 #define INJ2_CMD_BIT      1

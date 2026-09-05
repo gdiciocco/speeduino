@@ -28,8 +28,11 @@ volatile unsigned long ms_counter = 0; //A counter that increments once per ms
 uint16_t fixedCrankingOverride = 0;
 volatile uint32_t toothHistory[TOOTH_LOG_SIZE]; ///< Tooth trigger history - delta time (in uS) from last tooth (Indexed by @ref toothHistoryIndex)
 volatile uint8_t compositeLogHistory[TOOTH_LOG_SIZE];
-// Some code relies on tooth log containing less than UINT8_MAX items.
-static_assert(_countof(toothHistory)<UINT8_MAX, "Check all uses of toothHistory/toothHistoryIndex etc.");
+// The index must be able to address the whole log. It used to have to fit in a
+// byte; every use is now at least unsigned int, so the real constraint is just
+// that the two buffers stay the same length.
+static_assert(_countof(toothHistory)==_countof(compositeLogHistory), "Trigger log buffers must be the same length");
+static_assert(_countof(toothHistory)<=(size_t)UINT16_MAX, "Trigger log index type cannot address the whole log");
 volatile unsigned int toothHistoryIndex = 0; ///< Current index to @ref toothHistory array
 unsigned long currentLoopTime; /**< The time (in uS) that the current mainloop started */
 volatile uint16_t ignitionCount; /**< The count of ignition events that have taken place since the engine started */

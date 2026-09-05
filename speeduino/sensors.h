@@ -41,7 +41,7 @@ void refreshADCConfiguration(void);
 void flexPulse(void);
 void initialiseFlexSensor(config2 &page2, statuses &current, uint8_t pin);
 void knockPulse(void);
-uint32_t vssGetPulseGap(byte toothHistoryIndex);
+uint32_t vssGetPulseGap(uint8_t historyIndex);
 void vssPulse(void);
 uint16_t readAuxanalog(uint8_t analogPin);
 uint16_t readAuxdigital(uint8_t digitalPin);
