@@ -51,6 +51,12 @@ TESTABLE_INLINE_STATIC table3d_dim_t linear_bin_search( const table3d_axis_t *pS
   // Performance note: on AVR it's much quicker to increment and compare 8-bit indices (and
   // dereference pointers) than to increment and compare 16-bit pointers!
   // Up to 80 loop/sec!
+  //
+  // Measured on an F407 at 168MHz (test/test_tables/bench_lookup.cpp): the
+  // conclusion survives the change of architecture even though the reasoning
+  // does not. Widening this counter to native width made a lookup ~1% slower,
+  // because the search is only ~13% of a lookup even with cache-hostile inputs
+  // - the interpolation is the rest. Do not "fix" this for the UXTB.
   // const table3d_axis_t * const pEnd = pStart + length -1U;
   // const table3d_axis_t *pLower = pStart + 1U;
   // while ((pLower != pEnd) && !is_in_bin(value, *pLower, *(pLower-1U))) { 
